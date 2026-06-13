@@ -24,3 +24,28 @@ test_that("bnb_elasticities runs for both margins", {
                          print_output = FALSE)
   expect_true(is.list(el) && all(c("y1", "y2") %in% names(el)))
 })
+
+test_that("bnb_marginal_effects AME and SE match an independent delta-method computation", {
+  fit <- make_diag_fit()
+  me <- bnb_marginal_effects(fit, which = "y1", type = "AME", print_output = FALSE)
+
+  # Independent recomputation for the continuous variable 'x'
+  X1 <- fit$X1
+  p1 <- ncol(X1)
+  beta1 <- fit$coef[grep("^b1:", names(fit$coef))]
+  names(beta1) <- sub("^b1:", "", names(beta1))
+  Vb1 <- fit$vcov[1:p1, 1:p1, drop = FALSE]
+  mu  <- as.vector(exp(X1 %*% beta1))
+  n   <- nrow(X1)
+  j   <- which(colnames(X1) == "x")
+
+  ame_x <- mean(beta1[["x"]] * mu)
+  Xmubar <- as.numeric(t(X1) %*% (mu / n))   # E[mu * x_k]
+  g <- beta1[["x"]] * Xmubar
+  g[j] <- g[j] + mean(mu)
+  se_x <- sqrt(as.numeric(t(g) %*% Vb1 %*% g))
+
+  row_x <- me[me$Name == "x", ]
+  expect_equal(row_x$Estimate, ame_x, tolerance = 1e-8)
+  expect_equal(row_x$StdErr,   se_x,  tolerance = 1e-8)
+})
