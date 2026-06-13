@@ -1,0 +1,9 @@
+^Rcodes$
+^data/rwm1984\.csv$
+^docs$
+^\.git$
+^\.gitignore$
+^\.claude$
+^.*\.Rproj$
+^\.Rproj\.user$
+^LICENSE\.md$

@@ -1,0 +1,29 @@
+Package: rpbnb
+Type: Package
+Title: Bivariate and Random-Parameter Negative Binomial Regression
+Version: 0.1.0
+Authors@R: person("Project", "Author", email = "wonstran@gmail.com", role = c("aut", "cre"))
+Description: Maximum-likelihood estimation of the Famoye/Sarmanov bivariate
+    negative binomial (NB2) regression model and maximum-simulated-likelihood
+    estimation of a bivariate random-parameter negative binomial model, with a
+    normal random-coefficient data simulator, diagnostics, and standard model
+    methods.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1)
+Imports:
+    stats,
+    maxLik,
+    numDeriv,
+    randtoolbox,
+    MASS
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    parallel
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+LazyData: false
