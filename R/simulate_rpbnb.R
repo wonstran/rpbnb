@@ -46,6 +46,11 @@ simulate_rpbnb <- function(n, beta1, beta2,
     covariates <- as.data.frame(stats::setNames(
       lapply(vars, function(v) rnorm(n)), vars))
   }
+  missing_cov <- setdiff(vars, names(covariates))
+  if (length(missing_cov)) {
+    stop("covariates is missing required column(s): ",
+         paste(missing_cov, collapse = ", "), ".", call. = FALSE)
+  }
   build_X <- function(bv) {
     X <- cbind(`(Intercept)` = rep(1, n))
     for (nm in setdiff(names(bv), "(Intercept)")) X <- cbind(X, covariates[[nm]])

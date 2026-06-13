@@ -6,6 +6,7 @@ test_that("simulate_rpbnb is reproducible for a fixed seed", {
                       beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
                       dispersion = c(m1 = 0.4, m2 = 0.5), seed = 42)
   expect_identical(a$data, b$data)
+  expect_identical(a$coef_realized, b$coef_realized)
 })
 
 test_that("simulate_rpbnb returns the documented pieces and true params", {
@@ -35,4 +36,15 @@ test_that("counts are overdispersed when dispersion > 0", {
                       beta2 = c("(Intercept)" = 1.0, x1 = 0.0),
                       dispersion = c(m1 = 0.8, m2 = 0.8), seed = 3)
   expect_gt(var(s$data$y1), mean(s$data$y1))
+})
+
+test_that("simulate_rpbnb errors when supplied covariates miss a column", {
+  cov <- data.frame(x1 = rnorm(50))
+  expect_error(
+    simulate_rpbnb(n = 50, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+                   beta2 = c("(Intercept)" = 0.1, x2 = -0.2),
+                   dispersion = c(m1 = 0.4, m2 = 0.4),
+                   covariates = cov, seed = 1),
+    "missing required column"
+  )
 })
