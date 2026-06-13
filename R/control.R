@@ -38,6 +38,12 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
   if (!is.numeric(draws_hessian) || draws_hessian < 1) {
     stop("`draws_hessian` must be a positive integer.", call. = FALSE)
   }
+  if (!is.numeric(iterlim) || iterlim < 1) {
+    stop("`iterlim` must be a positive integer.", call. = FALSE)
+  }
+  if (!is.numeric(reltol) || reltol <= 0) {
+    stop("`reltol` must be a positive number.", call. = FALSE)
+  }
   structure(
     list(method = method, iterlim = as.integer(iterlim), reltol = reltol,
          print_level = as.integer(print_level),

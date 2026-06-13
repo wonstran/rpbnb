@@ -8,6 +8,7 @@
 #' @noRd
 halton_normal <- function(n_draws, d, skip = 100, burn = 200) {
   if (d <= 0) return(matrix(0, nrow = n_draws, ncol = 0))
+  # `skip` retained for API symmetry; randtoolbox::halton has no skip arg.
   n <- burn + n_draws
   U <- randtoolbox::halton(n = n, dim = d, normal = FALSE,
                            usetime = FALSE, init = TRUE)

@@ -12,6 +12,8 @@ test_that("rpbnb_control validates inputs", {
   expect_error(rpbnb_control(n_cores = 0), "n_cores")
   expect_error(rpbnb_control(method = "NOPE"), "method")
   expect_error(rpbnb_control(draws_hessian = -1), "draws_hessian")
+  expect_error(rpbnb_control(iterlim = 0), "iterlim")
+  expect_error(rpbnb_control(reltol = 0), "reltol")
 })
 
 test_that("rpbnb_control overrides take effect", {

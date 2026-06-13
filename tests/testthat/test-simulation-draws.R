@@ -14,3 +14,9 @@ test_that("d = 0 yields a 0-column matrix with n_draws rows", {
   Z <- rpbnb:::halton_normal(n_draws = 10, d = 0)
   expect_equal(dim(Z), c(10L, 0L))
 })
+
+test_that("halton_normal is deterministic across repeated calls", {
+  a <- rpbnb:::halton_normal(n_draws = 100, d = 2, burn = 50)
+  b <- rpbnb:::halton_normal(n_draws = 100, d = 2, burn = 50)
+  expect_identical(a, b)
+})
