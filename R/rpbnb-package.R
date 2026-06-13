@@ -8,7 +8,6 @@
 "_PACKAGE"
 
 #' @importFrom stats model.frame model.matrix model.response pnorm plogis
-#'   qnorm symnum coef logLik AIC BIC predict vcov dnbinom rnorm runif rbinom
-#'   var sd setNames
-#' @importFrom utils head
+#'   qnorm symnum coef logLik AIC BIC predict vcov dnbinom rnbinom rnorm runif
+#'   rbinom var sd setNames
 NULL
