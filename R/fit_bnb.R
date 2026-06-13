@@ -109,8 +109,8 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
   dimnames(vc) <- list(names(par_hat), names(par_hat))
   names(se) <- names(par_hat)
 
-  convergence <- list(code = fit$code, message = fit$message,
-                      iterations = fit$iterations)
+  convergence <- list(converged = fit$code <= 2L, code = fit$code,
+                      message = fit$message, iterations = fit$iterations)
 
   list(coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
        npar = length(par_hat),
@@ -124,8 +124,12 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
 #' @noRd
 fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
                                  X1, X2, Y1, Y2) {
-  g1 <- MASS::glm.nb(formula_1, data = data)
-  g2 <- MASS::glm.nb(formula_2, data = data)
+  g1 <- tryCatch(MASS::glm.nb(formula_1, data = data),
+                 error = function(e) stop("Margin 1 (", deparse(formula_1),
+                   ") glm.nb failed: ", conditionMessage(e), call. = FALSE))
+  g2 <- tryCatch(MASS::glm.nb(formula_2, data = data),
+                 error = function(e) stop("Margin 2 (", deparse(formula_2),
+                   ") glm.nb failed: ", conditionMessage(e), call. = FALSE))
 
   p1 <- length(stats::coef(g1)); p2 <- length(stats::coef(g2))
 
@@ -152,8 +156,9 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 
   ll <- as.numeric(stats::logLik(g1)) + as.numeric(stats::logLik(g2))
 
-  convergence <- list(code = g1$converged && g2$converged,
-                      message = "glm.nb", iterations = NA_integer_)
+  convergence <- list(converged = isTRUE(g1$converged) && isTRUE(g2$converged),
+                      code = NA_integer_, message = "glm.nb",
+                      iterations = NA_integer_)
 
   list(coef = par, vcov = vc, se = se, logLik = ll,
        npar = npar_total - 1,            # z_lambda is fixed, not free
@@ -169,7 +174,8 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #' @param dependence Dependence structure: "independence" (two univariate NB2
 #'   margins) or "famoye" (Famoye/Sarmanov bivariate NB).
 #' @param start Optional starting parameter vector.
-#' @param control An [rpbnb_control()] object.
+#' @param control An [rpbnb_control()] object. The famoye estimator uses BFGS;
+#'   `control$method` is currently honored only by the optimizer's internal setup.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples
@@ -186,6 +192,12 @@ fit_bnb <- function(formula_1, formula_2, data,
   mf2 <- stats::model.frame(formula_2, data = data)
   Y1  <- as.integer(stats::model.response(mf1))
   Y2  <- as.integer(stats::model.response(mf2))
+  if (length(Y1) != length(Y2)) {
+    stop("formula_1 and formula_2 yield different sample sizes (",
+         length(Y1), " vs ", length(Y2),
+         "); ensure both outcomes have complete cases on the same rows.",
+         call. = FALSE)
+  }
   if (any(Y1 < 0 | Y2 < 0)) stop("Counts must be non-negative", call. = FALSE)
   X1  <- stats::model.matrix(formula_1, mf1)
   X2  <- stats::model.matrix(formula_2, mf2)
