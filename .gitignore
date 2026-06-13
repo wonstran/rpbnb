@@ -1,0 +1,32 @@
+# R artifacts
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.Rapp.history
+.Ruserdata
+
+# Package build artifacts
+*.tar.gz
+*.Rcheck/
+src/*.o
+src/*.so
+src/*.dll
+
+# renv
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/staging/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*~
+.vscode/
+.idea/
+
+# Claude Code local settings
+.claude/
