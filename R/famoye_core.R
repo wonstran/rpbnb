@@ -5,7 +5,7 @@
 #' @noRd
 d_const <- function() 1 - exp(-1)
 
-#' E[exp(-Y)] under NB2(mu, m); c(mu, m) = (1 + d*m*mu)^(-1/m)
+#' E(exp(-Y)) under NB2(mu, m); c(mu, m) = (1 + d*m*mu)^(-1/m)
 #' @keywords internal
 #' @noRd
 c_val <- function(mu, m) (1 + d_const() * m * mu)^(-1 / m)
