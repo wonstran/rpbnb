@@ -17,11 +17,15 @@ test_that("c_val equals E[exp(-Y)] on a truncated NB2 grid", {
   expect_equal(rpbnb:::c_val(mu, m), approx, tolerance = 1e-8)
 })
 
-test_that("lambda_bounds_vec returns a valid open interval", {
+test_that("lambda_bounds_vec returns correct numeric bounds", {
   c1 <- c(0.2, 0.4, 0.6); c2 <- c(0.3, 0.5, 0.1)
   b  <- rpbnb:::lambda_bounds_vec(c1, c2)
   expect_length(b, 2)
-  expect_true(b[1] < 0 && b[2] > 0 && b[1] < b[2])
+  # obs 1 is binding lower bound: -1/((1-0.2)*(1-0.3))
+  expect_equal(b[1], -1 / ((1 - 0.2) * (1 - 0.3)), tolerance = 1e-10)
+  # obs 3 is binding upper bound: 1/(0.6*(1-0.1))
+  expect_equal(b[2], 1 / (0.6 * (1 - 0.1)), tolerance = 1e-10)
+  expect_true(b[1] < b[2])
 })
 
 test_that("d_const is Famoye's 1 - exp(-1)", {
