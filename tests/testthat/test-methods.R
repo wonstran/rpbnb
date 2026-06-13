@@ -41,7 +41,7 @@ test_that("summary and print run without error", {
   expect_output(print(s))
 })
 
-test_that("rpbnb_fit methods work, incl. NULL vcov under compute_se=FALSE", {
+test_that("rpbnb_fit methods work, incl. NA vcov under compute_se=FALSE", {
   sim <- simulate_rpbnb(n = 300, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
                         beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
                         random_1 = list(x1 = list(sd = 0.4)),
@@ -50,9 +50,12 @@ test_that("rpbnb_fit methods work, incl. NULL vcov under compute_se=FALSE", {
                    draws = 60, seed = 1, control = rpbnb_control(compute_se = FALSE))
   expect_s3_class(fit, "rpbnb_fit")
   expect_true(is.numeric(coef(fit)))
-  expect_null(vcov(fit))
+  V <- vcov(fit)
+  expect_true(is.matrix(V))
+  expect_equal(nrow(V), length(coef(fit)))
+  expect_true(all(is.na(V)))
   expect_s3_class(logLik(fit), "logLik")
-  expect_output(print(fit))         # must not error despite NA se / NULL vcov
+  expect_output(print(fit))         # must not error despite NA se / NA vcov
   expect_output(print(summary(fit)))
   p <- predict(fit)
   expect_equal(nrow(p), fit$nobs)

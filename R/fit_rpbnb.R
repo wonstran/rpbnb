@@ -248,7 +248,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     dimnames(vc) <- list(par_names, par_names)
     names(se) <- par_names
   } else {
-    vc <- NULL
+    # Keep vcov() type-consistent with bnb_fit (an NA-filled matrix, not NULL)
+    # when SEs are skipped, so downstream code can rely on a matrix shape.
+    vc <- matrix(NA_real_, npar, npar, dimnames = list(par_names, par_names))
     se <- rep(NA_real_, npar); names(se) <- par_names
   }
 

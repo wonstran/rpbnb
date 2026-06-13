@@ -60,6 +60,17 @@ test_that("fit_bnb famoye reproduces legacy bnbr_v2-4 estimates on rwm1984", {
   # p1 = p2 = 3 (intercept + outwork + kids) -> 6 betas + log_m1 + log_m2 +
   # z_lambda = 9 estimation-scale parameters.
   expect_equal(length(coef(fit)), 6 + 3)
+
+  # Reference values from the legacy estimator inst/legacy/bnbr_v2-4.R
+  # (bnbr_famoye_bfgs on docvis/hospvis ~ outwork + kids, rwm1984_clean.csv).
+  # These pin the port against future drift (acceptance criterion 6). The new
+  # fit reproduces these to full precision since both use the same BFGS path.
+  expect_equal(unname(cf[["b1:(Intercept)"]]),  1.056637893095, tolerance = 1e-4)
+  expect_equal(unname(cf[["b1:outwork"]]),       0.515812046351, tolerance = 1e-4)
+  expect_equal(unname(cf[["b1:kids"]]),         -0.313782996360, tolerance = 1e-4)
+  expect_equal(unname(cf[["b2:outwork"]]),       0.322182617958, tolerance = 1e-4)
+  expect_equal(unname(cf[["log_m1"]]),           0.850570193675, tolerance = 1e-4)
+  expect_equal(as.numeric(logLik(fit)),      -9642.61529797,    tolerance = 1e-3)
 })
 
 test_that("fit_bnb independence equals two univariate NB2 fits", {
