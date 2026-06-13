@@ -41,6 +41,7 @@ test_that("RP-BNB simulated-LL analytic gradient matches numDeriv", {
 })
 
 test_that("fit_rpbnb recovers simulated parameters (small case)", {
+  skip_on_cran()
   sim <- simulate_rpbnb(
     n = 1500,
     beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
@@ -68,6 +69,7 @@ test_that("fit_rpbnb recovers simulated parameters (small case)", {
 })
 
 test_that("fit_rpbnb with sd->0 approaches fixed-parameter BNB", {
+  skip_on_cran()
   sim <- simulate_rpbnb(
     n = 800,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
@@ -91,4 +93,39 @@ test_that("fit_rpbnb errors on unknown random name", {
               draws = 50, control = rpbnb_control(compute_se = FALSE)),
     "nope"
   )
+})
+
+test_that("fit_rpbnb compute_se=TRUE yields a finite covariance and SEs", {
+  skip_on_cran()
+  sim <- simulate_rpbnb(n = 400,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+    random_1 = list(x1 = list(sd = 0.4)),
+    dispersion = c(m1 = 0.4, m2 = 0.4), lambda = 0, seed = 7)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 80, seed = 3,
+                   control = rpbnb_control(compute_se = TRUE, draws_hessian = 40))
+  V <- vcov(fit)
+  expect_true(is.matrix(V))
+  expect_equal(nrow(V), length(coef(fit)))
+  expect_true(all(is.finite(fit$se)))
+  expect_true(all(diag(V) >= 0))
+})
+
+test_that("fit_rpbnb parallel path matches sequential and respects workers", {
+  skip_on_cran()
+  skip_if_not_installed("parallel")
+  sim <- simulate_rpbnb(n = 300,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+    random_1 = list(x1 = list(sd = 0.4)),
+    dispersion = c(m1 = 0.4, m2 = 0.4), lambda = 0, seed = 8)
+  seq_fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                       draws = 60, seed = 2,
+                       control = rpbnb_control(compute_se = FALSE, n_cores = 1))
+  par_fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                       draws = 60, seed = 2,
+                       control = rpbnb_control(compute_se = FALSE, n_cores = 2))
+  # Same draws + seed => statistically identical estimates (parallel only splits the draw loop)
+  expect_equal(unname(coef(seq_fit)), unname(coef(par_fit)), tolerance = 1e-6)
 })

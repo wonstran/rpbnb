@@ -40,7 +40,9 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #' @param draw_type Quasi-random draw type. Only "halton" is supported in this version.
 #' @param seed Random seed for the simulation draws.
 #' @param start Optional starting parameter vector.
-#' @param control An [rpbnb_control()] object.
+#' @param control An [rpbnb_control()] object. Estimation uses BFGS;
+#'   `control$method` is not currently honored by `fit_rpbnb` (the
+#'   simulated-likelihood objective returns an aggregate gradient).
 #' @return An object of class `rpbnb_fit`.
 #' @export
 #' @examples
@@ -138,6 +140,10 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     cl <- parallel::makeCluster(max(1L, as.integer(n_cores)))
     on.exit({ try(parallel::stopCluster(cl), silent = TRUE) }, add = TRUE)
     y1 <- Y1; y2 <- Y2
+    # clusterExport must list every transitive callee: workers run in a fresh
+    # globalenv without the rpbnb namespace, so all helpers (and their callees)
+    # must be exported by name. Adding a new internal call inside any pass
+    # function requires adding it here too.
     parallel::clusterExport(cl,
       c("X1", "X2", "XR1", "XR2", "y1", "y2", "Z1_opt", "Z2_opt",
         "c_val", "lambda_bounds_vec", "nb_logpmf_y_mu_r", "dct_dm",
