@@ -299,15 +299,3 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     draws = n_draws, draw_type = draw_type, seed = seed,
     ll_trace = ll_trace, convergence = convergence, call = match.call())
 }
-
-#' @export
-coef.rpbnb_fit <- function(object, ...) object$coef
-
-#' @export
-vcov.rpbnb_fit <- function(object, ...) object$vcov
-
-#' @export
-logLik.rpbnb_fit <- function(object, ...) {
-  structure(as.numeric(object$logLik), df = object$npar,
-            nobs = object$nobs, class = "logLik")
-}

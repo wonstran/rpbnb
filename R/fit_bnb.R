@@ -217,18 +217,3 @@ fit_bnb <- function(formula_1, formula_2, data,
               ll_trace = res$ll_trace, convergence = res$convergence,
               call = match.call())
 }
-
-#' @export
-coef.bnb_fit <- function(object, ...) object$coef
-
-#' @export
-logLik.bnb_fit <- function(object, ...) {
-  val <- object$logLik
-  attr(val, "df") <- object$npar
-  attr(val, "nobs") <- object$nobs
-  class(val) <- "logLik"
-  val
-}
-
-#' @export
-vcov.bnb_fit <- function(object, ...) object$vcov
