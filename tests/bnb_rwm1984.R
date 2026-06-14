@@ -64,9 +64,9 @@ cat(sprintf("LR statistic (1 df)  = %.3f   p = %.4g\n",
 cat("\n")
 gof <- bnb_gof(fit_fam, print_output = TRUE)
 
-# ---- 5. Average marginal effects (doctor-visits equation) -------------------
-cat("\n--- Average marginal effects (docvis) ---\n")
-me <- bnb_marginal_effects(fit_fam, which = "y1", type = "AME",
+# ---- 5. Average marginal effects (both equations) ---------------------------
+cat("\n--- Average marginal effects (docvis + hospvis) ---\n")
+me <- bnb_marginal_effects(fit_fam, which = "both", type = "AME",
                            print_output = TRUE)
 
 # ---- 6. Predicted conditional means -----------------------------------------
