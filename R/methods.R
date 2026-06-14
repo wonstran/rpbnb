@@ -167,13 +167,17 @@ print.summary.bnb_fit <- function(x, digits = 4, ...) {
 
   split_coef <- .split_coef_by_equation(x$coefficients)
 
-  # Extract variable names from the call for labeling
-  y1_name <- if (!is.null(x$call$formula_1)) {
+  # Extract variable names from the formulas for labeling
+  y1_name <- if (!is.null(x$formula_1)) {
+    as.character(x$formula_1[[2]])
+  } else if (!is.null(x$call$formula_1)) {
     as.character(x$call$formula_1[[2]])
   } else {
     "y1"
   }
-  y2_name <- if (!is.null(x$call$formula_2)) {
+  y2_name <- if (!is.null(x$formula_2)) {
+    as.character(x$formula_2[[2]])
+  } else if (!is.null(x$call$formula_2)) {
     as.character(x$call$formula_2[[2]])
   } else {
     "y2"
@@ -271,11 +275,15 @@ print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
 
   y1_name <- if (!is.null(x$formula_1)) {
     as.character(x$formula_1[[2]])
+  } else if (!is.null(x$call$formula_1)) {
+    as.character(x$call$formula_1[[2]])
   } else {
     "y1"
   }
   y2_name <- if (!is.null(x$formula_2)) {
     as.character(x$formula_2[[2]])
+  } else if (!is.null(x$call$formula_2)) {
+    as.character(x$call$formula_2[[2]])
   } else {
     "y2"
   }

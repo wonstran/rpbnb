@@ -10,7 +10,14 @@
 # Also executed by R CMD check, so it must run end-to-end without error.
 # =====================================================================
 
-library(rpbnb)
+# Load the package: try development version first, fall back to installed
+if (dir.exists("R") && dir.exists("tests")) {
+  # Running from package root in development mode
+  devtools::load_all(quiet = TRUE)
+} else {
+  # Installed package or running from elsewhere
+  library(rpbnb)
+}
 
 # ---- Load the bundled sample data (works both installed and in-source) ------
 csv <- system.file("extdata", "rwm1984_clean.csv", package = "rpbnb")
