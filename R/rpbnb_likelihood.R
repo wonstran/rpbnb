@@ -82,6 +82,14 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   g_logsd2 <- if (q2>0) numeric(q2) else numeric(0)
   g_logm1 <- 0; g_logm2 <- 0; g_z <- 0
 
+  # Draw-invariant quantities (depend only on m1, m2, y, constants): hoist out of
+  # the per-draw loop to avoid recomputing them R times per gradient evaluation.
+  dconst <- d_const()
+  r1v <- 1 / m1; r2v <- 1 / m2
+  log_m1_v <- log(m1); log_m2_v <- log(m2)
+  S1 <- digamma(r1v + y1) - digamma(r1v)
+  S2 <- digamma(r2v + y2) - digamma(r2v)
+
   for (r in 1:R) {
     mu1_r <- pass1[[r]]$mu1; mu2_r <- pass1[[r]]$mu2
     c1_r  <- pass1[[r]]$c1;  c2_r  <- pass1[[r]]$c2
@@ -105,12 +113,9 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     g_beta1 <- g_beta1 + colSums(sweep(score_b1, 1, w_ir, `*`))
     g_beta2 <- g_beta2 + colSums(sweep(score_b2, 1, w_ir, `*`))
 
-    r1v <- 1/m1; r2v <- 1/m2
-    S1 <- digamma(r1v + y1) - digamma(r1v)
-    S2 <- digamma(r2v + y2) - digamma(r2v)
-    term_m1 <- r1v^2 * log(m1) + r1v^2 * (log(mu1_r + r1v) - 1) +
+    term_m1 <- r1v^2 * log_m1_v + r1v^2 * (log(mu1_r + r1v) - 1) +
       r1v^2 * (y1 + r1v)/(mu1_r + r1v) - r1v^2 * S1 - (lam * k2v * inv_dep) * dc1_dm1
-    term_m2 <- r2v^2 * log(m2) + r2v^2 * (log(mu2_r + r2v) - 1) +
+    term_m2 <- r2v^2 * log_m2_v + r2v^2 * (log(mu2_r + r2v) - 1) +
       r2v^2 * (y2 + r2v)/(mu2_r + r2v) - r2v^2 * S2 - (lam * k1v * inv_dep) * dc2_dm2
     g_logm1 <- g_logm1 + sum(w_ir * (m1 * term_m1))
     g_logm2 <- g_logm2 + sum(w_ir * (m2 * term_m2))
@@ -120,7 +125,7 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     if (q1 > 0) {
       M1 <- sweep(XR1, 2, Z1sd[r,], `*`)     # dη/d log_sd = XR1 * (sd*z)
       part_nb <- sweep(M1, 1, w1, `*`)
-      row_factor1 <- -(d_const() * c1_r * mu1_r) / (1 + d_const() * m1 * mu1_r)
+      row_factor1 <- -(dconst * c1_r * mu1_r) / (1 + dconst * m1 * mu1_r)
       part_c  <- sweep(M1, 1, row_factor1, `*`)
       score_logsd1 <- part_nb - sweep(part_c, 1, pen1, `*`)
       g_logsd1 <- g_logsd1 + colSums(sweep(score_logsd1, 1, w_ir, `*`))
@@ -128,7 +133,7 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     if (q2 > 0) {
       M2 <- sweep(XR2, 2, Z2sd[r,], `*`)
       part_nb2 <- sweep(M2, 1, w2, `*`)
-      row_factor2 <- -(d_const() * c2_r * mu2_r) / (1 + d_const() * m2 * mu2_r)
+      row_factor2 <- -(dconst * c2_r * mu2_r) / (1 + dconst * m2 * mu2_r)
       part_c2  <- sweep(M2, 1, row_factor2, `*`)
       score_logsd2 <- part_nb2 - sweep(part_c2, 1, pen2, `*`)
       g_logsd2 <- g_logsd2 + colSums(sweep(score_logsd2, 1, w_ir, `*`))

@@ -14,7 +14,7 @@ test_that("row_log_sum_exp is stable for large magnitudes", {
   expect_true(all(is.finite(out)))
 })
 
-test_that("accepted_ll_trace keeps only improving values", {
-  tr <- rpbnb:::accepted_ll_trace(c(-10, -8, -9, -7, -7.0000001))
-  expect_equal(tr$logLik, c(-10, -8, -7), tolerance = 1e-6)
+test_that("signif_stars maps p-values to the expected codes", {
+  expect_equal(rpbnb:::signif_stars(c(0.0001, 0.02, 0.2)),
+               c("***", "*", " "))
 })

@@ -58,17 +58,25 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
   BIC_val <- fit$BIC
 
   # ---------- Null model (intercept-only), same dependence structure --------
+  # A degenerate response (e.g. a constant outcome in a subsample) can make the
+  # intercept-only glm.nb / optimizer fail. Treat that as missing pseudo-R^2
+  # rather than aborting goodness-of-fit entirely.
   df_null  <- data.frame(Y1 = fit$Y1, Y2 = fit$Y2)
-  fit_null <- fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null,
-                      dependence = fit$dependence)
-  ll_null  <- as.numeric(fit_null$logLik)
+  fit_null <- tryCatch(
+    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = fit$dependence),
+    error = function(e) {
+      warning("Null model could not be fitted (", conditionMessage(e),
+              "); pseudo-R^2 set to NA.", call. = FALSE)
+      NULL
+    })
+  ll_null <- if (is.null(fit_null)) NA_real_ else as.numeric(fit_null$logLik)
 
   # ---------- Pseudo R^2 ----------
   R2_MF  <- 1 - (ll_full / ll_null)
   R2_MFa <- 1 - ((ll_full - k) / ll_null)
   R2_CS  <- 1 - exp((2 / n) * (ll_null - ll_full))
   denom  <- 1 - exp((2 / n) * ll_null)
-  R2_NK  <- if (abs(denom) < .Machine$double.eps) NA_real_ else R2_CS / denom
+  R2_NK  <- if (is.na(denom) || abs(denom) < .Machine$double.eps) NA_real_ else R2_CS / denom
 
   clamp01 <- function(x) ifelse(is.na(x), NA_real_, pmin(pmax(x, 0), 1))
   R2_MF  <- clamp01(R2_MF)

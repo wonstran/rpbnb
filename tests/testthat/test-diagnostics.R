@@ -12,6 +12,19 @@ test_that("bnb_gof returns finite AIC/BIC and pseudo-R2 in [0,1]", {
   expect_true(all(g$pseudoR2 >= 0 & g$pseudoR2 <= 1, na.rm = TRUE))
 })
 
+test_that("bnb_gof returns NA pseudo-R2 with a warning when the null model fails", {
+  # A degenerate (all-zero) response makes the intercept-only glm.nb null fail;
+  # bnb_gof should warn and return NA pseudo-R2 rather than aborting.
+  fake <- structure(
+    list(logLik = -50, npar = 4L, nobs = 30L, AIC = 108, BIC = 114,
+         dependence = "independence",
+         Y1 = rep(0L, 30), Y2 = rpois(30, 2)),
+    class = "bnb_fit")
+  expect_warning(g <- bnb_gof(fake, print_output = FALSE), "[Nn]ull model")
+  expect_true(all(is.na(g$pseudoR2)))
+  expect_equal(g$AIC, 108)              # full-model metrics still returned
+})
+
 test_that("bnb_marginal_effects returns a row per requested variable", {
   me <- bnb_marginal_effects(make_diag_fit(), which = "y1", type = "AME",
                              print_output = FALSE)

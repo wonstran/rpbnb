@@ -136,11 +136,14 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
   log_m1 <- log(1 / g1$theta)
   log_m2 <- log(1 / g2$theta)
 
-  par <- c(stats::coef(g1), stats::coef(g2), log_m1, log_m2, 0)
+  # Independence has no dependence parameter: the coefficient vector holds only
+  # the two betas and the two dispersions (no fabricated z_lambda), so
+  # length(coef) == npar. lambda = 0 is recorded separately on the fit object.
+  par <- c(stats::coef(g1), stats::coef(g2), log_m1, log_m2)
   names(par) <- c(paste0("b1:", cn1), paste0("b2:", cn2),
-                  "log_m1", "log_m2", "z_lambda")
+                  "log_m1", "log_m2")
 
-  npar_total <- length(par)
+  npar_total <- length(par)            # p1 + p2 + 2, all free
   vc <- matrix(0, npar_total, npar_total,
                dimnames = list(names(par), names(par)))
   vc[1:p1, 1:p1] <- stats::vcov(g1)
@@ -148,11 +151,9 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
   # log_m = log(1/theta); delta-method var(log_m) = (SE.theta / theta)^2
   vc[p1 + p2 + 1, p1 + p2 + 1] <- (g1$SE.theta / g1$theta)^2
   vc[p1 + p2 + 2, p1 + p2 + 2] <- (g2$SE.theta / g2$theta)^2
-  # z_lambda is fixed at 0: variance 0
 
   se <- sqrt(pmax(diag(vc), 0))
   names(se) <- names(par)
-  se["z_lambda"] <- NA_real_
 
   ll <- as.numeric(stats::logLik(g1)) + as.numeric(stats::logLik(g2))
 
@@ -161,7 +162,7 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
                       iterations = NA_integer_)
 
   list(coef = par, vcov = vc, se = se, logLik = ll,
-       npar = npar_total - 1,            # z_lambda is fixed, not free
+       npar = npar_total,               # all parameters free (no lambda)
        lambda = 0, bounds = c(NA_real_, NA_real_),
        mu1 = unname(stats::fitted(g1)), mu2 = unname(stats::fitted(g2)),
        ll_trace = numeric(0), convergence = convergence)

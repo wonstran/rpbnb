@@ -221,6 +221,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2
     if (any(!is.finite(info))) {
+      warning("Non-finite information; retrying Hessian with larger step.",
+              call. = FALSE)
       H <- numDeriv::hessian(ll_fb, par_hat,
                              method.args = list(r = max(6, control$hess_r + 2),
                                                 eps = max(1e-4, 5 * control$hess_eps)))
