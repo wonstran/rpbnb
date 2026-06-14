@@ -66,6 +66,15 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   print(tab, row.names = FALSE, right = TRUE)
 }
 
+.split_coef_by_equation <- function(coef_matrix) {
+  b1_idx <- grepl("^b1:", coef_matrix$Parameter)
+  b2_idx <- grepl("^b2:", coef_matrix$Parameter)
+  list(
+    b1 = coef_matrix[b1_idx, , drop = FALSE],
+    b2 = coef_matrix[b2_idx, , drop = FALSE]
+  )
+}
+
 # Natural-scale view of the transformed parameters: random-coefficient SDs
 # (exp(log_sd)), NB2 dispersions m = exp(log_m), and the Famoye dependence lambda
 # (stored on the object), each with a delta-method standard error. Returns NULL
@@ -116,7 +125,24 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 print.bnb_fit <- function(x, digits = 4, ...) {
   cat("Bivariate NB (", x$dependence, ") fit\n", sep = "")
   cat("Call: "); print(x$call)
-  .print_coef_matrix(.coef_matrix(x), digits)
+
+  coef_matrix <- .coef_matrix(x)
+  split_coef <- .split_coef_by_equation(coef_matrix)
+
+  y1_name <- as.character(x$formula_1[[2]])
+  if (nrow(split_coef$b1) > 0) {
+    cat("\n--- Equation 1: ", y1_name, " ---\n", sep = "")
+    split_coef$b1$Parameter <- sub("^b1:", "", split_coef$b1$Parameter)
+    .print_coef_matrix(split_coef$b1, digits)
+  }
+
+  y2_name <- as.character(x$formula_2[[2]])
+  if (nrow(split_coef$b2) > 0) {
+    cat("\n--- Equation 2: ", y2_name, " ---\n", sep = "")
+    split_coef$b2$Parameter <- sub("^b2:", "", split_coef$b2$Parameter)
+    .print_coef_matrix(split_coef$b2, digits)
+  }
+
   .print_natural_scale(x, digits)
   cat(sprintf("\nlogLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               as.numeric(x$logLik), x$AIC, x$BIC))
@@ -130,14 +156,41 @@ summary.bnb_fit <- function(object, ...) {
                  natural = .natural_scale_table(object),
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
-                 dependence = object$dependence, call = object$call),
+                 dependence = object$dependence, call = object$call,
+                 formula_1 = object$formula_1, formula_2 = object$formula_2),
             class = "summary.bnb_fit")
 }
 
 #' @export
 print.summary.bnb_fit <- function(x, digits = 4, ...) {
   cat("Bivariate NB (", x$dependence, ") - summary\n", sep = "")
-  .print_coef_matrix(x$coefficients, digits)
+
+  split_coef <- .split_coef_by_equation(x$coefficients)
+
+  # Extract variable names from the call for labeling
+  y1_name <- if (!is.null(x$call$formula_1)) {
+    as.character(x$call$formula_1[[2]])
+  } else {
+    "y1"
+  }
+  y2_name <- if (!is.null(x$call$formula_2)) {
+    as.character(x$call$formula_2[[2]])
+  } else {
+    "y2"
+  }
+
+  if (nrow(split_coef$b1) > 0) {
+    cat("\n--- Equation 1: ", y1_name, " ---\n", sep = "")
+    split_coef$b1$Parameter <- sub("^b1:", "", split_coef$b1$Parameter)
+    .print_coef_matrix(split_coef$b1, digits)
+  }
+
+  if (nrow(split_coef$b2) > 0) {
+    cat("\n--- Equation 2: ", y2_name, " ---\n", sep = "")
+    split_coef$b2$Parameter <- sub("^b2:", "", split_coef$b2$Parameter)
+    .print_coef_matrix(split_coef$b2, digits)
+  }
+
   if (!is.null(x$natural)) {
     cat("\nNatural-scale dispersion / dependence (delta-method SE):\n")
     .print_coef_matrix(x$natural, digits)
@@ -175,7 +228,24 @@ print.rpbnb_fit <- function(x, digits = 4, ...) {
   cat("Random-parameter bivariate NB fit (draws = ", x$draws,
       ", draw_type = ", x$draw_type, ")\n", sep = "")
   cat("Call: "); print(x$call)
-  .print_coef_matrix(.coef_matrix(x), digits)
+
+  coef_matrix <- .coef_matrix(x)
+  split_coef <- .split_coef_by_equation(coef_matrix)
+
+  y1_name <- as.character(x$formula_1[[2]])
+  if (nrow(split_coef$b1) > 0) {
+    cat("\n--- Equation 1: ", y1_name, " ---\n", sep = "")
+    split_coef$b1$Parameter <- sub("^b1:", "", split_coef$b1$Parameter)
+    .print_coef_matrix(split_coef$b1, digits)
+  }
+
+  y2_name <- as.character(x$formula_2[[2]])
+  if (nrow(split_coef$b2) > 0) {
+    cat("\n--- Equation 2: ", y2_name, " ---\n", sep = "")
+    split_coef$b2$Parameter <- sub("^b2:", "", split_coef$b2$Parameter)
+    .print_coef_matrix(split_coef$b2, digits)
+  }
+
   .print_natural_scale(x, digits)
   cat(sprintf("\nlogLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               as.numeric(x$logLik), x$AIC, x$BIC))
@@ -188,14 +258,40 @@ summary.rpbnb_fit <- function(object, ...) {
                  natural = .natural_scale_table(object),
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
-                 draws = object$draws, call = object$call),
+                 draws = object$draws, call = object$call,
+                 formula_1 = object$formula_1, formula_2 = object$formula_2),
             class = "summary.rpbnb_fit")
 }
 
 #' @export
 print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
   cat("Random-parameter bivariate NB - summary (draws = ", x$draws, ")\n", sep = "")
-  .print_coef_matrix(x$coefficients, digits)
+
+  split_coef <- .split_coef_by_equation(x$coefficients)
+
+  y1_name <- if (!is.null(x$formula_1)) {
+    as.character(x$formula_1[[2]])
+  } else {
+    "y1"
+  }
+  y2_name <- if (!is.null(x$formula_2)) {
+    as.character(x$formula_2[[2]])
+  } else {
+    "y2"
+  }
+
+  if (nrow(split_coef$b1) > 0) {
+    cat("\n--- Equation 1: ", y1_name, " ---\n", sep = "")
+    split_coef$b1$Parameter <- sub("^b1:", "", split_coef$b1$Parameter)
+    .print_coef_matrix(split_coef$b1, digits)
+  }
+
+  if (nrow(split_coef$b2) > 0) {
+    cat("\n--- Equation 2: ", y2_name, " ---\n", sep = "")
+    split_coef$b2$Parameter <- sub("^b2:", "", split_coef$b2$Parameter)
+    .print_coef_matrix(split_coef$b2, digits)
+  }
+
   if (!is.null(x$natural)) {
     cat("\nNatural-scale dispersion / dependence (delta-method SE):\n")
     .print_coef_matrix(x$natural, digits)
