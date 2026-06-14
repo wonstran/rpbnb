@@ -2,6 +2,17 @@
 # Parameter vector: [beta1 (p1), beta2 (p2), log_m1, log_m2, z_lambda].
 # Core math (c_val, nb_logpmf_y_mu_r, lambda_bounds_vec, dct_dm, dc_dbeta_mat,
 # d_const) lives in famoye_core.R; these functions call those helpers.
+#
+# Gradient note: the objective (bnb_loglik_vec) recomputes the data-adaptive
+# global lambda bounds at every parameter value, while the analytic score
+# (bnb_score_mat) treats those bounds as constant -- it omits the derivative of
+# the max/min-over-observations bounds, which are non-smooth and contribute only
+# through one binding observation. Away from the optimum the two can differ, but
+# at the solution the bounds are locally stationary and the analytic gradient
+# matches the true objective gradient to ~1e-3 (both ~0); see the regression test
+# "analytic (frozen-bounds) gradient agrees with the true objective gradient" in
+# tests/testthat/test-fit-bnb.R. The Hessian/SEs use the same frozen-bounds
+# objective (bnbr_loglik_fixed_bounds) for consistency.
 
 #' Per-observation log-likelihood (vector) for the Famoye BNB model
 #' @keywords internal

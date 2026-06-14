@@ -1,3 +1,22 @@
+test_that("at the optimum the analytic (frozen-bounds) gradient agrees with the true objective gradient", {
+  # The optimizer's objective uses data-adaptive lambda bounds while the analytic
+  # gradient treats them as frozen. This regression guard confirms the resulting
+  # optimum is a genuine stationary point of the ACTUAL objective: the numerical
+  # gradient of sum(bnb_loglik_vec) at the solution is ~0 and matches the analytic
+  # gradient. (Codex review flagged a 3.71 mismatch -- but that was at an arbitrary
+  # point far from the optimum, not at the solution.)
+  skip_if_not(file.exists(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb")))
+  d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+  fit <- fit_bnb(docvis ~ outwork + kids, hospvis ~ outwork + kids,
+                 data = d, dependence = "famoye")
+  ph <- fit$coef
+  obj <- function(p) sum(rpbnb:::bnb_loglik_vec(p, fit$Y1, fit$Y2, fit$X1, fit$X2))
+  g_true <- numDeriv::grad(obj, ph)
+  g_anal <- rpbnb:::bnb_grad_vec(ph, fit$Y1, fit$Y2, fit$X1, fit$X2)
+  expect_lt(max(abs(g_true)), 0.05)         # true objective gradient ~ 0 at optimum
+  expect_lt(max(abs(g_true - g_anal)), 0.01) # analytic gradient agrees there
+})
+
 test_that("bnb_loglik_vec equals two NB2 logs + dependence term at lambda interior", {
   set.seed(7)
   n  <- 50

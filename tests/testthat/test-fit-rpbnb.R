@@ -84,6 +84,39 @@ test_that("fit_rpbnb with sd->0 approaches fixed-parameter BNB", {
                unname(coef(bn)[["b1:x1"]]), tolerance = 0.1)
 })
 
+test_that("fit_rpbnb honours the seed (different seeds -> different draws/estimates)", {
+  skip_on_cran()
+  sim <- simulate_rpbnb(n = 400,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+    random_1 = list(x1 = list(sd = 0.5)),
+    dispersion = c(m1 = 0.4, m2 = 0.4), seed = 6)
+  ctl <- rpbnb_control(compute_se = FALSE)
+  f1  <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 80, seed = 1, control = ctl)
+  f1b <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 80, seed = 1, control = ctl)
+  f2  <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 80, seed = 2, control = ctl)
+  expect_equal(unname(coef(f1)), unname(coef(f1b)), tolerance = 1e-10)
+  expect_false(isTRUE(all.equal(unname(coef(f1)), unname(coef(f2)), tolerance = 1e-6)))
+})
+
+test_that("predict.rpbnb_fit on newdata reproduces the stored draw-averaged means", {
+  skip_on_cran()
+  sim <- simulate_rpbnb(n = 500,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+    random_1 = list(x1 = list(sd = 0.5)),
+    dispersion = c(m1 = 0.4, m2 = 0.4), seed = 5)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 300, seed = 1, control = rpbnb_control(compute_se = FALSE))
+  p_stored <- predict(fit)                       # draw-averaged unconditional means
+  p_new    <- predict(fit, newdata = sim$data)   # closed-form unconditional means
+  expect_equal(p_new$mu1, p_stored$mu1, tolerance = 0.02)
+  expect_equal(p_new$mu2, p_stored$mu2, tolerance = 0.02)
+})
+
 test_that("fit_rpbnb errors on unknown random name", {
   sim <- simulate_rpbnb(n = 100, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
                         beta2 = c("(Intercept)" = 0.1, x1 = 0.1),

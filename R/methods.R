@@ -83,15 +83,41 @@ logLik.rpbnb_fit <- function(object, ...) {
             nobs = object$nobs, class = "logLik")
 }
 
+# Unconditional mean for one equation under normal random coefficients:
+# E[exp(x'b + sum_j x_j * sd_j * eta_j)] = exp(x'b + 0.5 * sum_j sd_j^2 * x_j^2),
+# matching the draw-averaged means stored at fit time. Internal.
+.rpbnb_uncond_mu <- function(formula, coef, beta_prefix, sd_prefix, newdata) {
+  X <- stats::model.matrix(formula[-2L], newdata)
+  b <- coef[grep(paste0("^", beta_prefix, ":"), names(coef))]
+  names(b) <- sub(paste0("^", beta_prefix, ":"), "", names(b))
+  b <- b[colnames(X)]                       # align coefficients to design columns
+  if (anyNA(b)) {
+    stop("newdata produces design columns absent from the fitted model: ",
+         paste(colnames(X)[is.na(b)], collapse = ", "),
+         ". Ensure factor levels match the training data.", call. = FALSE)
+  }
+  lp <- as.vector(X %*% b)
+  sd_log <- coef[grep(paste0("^", sd_prefix, ":"), names(coef))]
+  if (length(sd_log)) {
+    rand_cols <- sub(paste0("^", sd_prefix, ":"), "", names(sd_log))
+    sds <- exp(sd_log)
+    for (k in seq_along(rand_cols)) {
+      col <- rand_cols[k]
+      if (col %in% colnames(X)) {
+        lp <- lp + 0.5 * (sds[[k]]^2) * (X[, col]^2)
+      }
+    }
+  }
+  as.vector(exp(lp))
+}
+
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
   if (is.null(newdata)) return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
-  X1 <- stats::model.matrix(object$formula_1[-2L], newdata)
-  X2 <- stats::model.matrix(object$formula_2[-2L], newdata)
-  b1 <- object$coef[grep("^b1:", names(object$coef))]
-  b2 <- object$coef[grep("^b2:", names(object$coef))]
-  data.frame(mu1 = as.vector(exp(X1 %*% b1)),
-             mu2 = as.vector(exp(X2 %*% b2)))
+  data.frame(
+    mu1 = .rpbnb_uncond_mu(object$formula_1, object$coef, "b1", "log_sd1", newdata),
+    mu2 = .rpbnb_uncond_mu(object$formula_2, object$coef, "b2", "log_sd2", newdata)
+  )
 }
 
 #' @export

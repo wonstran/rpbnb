@@ -67,7 +67,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   n_draws      <- draws
   n_draws_hess <- control$draws_hessian
   halton_burn  <- control$halton_burn
-  halton_skip  <- control$halton_skip
   n_cores      <- control$n_cores
   compute_se   <- control$compute_se
   method       <- "BFGS"
@@ -75,17 +74,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                        reltol = control$reltol,
                        printLevel = control$print_level)
 
-  mf1 <- stats::model.frame(formula_1, data = data)
-  mf2 <- stats::model.frame(formula_2, data = data)
-  Y1  <- as.integer(stats::model.response(mf1))
-  Y2  <- as.integer(stats::model.response(mf2))
-  if (length(Y1) != length(Y2)) {
-    stop("formula_1 and formula_2 yield different sample sizes (",
-         length(Y1), " vs ", length(Y2), ").", call. = FALSE)
-  }
-  if (any(Y1 < 0 | Y2 < 0)) stop("Counts must be non-negative", call. = FALSE)
-  X1  <- stats::model.matrix(formula_1, mf1)
-  X2  <- stats::model.matrix(formula_2, mf2)
+  prep <- .prepare_bnb_data(formula_1, formula_2, data)
+  Y1 <- prep$Y1; Y2 <- prep$Y2
+  X1 <- prep$X1; X2 <- prep$X2
 
   # random names -> indices; unknown names are an error (not silently dropped)
   idx_from_names <- function(who, X) {
@@ -105,10 +96,13 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   XR1 <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else NULL
   XR2 <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else NULL
 
-  # Halton normals for optimization phase (deterministic; set seed first)
+  # Halton normals for the optimization phase. set.seed(seed) drives the
+  # Cranley-Patterson rotation in halton_normal, so `seed` selects a reproducible
+  # randomized-QMC draw set; the same draws are reused across all optimizer
+  # evaluations for a smooth simulated likelihood.
   set.seed(seed)
   if ((q1 + q2) > 0) {
-    Z_opt  <- halton_normal(n_draws, q1 + q2, skip = halton_skip, burn = halton_burn)
+    Z_opt  <- halton_normal(n_draws, q1 + q2, burn = halton_burn)
     Z1_opt <- if (q1 > 0) Z_opt[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
     Z2_opt <- if (q2 > 0) Z_opt[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
   } else {
@@ -200,7 +194,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     set.seed(seed + 1L)
     if ((q1 + q2) > 0) {
       Z_h  <- halton_normal(n_draws_hess, q1 + q2,
-                            skip = halton_skip,
                             burn = max(50, floor(halton_burn / 3)))
       Z1_h <- if (q1 > 0) Z_h[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)
       Z2_h <- if (q2 > 0) Z_h[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)

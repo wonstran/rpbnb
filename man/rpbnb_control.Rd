@@ -11,7 +11,6 @@ rpbnb_control(
   print_level = 0L,
   draws_hessian = 100L,
   halton_burn = 300L,
-  halton_skip = 100L,
   n_cores = 1L,
   compute_se = TRUE,
   hess_eps = 1e-05,
@@ -31,7 +30,8 @@ rpbnb_control(
 \item{draws_hessian}{Number of simulation draws used for the random-parameter
 Hessian (smaller than the optimization draws for speed). Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
 
-\item{halton_burn, halton_skip}{Halton sequence burn-in and skip.}
+\item{halton_burn}{Number of leading Halton points discarded before forming
+the simulation draws.}
 
 \item{n_cores}{Worker processes for the optional cluster path (1 = sequential).}
 

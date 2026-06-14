@@ -188,25 +188,15 @@ fit_bnb <- function(formula_1, formula_2, data,
                     start = NULL, control = rpbnb_control()) {
   dependence <- match.arg(dependence)
 
-  mf1 <- stats::model.frame(formula_1, data = data)
-  mf2 <- stats::model.frame(formula_2, data = data)
-  Y1  <- as.integer(stats::model.response(mf1))
-  Y2  <- as.integer(stats::model.response(mf2))
-  if (length(Y1) != length(Y2)) {
-    stop("formula_1 and formula_2 yield different sample sizes (",
-         length(Y1), " vs ", length(Y2),
-         "); ensure both outcomes have complete cases on the same rows.",
-         call. = FALSE)
-  }
-  if (any(Y1 < 0 | Y2 < 0)) stop("Counts must be non-negative", call. = FALSE)
-  X1  <- stats::model.matrix(formula_1, mf1)
-  X2  <- stats::model.matrix(formula_2, mf2)
-  cn1 <- colnames(X1); cn2 <- colnames(X2)
+  prep <- .prepare_bnb_data(formula_1, formula_2, data)
+  Y1 <- prep$Y1; Y2 <- prep$Y2
+  X1 <- prep$X1; X2 <- prep$X2
+  cn1 <- prep$cn1; cn2 <- prep$cn2
 
   res <- if (dependence == "famoye") {
     fit_bnb_famoye(Y1, Y2, X1, X2, cn1, cn2, start, control)
   } else {
-    fit_bnb_independence(formula_1, formula_2, data, cn1, cn2, X1, X2, Y1, Y2)
+    fit_bnb_independence(formula_1, formula_2, prep$data, cn1, cn2, X1, X2, Y1, Y2)
   }
 
   new_bnb_fit(coef = res$coef, vcov = res$vcov, se = res$se,
