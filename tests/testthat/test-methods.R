@@ -22,14 +22,27 @@ test_that("famoye length(coef) == npar; independence drops the fake z_lambda", {
   expect_equal(nrow(vcov(fi)), length(coef(fi)))
 })
 
-test_that("summary surfaces natural-scale dispersion and dependence with SEs", {
-  ff <- make_small_bnb()
+test_that("summary surfaces natural-scale dispersion and dependence with finite SEs", {
+  ff <- make_small_bnb()                       # famoye, default control -> SEs computed
   s <- summary(ff)
   expect_false(is.null(s$natural))
   expect_true(any(grepl("^m1", s$natural$Parameter)))
-  expect_true(any(grepl("lambda", s$natural$Parameter)))
   lam_row <- s$natural[grepl("lambda", s$natural$Parameter), ]
-  expect_true(is.finite(lam_row$Estimate))   # natural-scale lambda, not z_lambda
+  m1_row  <- s$natural[grepl("^m1", s$natural$Parameter), ]
+  expect_true(is.finite(lam_row$Estimate))     # natural-scale lambda, not z_lambda
+  expect_true(is.finite(lam_row$StdErr))       # delta-method SE actually computed
+  expect_true(is.finite(m1_row$StdErr))
+})
+
+test_that("independence summary shows no lambda row (no dependence parameter)", {
+  set.seed(21)
+  d <- data.frame(x = rnorm(400))
+  d$y1 <- rnbinom(400, size = 2, mu = exp(0.3 + 0.2 * d$x))
+  d$y2 <- rnbinom(400, size = 2, mu = exp(0.1 - 0.1 * d$x))
+  fi <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "independence")
+  nat <- summary(fi)$natural
+  expect_false(any(grepl("lambda", nat$Parameter)))
+  expect_true(any(grepl("^m1", nat$Parameter)))
 })
 
 test_that("coef/vcov/logLik/AIC/BIC are consistent", {

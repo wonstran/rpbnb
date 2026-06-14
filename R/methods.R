@@ -86,10 +86,12 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   if ("log_m1" %in% names(cf)) { m1 <- exp(cf[["log_m1"]]); add("m1 (dispersion)", m1, m1 * se_of("log_m1")) }
   if ("log_m2" %in% names(cf)) { m2 <- exp(cf[["log_m2"]]); add("m2 (dispersion)", m2, m2 * se_of("log_m2")) }
 
-  if (!is.null(object$lambda)) {
+  # Only models with an estimated dependence parameter (z_lambda present, i.e.
+  # famoye) get a lambda row; an independence fit has no dependence parameter.
+  if ("z_lambda" %in% names(cf) && !is.null(object$lambda)) {
     lam_se <- NA_real_
-    if ("z_lambda" %in% names(cf) && !is.null(object$bounds) &&
-        all(is.finite(object$bounds)) && is.finite(se_of("z_lambda"))) {
+    if (!is.null(object$bounds) && all(is.finite(object$bounds)) &&
+        is.finite(se_of("z_lambda"))) {
       eps <- 1e-6; sig <- stats::plogis(cf[["z_lambda"]])
       dlam_dz <- (object$bounds[2] - object$bounds[1]) * (1 - 2 * eps) * sig * (1 - sig)
       lam_se <- abs(dlam_dz) * se_of("z_lambda")

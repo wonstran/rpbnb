@@ -36,11 +36,11 @@ test_that("fit_bnb rejects non-integer responses instead of silently truncating"
   )
 })
 
-test_that("fit_bnb rejects non-finite responses", {
+test_that("fit_bnb rejects non-finite responses via the finiteness check", {
   d <- data.frame(y1 = c(1, Inf, 3), y2 = c(0, 1, 2), x = c(0.1, 0.2, 0.3))
   expect_error(
     fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye"),
-    "finite|integer"
+    "non-finite"
   )
 })
 

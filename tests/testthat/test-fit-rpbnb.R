@@ -115,6 +115,29 @@ test_that("predict.rpbnb_fit on newdata reproduces the stored draw-averaged mean
   p_new    <- predict(fit, newdata = sim$data)   # closed-form unconditional means
   expect_equal(p_new$mu1, p_stored$mu1, tolerance = 0.02)
   expect_equal(p_new$mu2, p_stored$mu2, tolerance = 0.02)
+
+  # Independent oracle: the closed-form unconditional mean must differ
+  # MATERIALLY from the naive exp(Xb) (no heterogeneity correction) on the
+  # random equation -- i.e. the 0.5*sd^2*x^2 lift is actually applied. With
+  # sd ~ 0.5 the average lift is well above 5%.
+  b1 <- coef(fit)[grep("^b1:", names(coef(fit)))]
+  names(b1) <- sub("^b1:", "", names(b1))
+  X1 <- stats::model.matrix(~ x1, sim$data)
+  mu_plain <- as.vector(exp(X1[, names(b1)] %*% b1))
+  rel_gap <- mean(abs(p_new$mu1 - mu_plain)) / mean(p_new$mu1)
+  expect_gt(rel_gap, 0.05)
+})
+
+test_that("predict honours a dot formula (y ~ .) end-to-end", {
+  skip_on_cran()
+  sim <- simulate_rpbnb(n = 200, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+                        beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+                        dispersion = c(m1 = 0.4, m2 = 0.4), seed = 9)
+  d <- sim$data[, c("y1", "x1")]   # only y1 and x1 so `.` is unambiguous
+  fit <- fit_bnb(y1 ~ ., y2 ~ x1,
+                 data = cbind(d, y2 = sim$data$y2), dependence = "famoye")
+  expect_s3_class(fit, "bnb_fit")
+  expect_true("b1:x1" %in% names(coef(fit)))
 })
 
 test_that("fit_rpbnb errors on unknown random name", {

@@ -40,7 +40,10 @@
 #' @noRd
 .prepare_bnb_data <- function(formula_1, formula_2, data) {
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
-  vars <- unique(c(all.vars(formula_1), all.vars(formula_2)))
+  # Expand the formulas against the data so a "." RHS resolves to the actual
+  # columns before collecting variable names.
+  vars <- unique(c(all.vars(stats::terms(formula_1, data = data)),
+                   all.vars(stats::terms(formula_2, data = data))))
   missing_vars <- vars[!vars %in% names(data)]
   if (length(missing_vars)) {
     stop("Variable(s) not found in data: ",
