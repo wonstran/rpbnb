@@ -2,17 +2,18 @@ test_that("normal spec reproduces the pre-refactor draws (backward compat)", {
   set.seed(99)
   ref_cov <- data.frame(x1 = rnorm(2000))
   # Legacy realization formula: B = beta + sd * rnorm(n)
-  set.seed(5); legacy_eps <- rnorm(2000)
-  legacy_B <- 0.4 + 0.5 * legacy_eps
+  # Inside simulate_rpbnb(seed=5): set.seed(5) runs, then covariates are provided (no RNG),
+  # then realize() is called for eq1, which draws rnorm(n) for the x1 random coefficient.
+  set.seed(5)
+  legacy_eq1_x1 <- 0.4 + 0.5 * rnorm(2000)
   s <- simulate_rpbnb(n = 2000,
         beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
         beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
         random_1 = list(x1 = list(sd = 0.5)),
         dispersion = c(m1 = 0.4, m2 = 0.5),
         covariates = ref_cov, seed = 5)
-  # The x1 realized coefficients are drawn first for eq1 in realize(); compare moments
-  expect_equal(mean(s$coef_realized$eq1[, "x1"]), 0.4, tolerance = 0.1)
-  expect_equal(stats::sd(s$coef_realized$eq1[, "x1"]), 0.5, tolerance = 0.06)
+  # Assert exact bit-identity reproduction of the legacy normal stream
+  expect_equal(unname(s$coef_realized$eq1[, "x1"]), legacy_eq1_x1, tolerance = 1e-9)
 })
 
 test_that("lognormal sign forces coefficient sign", {
