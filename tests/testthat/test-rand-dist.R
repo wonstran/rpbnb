@@ -48,6 +48,8 @@ test_that("parse_rand_spec handles char vector, named list, and errors", {
   expect_error(parse_rand_spec(list(x1 = "weibull")), "unknown distribution")
   expect_error(parse_rand_spec(list(x1 = list(dist = "normal", sign = -1))),
                "only meaningful for lognormal")
+  expect_error(parse_rand_spec(list(x1 = list(dist = "uniform", sign = 1))),
+               "only meaningful for lognormal")
   expect_error(parse_rand_spec(list(x1 = list(dist = "lognormal", sign = 2))),
                "must be -1 or 1")
   expect_error(parse_rand_spec(list("normal")), "named list")

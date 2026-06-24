@@ -63,6 +63,55 @@ test_that("analytic gradient matches numeric gradient for each distribution", {
   check_grad("lognormal", sign = -1)
 })
 
+test_that("analytic gradient matches numeric gradient for mixed cross-equation random coefs", {
+  # Case: eq1 has lognormal (sign=-1) random coef; eq2 has triangular random coef
+  # This exercises q1 > 0 AND q2 > 0 simultaneously.
+  set.seed(7)
+  n <- 80
+  X1 <- cbind(`(Intercept)` = 1, x1 = rnorm(n))
+  X2 <- cbind(`(Intercept)` = 1, x2 = rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rpois(n, 2)
+  rand_idx1 <- 2L; rand_idx2 <- 2L
+  XR1 <- X1[, rand_idx1, drop = FALSE]
+  XR2 <- X2[, rand_idx2, drop = FALSE]
+  U1 <- halton_uniform(60, 1, burn = 50)
+  U2 <- halton_uniform(60, 1, burn = 50)
+  dist1 <- "lognormal"; sign1 <- -1
+  dist2 <- "triangular"; sign2 <- 1
+  # par: b1(2), b2(2), scale1(1), scale2(1), log_m1, log_m2, z_lambda
+  par <- c(0.1, -0.3, 0.05, -0.1, log(0.3), log(0.4), log(0.5), log(0.6), 0.2)
+
+  k1 <- ncol(X1); k2 <- ncol(X2); q1 <- 1L; q2 <- 1L
+  beta1 <- par[seq_len(k1)]; beta2 <- par[(k1+1):(k1+k2)]
+  idx_end <- k1 + k2 + q1 + q2
+  sd1 <- exp(par[k1+k2+1]); sd2 <- exp(par[k1+k2+q1+1])
+  m1 <- exp(par[idx_end+1]); m2 <- exp(par[idx_end+2])
+  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+  real1 <- rand_realize(U1, dist1, sign1, b = beta1[rand_idx1], s = sd1)
+  real2 <- rand_realize(U2, dist2, sign2, b = beta2[rand_idx2], s = sd2)
+  R <- nrow(U1); lo <- -Inf; hi <- Inf
+  for (r in seq_len(R)) {
+    mu1 <- pmin(exp(xb1 + as.vector(XR1 %*% real1$dev[r, ])), 1e15)
+    mu2 <- pmin(exp(xb2 + as.vector(XR2 %*% real2$dev[r, ])), 1e15)
+    b <- lambda_bounds_vec(c_val(mu1, m1), c_val(mu2, m2))
+    lo <- max(lo, b[1]); hi <- min(hi, b[2])
+  }
+  bnds <- c(lo, hi)
+
+  f <- function(p) {
+    bnbr_rp_ll_fixed_bounds(p, y1, y2, X1, X2, XR1, XR2,
+                            rand_idx1, rand_idx2, U1, U2,
+                            bnds[1], bnds[2],
+                            dist1, dist2, sign1, sign2)
+  }
+  v <- bnbr_rp_ll_and_grad(par, y1, y2, X1, X2, XR1, XR2,
+                           rand_idx1, rand_idx2, U1, U2,
+                           dist1, dist2, sign1, sign2)
+  g_analytic <- unname(attr(v, "gradient"))
+  g_numeric  <- numDeriv::grad(f, par)
+  expect_equal(g_analytic, g_numeric, tolerance = 1e-4)
+})
+
 test_that("fixed-bounds LL is finite and matches the free LL bounds at z=0", {
   cs <- make_case("uniform")
   v  <- bnbr_rp_ll_and_grad(cs$par, cs$y1, cs$y2, cs$X1, cs$X2, cs$XR1, cs$XR2,

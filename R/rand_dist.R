@@ -96,6 +96,10 @@ parse_rand_spec <- function(spec) {
       this_sign  <- if (is.null(v$sign)) 1 else v$sign
       this_scale <- if (!is.null(v$scale)) v$scale
                     else if (!is.null(v$sd)) v$sd else NA_real_
+      if (!is.null(v$sign) && d != "lognormal") {
+        stop("`sign` is only meaningful for lognormal (got '", d,
+             "' for '", nm[i], "').", call. = FALSE)
+      }
     } else {
       stop("random spec value for '", nm[i],
            "' must be a distribution name or a list.", call. = FALSE)
@@ -103,10 +107,6 @@ parse_rand_spec <- function(spec) {
     if (!d %in% valid) {
       stop("unknown distribution '", d, "' for '", nm[i], "'. Valid: ",
            paste(valid, collapse = ", "), ".", call. = FALSE)
-    }
-    if (this_sign != 1 && d != "lognormal") {
-      stop("`sign` is only meaningful for lognormal (got '", d,
-           "' for '", nm[i], "').", call. = FALSE)
     }
     if (!this_sign %in% c(-1, 1)) {
       stop("`sign` must be -1 or 1 for '", nm[i], "'.", call. = FALSE)
