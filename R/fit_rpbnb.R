@@ -62,8 +62,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   stopifnot(is.data.frame(data))
   draw_type <- match.arg(draw_type, "halton")
 
-  rand_names1 <- random_1
-  rand_names2 <- random_2
+  spec1 <- parse_rand_spec(random_1)
+  spec2 <- parse_rand_spec(random_2)
   n_draws      <- draws
   n_draws_hess <- control$draws_hessian
   halton_burn  <- control$halton_burn
@@ -88,21 +88,24 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     }
     as.integer(match(who, colnames(X)))
   }
-  rand_idx1 <- idx_from_names(rand_names1, X1)
-  rand_idx2 <- idx_from_names(rand_names2, X2)
+  rand_idx1 <- idx_from_names(spec1$names, X1)
+  rand_idx2 <- idx_from_names(spec2$names, X2)
+  dist1 <- spec1$dist; sign1 <- spec1$sign
+  dist2 <- spec2$dist; sign2 <- spec2$sign
 
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   XR1 <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else NULL
   XR2 <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else NULL
 
-  # Halton normals for the optimization phase. set.seed(seed) drives the
-  # Cranley-Patterson rotation in halton_normal, so `seed` selects a reproducible
+  # Halton uniform draws for the optimization phase. set.seed(seed) drives the
+  # Cranley-Patterson rotation in halton_uniform, so `seed` selects a reproducible
   # randomized-QMC draw set; the same draws are reused across all optimizer
-  # evaluations for a smooth simulated likelihood.
+  # evaluations for a smooth simulated likelihood. The likelihood applies each
+  # column's u_to_base transform (via rand_realize), so we pass raw uniforms here.
   set.seed(seed)
   if ((q1 + q2) > 0) {
-    Z_opt  <- halton_normal(n_draws, q1 + q2, burn = halton_burn)
+    Z_opt  <- halton_uniform(n_draws, q1 + q2, burn = halton_burn)
     Z1_opt <- if (q1 > 0) Z_opt[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
     Z2_opt <- if (q2 > 0) Z_opt[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
   } else {
@@ -110,10 +113,15 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     Z2_opt <- matrix(0, nrow = n_draws, ncol = 0)
   }
 
+  scale_lab <- function(dist, cols) {
+    vapply(seq_along(dist),
+           function(j) paste0(rand_dist_registry[[dist[j]]]$scale_label, cols[j]),
+           character(1))
+  }
   par_names <- c(paste0("b1:", colnames(X1)),
                  paste0("b2:", colnames(X2)),
-                 if (q1 > 0) paste0("log_sd1:", colnames(X1)[rand_idx1]) else NULL,
-                 if (q2 > 0) paste0("log_sd2:", colnames(X2)[rand_idx2]) else NULL,
+                 if (q1 > 0) paste0(scale_lab(dist1, paste0("1:", colnames(X1)[rand_idx1]))) else NULL,
+                 if (q2 > 0) paste0(scale_lab(dist2, paste0("2:", colnames(X2)[rand_idx2]))) else NULL,
                  "log_m1", "log_m2", "z_lambda")
 
   if (is.null(start)) {
@@ -149,7 +157,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   ll_trace <- numeric(0)
   ll_fun <- function(p) {
     v <- bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
-                             rand_idx1, rand_idx2, Z1_opt, Z2_opt, cl = cl)
+                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
+                             dist1, dist2, sign1, sign2, cl = cl)
     ll_trace <<- c(ll_trace, as.numeric(v))
     v
   }
@@ -161,22 +170,20 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # --- Frozen lambda-bounds at the optimum (over the optimization draws) ---
   rebuild_bounds <- function(p) {
     beta1 <- p[1:k1]; beta2 <- p[(k1+1):(k1+k2)]
-    lg1 <- if (q1 > 0) (k1+k2+1):(k1+k2+q1) else integer(0)
-    lg2 <- if (q2 > 0) (k1+k2+q1+1):(k1+k2+q1+q2) else integer(0)
-    log_sd1 <- if (q1 > 0) p[lg1] else numeric(0)
-    log_sd2 <- if (q2 > 0) p[lg2] else numeric(0)
     idx_end <- k1 + k2 + q1 + q2
     m1 <- exp(p[idx_end+1]); m2 <- exp(p[idx_end+2])
-    sd1 <- if (q1 > 0) exp(log_sd1) else numeric(0)
-    sd2 <- if (q2 > 0) exp(log_sd2) else numeric(0)
+    sd1 <- if (q1 > 0) exp(p[(k1+k2+1):(k1+k2+q1)]) else numeric(0)
+    sd2 <- if (q2 > 0) exp(p[(k1+k2+q1+1):(k1+k2+q1+q2)]) else numeric(0)
     xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
-    Z1sd <- if (q1 > 0) sweep(Z1_opt, 2, sd1, `*`) else matrix(0, nrow = n_draws, ncol = 0)
-    Z2sd <- if (q2 > 0) sweep(Z2_opt, 2, sd2, `*`) else matrix(0, nrow = n_draws, ncol = 0)
+    dev1 <- if (q1>0) rand_realize(Z1_opt, dist1, sign1, beta1[rand_idx1], sd1)$dev
+            else matrix(0, n_draws, 0)
+    dev2 <- if (q2>0) rand_realize(Z2_opt, dist2, sign2, beta2[rand_idx2], sd2)$dev
+            else matrix(0, n_draws, 0)
     lamLo <- -Inf; lamHi <- Inf
-    Rloc <- if (q1 + q2 > 0) nrow(Z1sd) else 1L
+    Rloc <- if (q1 + q2 > 0) n_draws else 1L
     for (r in 1:Rloc) {
-      mu1_r <- if (q1 > 0) exp(xb1 + as.vector(XR1 %*% Z1sd[r,])) else exp(xb1)
-      mu2_r <- if (q2 > 0) exp(xb2 + as.vector(XR2 %*% Z2sd[r,])) else exp(xb2)
+      mu1_r <- if (q1 > 0) pmin(exp(xb1 + as.vector(XR1 %*% dev1[r, ])), 1e15) else exp(xb1)
+      mu2_r <- if (q2 > 0) pmin(exp(xb2 + as.vector(XR2 %*% dev2[r, ])), 1e15) else exp(xb2)
       b <- lambda_bounds_vec(c_val(mu1_r, m1), c_val(mu2_r, m2))
       lamLo <- max(lamLo, b[1]); lamHi <- min(lamHi, b[2])
     }
@@ -193,8 +200,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   if (isTRUE(compute_se)) {
     set.seed(seed + 1L)
     if ((q1 + q2) > 0) {
-      Z_h  <- halton_normal(n_draws_hess, q1 + q2,
-                            burn = max(50, floor(halton_burn / 3)))
+      Z_h  <- halton_uniform(n_draws_hess, q1 + q2,
+                             burn = max(50, floor(halton_burn / 3)))
       Z1_h <- if (q1 > 0) Z_h[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)
       Z2_h <- if (q2 > 0) Z_h[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)
     } else {
@@ -216,7 +223,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
     ll_fb <- function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
                                                  rand_idx1, rand_idx2, Z1_h, Z2_h,
-                                                 lamLo_h, lamHi_h, cl = cl_h)
+                                                 lamLo_h, lamHi_h,
+                                                 dist1, dist2, sign1, sign2,
+                                                 cl = cl_h)
     H <- numDeriv::hessian(ll_fb, par_hat,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2
@@ -262,9 +271,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   xb1 <- as.vector(X1 %*% beta1_hat); xb2 <- as.vector(X2 %*% beta2_hat)
   if (q1 > 0) {
     sd1  <- exp(par_hat[(k1+k2+1):(k1+k2+q1)])
-    Z1sd <- sweep(Z1_opt, 2, sd1, `*`)
+    dev1 <- rand_realize(Z1_opt, dist1, sign1, beta1_hat[rand_idx1], sd1)$dev
     mu1_mat <- vapply(seq_len(n_draws),
-                      function(r) exp(xb1 + as.vector(XR1 %*% Z1sd[r, ])),
+                      function(r) pmin(exp(xb1 + as.vector(XR1 %*% dev1[r, ])), 1e15),
                       numeric(length(Y1)))
     mu1_hat <- rowMeans(mu1_mat)
   } else {
@@ -272,9 +281,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
   if (q2 > 0) {
     sd2  <- exp(par_hat[(k1+k2+q1+1):(k1+k2+q1+q2)])
-    Z2sd <- sweep(Z2_opt, 2, sd2, `*`)
+    dev2 <- rand_realize(Z2_opt, dist2, sign2, beta2_hat[rand_idx2], sd2)$dev
     mu2_mat <- vapply(seq_len(n_draws),
-                      function(r) exp(xb2 + as.vector(XR2 %*% Z2sd[r, ])),
+                      function(r) pmin(exp(xb2 + as.vector(XR2 %*% dev2[r, ])), 1e15),
                       numeric(length(Y2)))
     mu2_hat <- rowMeans(mu2_mat)
   } else {
