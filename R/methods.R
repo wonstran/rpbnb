@@ -107,6 +107,21 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     }
     add("lambda (dependence)", object$lambda, lam_se)
   }
+
+  # Copula models have z_theta; report native param and Kendall's tau
+  if ("z_theta" %in% names(cf) && !is.null(object$cop_family)) {
+    z     <- cf[["z_theta"]]
+    se_z  <- se_of("z_theta")
+    fam   <- object$cop_family
+    nat   <- z_to_native(fam, z)
+    dn_dz <- dnative_dz(fam, z)
+    nat_se <- if (is.finite(se_z)) abs(dn_dz) * se_z else NA_real_
+    param_label <- switch(fam, frank="theta (Frank)", normal="rho (Gaussian)", kimeldorf="theta (Clayton)")
+    add(param_label, nat, nat_se)
+    td <- copula_tau_and_deriv(fam, z)
+    tau_se <- if (is.finite(se_z)) abs(td$dtau_dz) * se_z else NA_real_
+    add("Kendall's tau", td$tau, tau_se)
+  }
   if (!length(rows)) return(NULL)
   out <- do.call(rbind, rows)
   rownames(out) <- NULL
