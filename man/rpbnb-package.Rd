@@ -13,5 +13,10 @@ random-parameter negative binomial model.
 \author{
 \strong{Maintainer}: Project Author \email{wonstran@gmail.com}
 
+Authors:
+\itemize{
+  \item Project Author \email{wonstran@gmail.com}
+}
+
 }
 \keyword{internal}

@@ -1,0 +1,798 @@
+<!DOCTYPE html><html lang="en"><head><title>Help for package rpbnb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.css">
+<script type="text/javascript">
+const macros = { "\\R": "\\textsf{R}", "\\mbox": "\\text", "\\code": "\\texttt"};
+function processMathHTML() {
+    var l = document.getElementsByClassName('reqn');
+    for (let e of l) { katex.render(e.textContent, e, { throwOnError: false, macros }); }
+    return;
+}</script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.js"
+    onload="processMathHTML();"></script>
+<link rel="stylesheet" type="text/css" href="C:/PROGRA~1/R/R-45~1.1/doc/html/R-nav.css" />
+</head><body><div class="container"><nav class="package" aria-label="Topic Navigation">
+<div class="dropdown-menu">
+<h1>Package {rpbnb}</h1>
+<h2>Contents</h2>
+<ul class="menu">
+<li><a href='#rpbnb-package'><p>rpbnb: Bivariate and Random-Parameter Negative Binomial Regression</p></a></li>
+<li><a href='#bnb_elasticities'><p>Elasticities and semi-elasticities for a bivariate NB model</p></a></li>
+<li><a href='#bnb_gof'><p>Goodness of fit for a bivariate NB model</p></a></li>
+<li><a href='#bnb_marginal_effects'><p>Marginal effects for a bivariate NB model</p></a></li>
+<li><a href='#copula'><p>Specify a copula dependence structure for fit_bnb()</p></a></li>
+<li><a href='#fit_bnb'><p>Fit a bivariate negative binomial regression model</p></a></li>
+<li><a href='#fit_rpbnb'><p>Fit a bivariate random-parameter negative binomial model</p></a></li>
+<li><a href='#rpbnb_control'><p>Control parameters for rpbnb estimators</p></a></li>
+<li><a href='#simulate_bnb'><p>Simulate data from the Famoye/Sarmanov bivariate NB distribution</p></a></li>
+<li><a href='#simulate_rpbnb'><p>Simulate data from a random-parameter bivariate NB process</p></a></li>
+</ul>
+</div>
+<hr>
+</nav>
+<main>
+<table role='presentation'>
+<tr>
+<td>Type:</td>
+<td>Package</td>
+</tr>
+<tr>
+<td>Title:</td>
+<td>Bivariate and Random-Parameter Negative Binomial Regression</td>
+</tr>
+<tr>
+<td>Version:</td>
+<td>0.1.0</td>
+</tr>
+<tr>
+<td>Description:</td>
+<td>Maximum-likelihood estimation of the Famoye/Sarmanov bivariate
+    negative binomial (NB2) regression model and maximum-simulated-likelihood
+    estimation of a bivariate random-parameter negative binomial model, with a
+    normal random-coefficient data simulator, diagnostics, and standard model
+    methods.</td>
+</tr>
+<tr>
+<td>License:</td>
+<td><a href="https://opensource.org/licenses/mit-license.php">MIT</a> + file LICENSE</td>
+</tr>
+<tr>
+<td>Encoding:</td>
+<td>UTF-8</td>
+</tr>
+<tr>
+<td>Depends:</td>
+<td>R (&ge; 4.1)</td>
+</tr>
+<tr>
+<td>Imports:</td>
+<td>stats,
+compiler,
+maxLik,
+numDeriv,
+randtoolbox,
+MASS,
+pbivnorm</td>
+</tr>
+<tr>
+<td>Suggests:</td>
+<td>testthat (&ge; 3.0.0),
+knitr,
+rmarkdown,
+parallel</td>
+</tr>
+<tr>
+<td>Config/testthat/edition:</td>
+<td>3</td>
+</tr>
+<tr>
+<td>VignetteBuilder:</td>
+<td>knitr</td>
+</tr>
+<tr>
+<td>Roxygen:</td>
+<td>list(markdown = TRUE)</td>
+</tr>
+<tr>
+<td>LazyData:</td>
+<td>false</td>
+</tr>
+<tr>
+<td>Config/roxygen2/version:</td>
+<td>8.0.0</td>
+</tr>
+<tr>
+<td>Author:</td>
+<td>Project Author [aut, cre]</td>
+</tr>
+</table>
+<hr>
+<h2 id='rpbnb-package'>rpbnb: Bivariate and Random-Parameter Negative Binomial Regression</h2><span id='topic+rpbnb'></span><span id='topic+rpbnb-package'></span>
+
+<h3>Description</h3>
+
+<p>Maximum-likelihood estimation of the Famoye/Sarmanov bivariate negative
+binomial model and maximum-simulated-likelihood estimation of a bivariate
+random-parameter negative binomial model.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p><strong>Maintainer</strong>: Project Author <a href="mailto:wonstran@gmail.com">wonstran@gmail.com</a>
+</p>
+<p>Authors:
+</p>
+
+<ul>
+<li><p> Project Author <a href="mailto:wonstran@gmail.com">wonstran@gmail.com</a>
+</p>
+</li></ul>
+
+
+<hr>
+<h2 id='bnb_elasticities'>Elasticities and semi-elasticities for a bivariate NB model</h2><span id='topic+bnb_elasticities'></span>
+
+<h3>Description</h3>
+
+<p>For continuous regressors, the elasticity is <code class="reqn">\beta_j E[x_j]</code>; for
+binary (0/1) regressors, the semi-elasticity is <code class="reqn">\exp(\beta_j) - 1</code>
+(proportional change moving from 0 to 1).
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>bnb_elasticities(
+  fit,
+  which = c("y1", "y2", "both"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4,
+  print_output = TRUE
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="bnb_elasticities_+3A_fit">fit</code></td>
+<td>
+<p>A <code>bnb_fit</code> object from <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_which">which</code></td>
+<td>
+<p>Which margin(s): &quot;y1&quot;, &quot;y2&quot;, or &quot;both&quot;.</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_type">type</code></td>
+<td>
+<p>&quot;AME&quot; (uses sample mean of x) or &quot;MEM&quot; (uses mean design row).</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_vars">vars</code></td>
+<td>
+<p>Optional variable names to restrict output.</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term.</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="bnb_elasticities_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A data frame (single margin) or a named list of data frames (both),
+each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>, <code>z</code>, <code>p</code>, <code>Signif</code>,
+<code>var_type</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>d &lt;- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
+               dependence = "famoye")
+bnb_elasticities(fit, which = "both", type = "AME")
+</code></pre>
+
+<hr>
+<h2 id='bnb_gof'>Goodness of fit for a bivariate NB model</h2><span id='topic+bnb_gof'></span>
+
+<h3>Description</h3>
+
+<p>Reports log-likelihood, AIC, BIC, and four pseudo-R-squared measures
+(McFadden, McFadden adjusted, Cox-Snell, Nagelkerke) relative to an
+intercept-only null model refit with the same dependence structure.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>bnb_gof(fit, digits = 4, print_output = TRUE)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="bnb_gof_+3A_fit">fit</code></td>
+<td>
+<p>A <code>bnb_fit</code> object from <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="bnb_gof_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="bnb_gof_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing and return the
+result invisibly.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>Invisibly, a list with <code>n</code>, <code>k</code>, <code>logLik_full</code>, <code>logLik_null</code>,
+<code>AIC</code>, <code>BIC</code>, a named numeric vector <code>pseudoR2</code>, and the <code>null_fit</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>d &lt;- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
+               dependence = "famoye")
+bnb_gof(fit)
+</code></pre>
+
+<hr>
+<h2 id='bnb_marginal_effects'>Marginal effects for a bivariate NB model</h2><span id='topic+bnb_marginal_effects'></span>
+
+<h3>Description</h3>
+
+<p>Average marginal effects (AME) or marginal effects at the mean (MEM) for
+each margin. Continuous and binary (0/1) regressors are auto-detected;
+continuous effects use <code class="reqn">\partial E[Y]/\partial x_j = \beta_j \mu</code> and
+binary effects use <code class="reqn">E[Y|x_j=1] - E[Y|x_j=0]</code>.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>bnb_marginal_effects(
+  fit,
+  which = c("y1", "y2", "both", "all"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4,
+  print_output = TRUE
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="bnb_marginal_effects_+3A_fit">fit</code></td>
+<td>
+<p>A <code>bnb_fit</code> object from <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_which">which</code></td>
+<td>
+<p>Which margin(s): &quot;y1&quot;, &quot;y2&quot;, &quot;both&quot;, or &quot;all&quot;.</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_type">type</code></td>
+<td>
+<p>&quot;AME&quot; (average marginal effect) or &quot;MEM&quot; (effect at the mean).</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_vars">vars</code></td>
+<td>
+<p>Optional variable names or indices to restrict output.</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term.</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="bnb_marginal_effects_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A data frame (single margin) or a named list of data frames (both),
+each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>, <code>z</code>, <code>p</code>, <code>Signif</code>,
+<code>var_type</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>d &lt;- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
+               dependence = "famoye")
+bnb_marginal_effects(fit, which = "y1", type = "AME")
+</code></pre>
+
+<hr>
+<h2 id='copula'>Specify a copula dependence structure for fit_bnb()</h2><span id='topic+copula'></span>
+
+<h3>Description</h3>
+
+<p>Specify a copula dependence structure for fit_bnb()
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>copula(family = c("frank", "normal", "kimeldorf"))
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="copula_+3A_family">family</code></td>
+<td>
+<p>One of <code>"frank"</code>, <code>"normal"</code>, or <code>"kimeldorf"</code> (Clayton).</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_copula</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>copula("frank")
+copula("normal")
+copula("kimeldorf")
+</code></pre>
+
+<hr>
+<h2 id='fit_bnb'>Fit a bivariate negative binomial regression model</h2><span id='topic+fit_bnb'></span>
+
+<h3>Description</h3>
+
+<p>Fit a bivariate negative binomial regression model
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>fit_bnb(
+  formula_1,
+  formula_2,
+  data,
+  dependence = c("independence", "famoye"),
+  start = NULL,
+  control = rpbnb_control()
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="fit_bnb_+3A_formula_1">formula_1</code>, <code id="fit_bnb_+3A_formula_2">formula_2</code></td>
+<td>
+<p>Model formulas for the two count outcomes.</p>
+</td></tr>
+<tr><td><code id="fit_bnb_+3A_data">data</code></td>
+<td>
+<p>A data frame.</p>
+</td></tr>
+<tr><td><code id="fit_bnb_+3A_dependence">dependence</code></td>
+<td>
+<p>Dependence structure: &quot;independence&quot; (two univariate NB2
+margins) or &quot;famoye&quot; (Famoye/Sarmanov bivariate NB).</p>
+</td></tr>
+<tr><td><code id="fit_bnb_+3A_start">start</code></td>
+<td>
+<p>Optional starting parameter vector.</p>
+</td></tr>
+<tr><td><code id="fit_bnb_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. The famoye estimator uses BFGS;
+<code>control$method</code> is currently honored only by the optimizer's internal setup.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>bnb_fit</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>d &lt;- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+fit &lt;- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+               dependence = "famoye")
+summary(fit)
+</code></pre>
+
+<hr>
+<h2 id='fit_rpbnb'>Fit a bivariate random-parameter negative binomial model</h2><span id='topic+fit_rpbnb'></span>
+
+<h3>Description</h3>
+
+<p>Maximum simulated likelihood estimation with normal random coefficients and
+Famoye/Sarmanov dependence. Random coefficients are selected per equation by
+name via <code>random_1</code> / <code>random_2</code>.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>fit_rpbnb(
+  formula_1,
+  formula_2,
+  data,
+  random_1 = NULL,
+  random_2 = NULL,
+  draws = 400,
+  draw_type = "halton",
+  seed = 1234,
+  start = NULL,
+  control = rpbnb_control()
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="fit_rpbnb_+3A_formula_1">formula_1</code>, <code id="fit_rpbnb_+3A_formula_2">formula_2</code></td>
+<td>
+<p>Model formulas for the two count outcomes.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_data">data</code></td>
+<td>
+<p>A data frame.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_random_1">random_1</code>, <code id="fit_rpbnb_+3A_random_2">random_2</code></td>
+<td>
+<p>Character vectors of coefficient names (matching
+<code>model.matrix</code> columns) to treat as normal random coefficients in each
+equation. NULL means all-fixed for that equation.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_draws">draws</code></td>
+<td>
+<p>Number of simulation draws for the optimization.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_draw_type">draw_type</code></td>
+<td>
+<p>Quasi-random draw type. Only &quot;halton&quot; is supported in this version.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_seed">seed</code></td>
+<td>
+<p>Random seed for the simulation draws.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_start">start</code></td>
+<td>
+<p>Optional starting parameter vector.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. Estimation uses BFGS;
+<code>control$method</code> is not currently honored by <code>fit_rpbnb</code> (the
+simulated-likelihood objective returns an aggregate gradient).</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_fit</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                 draws = 100, control = rpbnb_control(compute_se = FALSE))
+coef(fit)
+</code></pre>
+
+<hr>
+<h2 id='rpbnb_control'>Control parameters for rpbnb estimators</h2><span id='topic+rpbnb_control'></span>
+
+<h3>Description</h3>
+
+<p>Control parameters for rpbnb estimators
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_control(
+  method = c("BFGS", "NR", "BHHH", "NM"),
+  iterlim = 300L,
+  reltol = 1e-08,
+  print_level = 0L,
+  draws_hessian = 100L,
+  halton_burn = 300L,
+  n_cores = 1L,
+  compute_se = TRUE,
+  hessian = c("numeric", "analytic"),
+  hess_eps = 1e-05,
+  hess_r = 4L
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_control_+3A_method">method</code></td>
+<td>
+<p>Optimizer passed to <code><a href="maxLik.html#topic+maxLik">maxLik::maxLik()</a></code>. One of &quot;BFGS&quot;, &quot;NR&quot;,
+&quot;BHHH&quot;, &quot;NM&quot;.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_iterlim">iterlim</code></td>
+<td>
+<p>Maximum optimizer iterations.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_reltol">reltol</code></td>
+<td>
+<p>Relative convergence tolerance.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_print_level">print_level</code></td>
+<td>
+<p>Verbosity passed to the optimizer (0 = silent).</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_draws_hessian">draws_hessian</code></td>
+<td>
+<p>Number of simulation draws used for the random-parameter
+Hessian (smaller than the optimization draws for speed). Ignored by <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_halton_burn">halton_burn</code></td>
+<td>
+<p>Number of leading Halton points discarded before forming
+the simulation draws.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_n_cores">n_cores</code></td>
+<td>
+<p>Worker processes for the optional cluster path (1 = sequential).</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_compute_se">compute_se</code></td>
+<td>
+<p>If FALSE, skip the Hessian and standard errors.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_hessian">hessian</code></td>
+<td>
+<p>How <code><a href="#topic+fit_bnb">fit_bnb()</a></code> (famoye) computes the Hessian for standard
+errors: &quot;numeric&quot; (default, <code><a href="numDeriv.html#topic+hessian">numDeriv::hessian()</a></code>) or &quot;analytic&quot; (the
+closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
+at the optimum and yield the same observed-information SEs.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_hess_eps">hess_eps</code>, <code id="rpbnb_control_+3A_hess_r">hess_r</code></td>
+<td>
+<p>Step and Richardson order for <code><a href="numDeriv.html#topic+hessian">numDeriv::hessian()</a></code>
+(used only when <code>hessian = "numeric"</code>).</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_control</code> (a named list).
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>rpbnb_control(method = "BFGS", iterlim = 200)
+rpbnb_control(hessian = "analytic")
+</code></pre>
+
+<hr>
+<h2 id='simulate_bnb'>Simulate data from the Famoye/Sarmanov bivariate NB distribution</h2><span id='topic+simulate_bnb'></span>
+
+<h3>Description</h3>
+
+<p>Generates paired count outcomes <code style="white-space: pre;">&#8288;(y1, y2)&#8288;</code> from the fixed-parameter
+Famoye/Sarmanov bivariate NB2 joint PMF:
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>simulate_bnb(
+  n,
+  beta1,
+  beta2,
+  dispersion = c(m1 = 0.5, m2 = 0.5),
+  lambda = 0,
+  covariates = NULL,
+  seed = 1234
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="simulate_bnb_+3A_n">n</code></td>
+<td>
+<p>Number of observations.</p>
+</td></tr>
+<tr><td><code id="simulate_bnb_+3A_beta1">beta1</code>, <code id="simulate_bnb_+3A_beta2">beta2</code></td>
+<td>
+<p>Named numeric vectors of coefficients for each equation;
+must include <code>"(Intercept)"</code>.</p>
+</td></tr>
+<tr><td><code id="simulate_bnb_+3A_dispersion">dispersion</code></td>
+<td>
+<p>Named numeric <code>c(m1 = ..., m2 = ...)</code> NB2 dispersion
+parameters (variance = mu + m * mu^2).</p>
+</td></tr>
+<tr><td><code id="simulate_bnb_+3A_lambda">lambda</code></td>
+<td>
+<p>Famoye/Sarmanov dependence parameter. Must lie within the
+valid bounds implied by the marginal means and dispersions.</p>
+</td></tr>
+<tr><td><code id="simulate_bnb_+3A_covariates">covariates</code></td>
+<td>
+<p>Optional data frame of covariates. If <code>NULL</code>, standard-
+normal columns are generated for every non-intercept coefficient name.</p>
+</td></tr>
+<tr><td><code id="simulate_bnb_+3A_seed">seed</code></td>
+<td>
+<p>Random seed for reproducibility.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p style="text-align: center;"><code class="reqn">P(Y_1=y_1, Y_2=y_2) = p_1(y_1)\,p_2(y_2)\,
+  [1 + \lambda(e^{-y_1}-c_1)(e^{-y_2}-c_2)]</code>
+</p>
+
+<p>where <code class="reqn">c_k = E[e^{-Y_k}]</code> under NB2(<code class="reqn">\mu_k, m_k</code>).
+</p>
+
+
+<h3>Value</h3>
+
+<p>A list with:
+</p>
+
+<dl>
+<dt><code>data</code></dt><dd><p>data frame with <code>y1</code>, <code>y2</code>, and covariate columns</p>
+</dd>
+<dt><code>mu</code></dt><dd><p>data frame with <code>mu1</code>, <code>mu2</code> (per-obs conditional means)</p>
+</dd>
+<dt><code>true</code></dt><dd><p>list of true parameters: <code>beta1</code>, <code>beta2</code>, <code>dispersion</code>, <code>lambda</code></p>
+</dd>
+<dt><code>settings</code></dt><dd><p>list with <code>n</code> and <code>seed</code></p>
+</dd>
+<dt><code>meta</code></dt><dd><p>list with <code>seed</code> and <code>r_version</code></p>
+</dd>
+</dl>
+
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_bnb(n = 500,
+  beta1 = c("(Intercept)" = 0.5, x1 = 0.3),
+  beta2 = c("(Intercept)" = 0.2, x1 = -0.2),
+  dispersion = c(m1 = 0.4, m2 = 0.5), lambda = 0.1, seed = 1)
+head(sim$data)
+</code></pre>
+
+<hr>
+<h2 id='simulate_rpbnb'>Simulate data from a random-parameter bivariate NB process</h2><span id='topic+simulate_rpbnb'></span>
+
+<h3>Description</h3>
+
+<p>Simulate data from a random-parameter bivariate NB process
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>simulate_rpbnb(
+  n,
+  beta1,
+  beta2,
+  random_1 = NULL,
+  random_2 = NULL,
+  dispersion = c(m1 = 0.5, m2 = 0.5),
+  lambda = 0,
+  covariates = NULL,
+  seed = 1234
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="simulate_rpbnb_+3A_n">n</code></td>
+<td>
+<p>Number of observations.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_beta1">beta1</code>, <code id="simulate_rpbnb_+3A_beta2">beta2</code></td>
+<td>
+<p>Named numeric vectors of fixed coefficient means per
+equation; must include &quot;(Intercept)&quot;.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_random_1">random_1</code>, <code id="simulate_rpbnb_+3A_random_2">random_2</code></td>
+<td>
+<p>Named lists giving random coefficients, e.g.
+<code>list(x1 = list(sd = 0.5))</code>. Means come from <code>beta1</code>/<code>beta2</code>.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_dispersion">dispersion</code></td>
+<td>
+<p>Named numeric <code>c(m1 = ..., m2 = ...)</code> NB2 dispersions.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_lambda">lambda</code></td>
+<td>
+<p>Famoye dependence parameter (0 = independent margins).</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_covariates">covariates</code></td>
+<td>
+<p>Optional data frame of covariates; if NULL, standard-normal
+columns are generated for every non-intercept name.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_+3A_seed">seed</code></td>
+<td>
+<p>Random seed.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A list with <code>data</code> (y1, y2, covariates), <code>coef_realized</code>
+(per-obs coefficients per equation), <code>mu</code> (conditional means), <code>true</code>
+(parameters), <code>settings</code>, and <code>meta</code> (R/seed/timestamp passed by caller).
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb(n = 500,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+head(sim$data)
+</code></pre>
+
+</main>
+
+</div>
+</body></html>

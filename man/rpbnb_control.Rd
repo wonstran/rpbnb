@@ -13,6 +13,7 @@ rpbnb_control(
   halton_burn = 300L,
   n_cores = 1L,
   compute_se = TRUE,
+  hessian = c("numeric", "analytic"),
   hess_eps = 1e-05,
   hess_r = 4L
 )
@@ -37,7 +38,13 @@ the simulation draws.}
 
 \item{compute_se}{If FALSE, skip the Hessian and standard errors.}
 
-\item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}.}
+\item{hessian}{How \code{\link[=fit_bnb]{fit_bnb()}} (famoye) computes the Hessian for standard
+errors: "numeric" (default, \code{\link[numDeriv:hessian]{numDeriv::hessian()}}) or "analytic" (the
+closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
+at the optimum and yield the same observed-information SEs.}
+
+\item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}
+(used only when \code{hessian = "numeric"}).}
 }
 \value{
 An object of class \code{rpbnb_control} (a named list).
@@ -47,4 +54,5 @@ Control parameters for rpbnb estimators
 }
 \examples{
 rpbnb_control(method = "BFGS", iterlim = 200)
+rpbnb_control(hessian = "analytic")
 }

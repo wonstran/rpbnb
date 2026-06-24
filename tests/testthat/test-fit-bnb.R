@@ -62,6 +62,41 @@ test_that("analytic gradient matches numDeriv", {
   expect_equal(unname(ana), num, tolerance = 1e-4)
 })
 
+test_that("analytic Hessian matches numDeriv hessian of the frozen-bounds loglik", {
+  # The analytic Hessian differentiates the SAME frozen-bounds objective that the
+  # numeric Hessian (numDeriv) does. Verify they agree at a feasible interior
+  # point with the lambda-bounds frozen at that point.
+  set.seed(11)
+  n  <- 60
+  X1 <- cbind(1, rnorm(n)); X2 <- cbind(1, rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rpois(n, 2)
+  par <- c(0.2, 0.1, 0.15, -0.05, log(0.6), log(0.7), 0.3)
+
+  beta1 <- par[1:2]; beta2 <- par[3:4]; m1 <- exp(par[5]); m2 <- exp(par[6])
+  mu1 <- as.vector(exp(X1 %*% beta1)); mu2 <- as.vector(exp(X2 %*% beta2))
+  c1  <- rpbnb:::c_val(mu1, m1); c2 <- rpbnb:::c_val(mu2, m2)
+  b   <- rpbnb:::lambda_bounds_vec(c1, c2)
+
+  f   <- function(p) rpbnb:::bnbr_loglik_fixed_bounds(p, y1, y2, X1, X2, b[1], b[2])
+  num <- numDeriv::hessian(f, par)
+  ana <- rpbnb:::bnb_hessian_fixed_bounds(par, y1, y2, X1, X2, b[1], b[2])
+
+  expect_equal(dim(ana), dim(num))
+  expect_equal(unname(ana), unname(num), tolerance = 1e-4)
+})
+
+test_that("famoye analytic and numeric Hessian give matching standard errors", {
+  skip_if_not(file.exists(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb")))
+  d  <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+  fn <- fit_bnb(docvis ~ outwork + kids, hospvis ~ outwork + kids, data = d,
+                dependence = "famoye", control = rpbnb_control(hessian = "numeric"))
+  fa <- fit_bnb(docvis ~ outwork + kids, hospvis ~ outwork + kids, data = d,
+                dependence = "famoye", control = rpbnb_control(hessian = "analytic"))
+  expect_equal(unname(fa$coef), unname(fn$coef), tolerance = 1e-6)
+  expect_equal(unname(fa$se),   unname(fn$se),   tolerance = 1e-2)
+  expect_true(all(is.finite(fa$se)))
+})
+
 sample_data <- function() {
   read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
 }

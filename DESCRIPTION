@@ -17,7 +17,8 @@ Imports:
     maxLik,
     numDeriv,
     randtoolbox,
-    MASS
+    MASS,
+    pbivnorm
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -26,5 +27,5 @@ Suggests:
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 LazyData: false
+Config/roxygen2/version: 8.0.0

@@ -1,0 +1,35 @@
+url: ~
+
+template:
+  bootstrap: 5
+
+home:
+  links: []
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [github]
+
+reference:
+  - title: "Model fitting"
+    desc: "Functions for fitting bivariate NB regression models"
+    contents:
+      - fit_bnb
+      - copula
+      - rpbnb_control
+      - fit_rpbnb
+  - title: "Post-estimation"
+    desc: "Marginal effects, goodness-of-fit, and elasticities"
+    contents:
+      - bnb_marginal_effects
+      - bnb_gof
+      - bnb_elasticities
+  - title: "Simulation"
+    desc: "Data simulators"
+    contents:
+      - simulate_bnb
+      - simulate_rpbnb
+  - title: "Package"
+    contents:
+      - rpbnb-package

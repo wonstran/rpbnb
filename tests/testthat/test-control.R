@@ -6,6 +6,13 @@ test_that("rpbnb_control returns documented defaults", {
   expect_equal(ctl$draws_hessian, 100L)
   expect_equal(ctl$n_cores, 1L)
   expect_true(ctl$compute_se)
+  expect_equal(ctl$hessian, "numeric")
+})
+
+test_that("rpbnb_control accepts hessian = 'analytic' and validates it", {
+  expect_equal(rpbnb_control(hessian = "analytic")$hessian, "analytic")
+  expect_equal(rpbnb_control(hessian = "numeric")$hessian, "numeric")
+  expect_error(rpbnb_control(hessian = "bogus"), "hessian")
 })
 
 test_that("rpbnb_control validates inputs", {
