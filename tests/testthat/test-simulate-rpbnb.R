@@ -17,7 +17,7 @@ test_that("simulate_rpbnb returns the documented pieces and true params", {
   expect_true(all(c("data", "coef_realized", "mu", "true", "settings", "meta") %in% names(s)))
   expect_true(all(c("y1", "y2", "x1") %in% names(s$data)))
   expect_equal(s$true$dispersion[["m1"]], 0.4)
-  expect_equal(s$true$random_1$x1$sd, 0.5)
+  expect_equal(s$true$random_1$scale[[1]], 0.5)
   expect_equal(nrow(s$data), 100)
 })
 

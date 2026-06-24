@@ -22,9 +22,11 @@ fit_rpbnb(
 
 \item{data}{A data frame.}
 
-\item{random_1, random_2}{Character vectors of coefficient names (matching
-\code{model.matrix} columns) to treat as normal random coefficients in each
-equation. NULL means all-fixed for that equation.}
+\item{random_1, random_2}{Random coefficients per equation. Either a character
+vector of \code{model.matrix} column names (all Normal), or a named list whose
+values are a distribution name (\code{"normal"}, \code{"lognormal"}, \code{"uniform"},
+\code{"triangular"}) or a list \code{list(dist = ..., sign = ...)} (\code{sign} is -1/1 and
+lognormal-only). NULL means all-fixed for that equation.}
 
 \item{draws}{Number of simulation draws for the optimization.}
 

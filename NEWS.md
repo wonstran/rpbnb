@@ -1,3 +1,11 @@
+# rpbnb 0.2.0 (development)
+
+* `fit_rpbnb()` and `simulate_rpbnb()`: per-coefficient random distributions.
+  `random_1`/`random_2` now accept a named list whose values specify a
+  distribution (`"normal"`, `"lognormal"`, `"uniform"`, `"triangular"`) or a
+  list `list(dist = ..., sign = ...)` for sign-constrained lognormal. The
+  previous character-vector interface (all-Normal) is fully preserved.
+
 # rpbnb 0.1.0
 
 * Initial release. Phase 1 deliverables:

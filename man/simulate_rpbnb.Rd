@@ -22,8 +22,12 @@ simulate_rpbnb(
 \item{beta1, beta2}{Named numeric vectors of fixed coefficient means per
 equation; must include "(Intercept)".}
 
-\item{random_1, random_2}{Named lists giving random coefficients, e.g.
-\code{list(x1 = list(sd = 0.5))}. Means come from \code{beta1}/\code{beta2}.}
+\item{random_1, random_2}{Named lists giving random coefficients. Each value
+is a list with \code{dist} (one of "normal", "lognormal", "uniform",
+"triangular"; default "normal"), \code{scale} (or \code{sd}) for the dispersion, and
+\code{sign} (-1/1, lognormal only). Means come from \code{beta1}/\code{beta2}; for a
+lognormal coefficient the \code{beta} entry is the log-location and the realized
+coefficient is \code{sign * exp(log_location + scale * z)}.}
 
 \item{dispersion}{Named numeric \code{c(m1 = ..., m2 = ...)} NB2 dispersions.}
 
