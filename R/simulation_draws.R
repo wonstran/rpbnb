@@ -26,7 +26,7 @@ halton_uniform <- function(n_draws, d, burn = 200) {
   pmin(pmax(U, 1e-12), 1 - 1e-12)
 }
 
-#' Standard-normal Halton draws (qnorm of [halton_uniform()])
+#' Standard-normal Halton draws (qnorm of `halton_uniform()`)
 #' @inheritParams halton_uniform
 #' @return An `n_draws` x `d` numeric matrix of standard-normal values.
 #' @keywords internal

@@ -11,7 +11,7 @@
 # uniform u in (0,1) itself for uniform. `u_to_base()` maps a uniform draw to
 # the base variate; the simulator may instead draw the base directly.
 
-#' Symmetric triangular inverse-CDF on [-1, 1]
+#' Symmetric triangular inverse-CDF on `[-1, 1]`
 #' @keywords internal
 #' @noRd
 tri_icdf <- function(u) {

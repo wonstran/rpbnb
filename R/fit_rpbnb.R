@@ -33,9 +33,11 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #'
 #' @param formula_1,formula_2 Model formulas for the two count outcomes.
 #' @param data A data frame.
-#' @param random_1,random_2 Character vectors of coefficient names (matching
-#'   `model.matrix` columns) to treat as normal random coefficients in each
-#'   equation. NULL means all-fixed for that equation.
+#' @param random_1,random_2 Random coefficients per equation. Either a character
+#'   vector of `model.matrix` column names (all Normal), or a named list whose
+#'   values are a distribution name (`"normal"`, `"lognormal"`, `"uniform"`,
+#'   `"triangular"`) or a list `list(dist = ..., sign = ...)` (`sign` is -1/1 and
+#'   lognormal-only). NULL means all-fixed for that equation.
 #' @param draws Number of simulation draws for the optimization.
 #' @param draw_type Quasi-random draw type. Only "halton" is supported in this version.
 #' @param seed Random seed for the simulation draws.
