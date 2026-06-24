@@ -11,12 +11,18 @@
 #'   the simulation draws.
 #' @param n_cores Worker processes for the optional cluster path (1 = sequential).
 #' @param compute_se If FALSE, skip the Hessian and standard errors.
-#' @param hess_eps,hess_r Step and Richardson order for [numDeriv::hessian()].
+#' @param hessian How [fit_bnb()] (famoye) computes the Hessian for standard
+#'   errors: "numeric" (default, [numDeriv::hessian()]) or "analytic" (the
+#'   closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
+#'   at the optimum and yield the same observed-information SEs.
+#' @param hess_eps,hess_r Step and Richardson order for [numDeriv::hessian()]
+#'   (used only when `hessian = "numeric"`).
 #'
 #' @return An object of class `rpbnb_control` (a named list).
 #' @export
 #' @examples
 #' rpbnb_control(method = "BFGS", iterlim = 200)
+#' rpbnb_control(hessian = "analytic")
 rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
                           iterlim = 300L,
                           reltol = 1e-8,
@@ -25,12 +31,17 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
                           halton_burn = 300L,
                           n_cores = 1L,
                           compute_se = TRUE,
+                          hessian = c("numeric", "analytic"),
                           hess_eps = 1e-5,
                           hess_r = 4L) {
   if (length(method) > 1) method <- method[1]
   allowed <- c("BFGS", "NR", "BHHH", "NM")
   if (!method %in% allowed) {
     stop("`method` must be one of: ", paste(allowed, collapse = ", "), call. = FALSE)
+  }
+  if (length(hessian) > 1) hessian <- hessian[1]
+  if (!hessian %in% c("numeric", "analytic")) {
+    stop("`hessian` must be one of: numeric, analytic", call. = FALSE)
   }
   if (!is.numeric(n_cores) || n_cores < 1) {
     stop("`n_cores` must be a positive integer.", call. = FALSE)
@@ -50,7 +61,7 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
          draws_hessian = as.integer(draws_hessian),
          halton_burn = as.integer(halton_burn),
          n_cores = as.integer(n_cores), compute_se = isTRUE(compute_se),
-         hess_eps = hess_eps, hess_r = as.integer(hess_r)),
+         hessian = hessian, hess_eps = hess_eps, hess_r = as.integer(hess_r)),
     class = "rpbnb_control"
   )
 }

@@ -74,13 +74,18 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
 
   ll_hat <- as.numeric(stats::logLik(fit))
 
-  # Standard errors via numeric Hessian with lambda-bounds frozen at optimum
+  # Standard errors from the Hessian, with lambda-bounds frozen at optimum. The
+  # analytic and numeric paths differentiate the same frozen-bounds objective.
   if (isTRUE(control$compute_se)) {
     lamLo_h <- bnds_hat[1]; lamHi_h <- bnds_hat[2]
     ll_fb <- function(p) bnbr_loglik_fixed_bounds(p, Y1, Y2, X1, X2, lamLo_h, lamHi_h)
 
-    H <- numDeriv::hessian(ll_fb, par_hat,
-                           method.args = list(r = control$hess_r, eps = control$hess_eps))
+    H <- if (identical(control$hessian, "analytic")) {
+      bnb_hessian_fixed_bounds(par_hat, Y1, Y2, X1, X2, lamLo_h, lamHi_h)
+    } else {
+      numDeriv::hessian(ll_fb, par_hat,
+                        method.args = list(r = control$hess_r, eps = control$hess_eps))
+    }
     info <- -H; info <- (info + t(info)) / 2
     if (any(!is.finite(info))) {
       warning("Non-finite information; retrying Hessian with larger step.")
