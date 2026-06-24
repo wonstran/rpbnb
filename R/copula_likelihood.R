@@ -18,7 +18,7 @@
 
 #' Per-observation discrete-copula NB2 log-likelihood
 #'
-#' @param par Parameter vector: [b1 (p1), b2 (p2), log_m1, log_m2, z_theta].
+#' @param par Parameter vector (b1, b2, log_m1, log_m2, z_theta).
 #' @param y1,y2 Response vectors.
 #' @param X1,X2 Design matrices.
 #' @param family Copula family string: "frank", "normal", or "kimeldorf".

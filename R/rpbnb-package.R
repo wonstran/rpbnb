@@ -7,8 +7,26 @@
 #' @keywords internal
 "_PACKAGE"
 
-#' @importFrom stats model.frame model.matrix model.response pnorm plogis
-#'   qnorm symnum coef logLik AIC BIC predict vcov dnbinom rnbinom rnorm runif
-#'   rbinom var sd setNames
+#' @importFrom stats model.frame
+#' @importFrom stats model.matrix
+#' @importFrom stats model.response
+#' @importFrom stats pnorm
+#' @importFrom stats plogis
+#' @importFrom stats qnorm
+#' @importFrom stats symnum
+#' @importFrom stats coef
+#' @importFrom stats logLik
+#' @importFrom stats AIC
+#' @importFrom stats BIC
+#' @importFrom stats predict
+#' @importFrom stats vcov
+#' @importFrom stats dnbinom
+#' @importFrom stats rnbinom
+#' @importFrom stats rnorm
+#' @importFrom stats runif
+#' @importFrom stats rbinom
+#' @importFrom stats var
+#' @importFrom stats sd
+#' @importFrom stats setNames
 #' @importFrom compiler cmpfun
 NULL
