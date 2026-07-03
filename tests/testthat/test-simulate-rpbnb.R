@@ -21,6 +21,30 @@ test_that("simulate_rpbnb returns the documented pieces and true params", {
   expect_equal(nrow(s$data), 100)
 })
 
+test_that("simulate_rpbnb does not fix the RNG when no seed is given", {
+  a <- simulate_rpbnb(n = 200, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+                      beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+                      dispersion = c(m1 = 0.4, m2 = 0.5))
+  b <- simulate_rpbnb(n = 200, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+                      beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+                      dispersion = c(m1 = 0.4, m2 = 0.5))
+  expect_false(isTRUE(all.equal(a$data, b$data)))
+})
+
+test_that("simulate_rpbnb realizes lognormal random coefficients correctly", {
+  loc <- 0.0; scale <- 0.3
+  s <- simulate_rpbnb(n = 40000,
+                      beta1 = c("(Intercept)" = 0.0, x1 = loc),
+                      beta2 = c("(Intercept)" = 0.0, x1 = 0.0),
+                      random_1 = list(x1 = list(dist = "lognormal",
+                                                sign = 1, scale = scale)),
+                      dispersion = c(m1 = 0.4, m2 = 0.4), seed = 11)
+  bx1 <- s$coef_realized$eq1[, "x1"]
+  # coef = sign * exp(loc + scale * z), z ~ N(0,1): all positive, lognormal mean.
+  expect_true(all(bx1 > 0))
+  expect_equal(mean(bx1), exp(loc + scale^2 / 2), tolerance = 0.02)
+})
+
 test_that("realized random coefficients match requested mean and sd", {
   s <- simulate_rpbnb(n = 20000, beta1 = c("(Intercept)" = 0.0, x1 = 0.5),
                       beta2 = c("(Intercept)" = 0.0, x1 = 0.0),
@@ -47,4 +71,29 @@ test_that("simulate_rpbnb errors when supplied covariates miss a column", {
                    covariates = cov, seed = 1),
     "missing required column"
   )
+})
+
+test_that("simulate_rpbnb errors when covariates has the wrong number of rows", {
+  cov <- data.frame(x1 = rnorm(30))
+  expect_error(
+    simulate_rpbnb(n = 50, beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+                   beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+                   dispersion = c(m1 = 0.4, m2 = 0.4),
+                   covariates = cov, seed = 1),
+    "n = 50 rows"
+  )
+})
+
+test_that("simulate_rpbnb marginal means are correct when (Intercept) is not listed first", {
+  # $mu is deterministic given the seed, so a small n gives identical
+  # coverage to a large one here.
+  s_scrambled <- simulate_rpbnb(n = 200,
+                                beta1 = c(x1 = 0.3, "(Intercept)" = 1.0),
+                                beta2 = c(x1 = -0.2, "(Intercept)" = 0.5),
+                                dispersion = c(m1 = 0.5, m2 = 0.5), seed = 7)
+  s_ordered <- simulate_rpbnb(n = 200,
+                              beta1 = c("(Intercept)" = 1.0, x1 = 0.3),
+                              beta2 = c("(Intercept)" = 0.5, x1 = -0.2),
+                              dispersion = c(m1 = 0.5, m2 = 0.5), seed = 7)
+  expect_identical(s_scrambled$mu, s_ordered$mu)
 })

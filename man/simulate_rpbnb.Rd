@@ -13,7 +13,7 @@ simulate_rpbnb(
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 }
 \arguments{
@@ -36,7 +36,9 @@ coefficient is \code{sign * exp(log_location + scale * z)}.}
 \item{covariates}{Optional data frame of covariates; if NULL, standard-normal
 columns are generated for every non-intercept name.}
 
-\item{seed}{Random seed.}
+\item{seed}{Optional random seed. If \code{NULL} (default) the RNG is left
+untouched and draws continue from the caller's current stream, so repeated
+calls yield distinct datasets; supply an integer for reproducible output.}
 }
 \value{
 A list with \code{data} (y1, y2, covariates), \code{coef_realized}

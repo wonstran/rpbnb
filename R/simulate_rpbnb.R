@@ -13,7 +13,9 @@
 #' @param lambda Famoye dependence parameter (0 = independent margins).
 #' @param covariates Optional data frame of covariates; if NULL, standard-normal
 #'   columns are generated for every non-intercept name.
-#' @param seed Random seed.
+#' @param seed Optional random seed. If `NULL` (default) the RNG is left
+#'   untouched and draws continue from the caller's current stream, so repeated
+#'   calls yield distinct datasets; supply an integer for reproducible output.
 #' @return A list with `data` (y1, y2, covariates), `coef_realized`
 #'   (per-obs coefficients per equation), `mu` (conditional means), `true`
 #'   (parameters), `settings`, and `meta` (R/seed/timestamp passed by caller).
@@ -28,7 +30,7 @@
 simulate_rpbnb <- function(n, beta1, beta2,
                            random_1 = NULL, random_2 = NULL,
                            dispersion = c(m1 = 0.5, m2 = 0.5),
-                           lambda = 0, covariates = NULL, seed = 1234) {
+                           lambda = 0, covariates = NULL, seed = NULL) {
   stopifnot("(Intercept)" %in% names(beta1), "(Intercept)" %in% names(beta2))
   if (!all(c("m1", "m2") %in% names(dispersion))) {
     stop("`dispersion` must be a named vector c(m1 = ., m2 = .).", call. = FALSE)
@@ -52,24 +54,16 @@ simulate_rpbnb <- function(n, beta1, beta2,
          call. = FALSE)
   }
 
-  set.seed(seed)
-  vars <- setdiff(union(names(beta1), names(beta2)), "(Intercept)")
-  if (is.null(covariates)) {
-    covariates <- as.data.frame(stats::setNames(
-      lapply(vars, function(v) rnorm(n)), vars))
-  }
-  missing_cov <- setdiff(vars, names(covariates))
-  if (length(missing_cov)) {
-    stop("covariates is missing required column(s): ",
-         paste(missing_cov, collapse = ", "), ".", call. = FALSE)
-  }
-  build_X <- function(bv) {
-    X <- cbind(`(Intercept)` = rep(1, n))
-    for (nm in setdiff(names(bv), "(Intercept)")) X <- cbind(X, covariates[[nm]])
-    colnames(X) <- names(bv)
-    X
-  }
-  X1 <- build_X(beta1); X2 <- build_X(beta2)
+  # Only touch the RNG when a seed is explicitly supplied; with seed = NULL the
+  # draws continue from the caller's current RNG stream (idiomatic R), so
+  # repeated calls in a Monte Carlo loop produce distinct datasets rather than
+  # silently identical ones.
+  if (!is.null(seed)) set.seed(seed)
+  if (is.null(covariates)) covariates <- .sim_default_covariates(beta1, beta2, n)
+  .check_sim_covariates(covariates, beta1, beta2, n)
+
+  d1 <- .build_sim_X(beta1, covariates, n); X1 <- d1$X; b1 <- d1$beta
+  d2 <- .build_sim_X(beta2, covariates, n); X2 <- d2$X; b2 <- d2$beta
 
   realize <- function(bv, spec, X) {
     B <- matrix(rep(bv, each = n), nrow = n, dimnames = list(NULL, names(bv)))
@@ -82,7 +76,11 @@ simulate_rpbnb <- function(n, beta1, beta2,
     }
     B
   }
-  B1 <- realize(beta1, spec1, X1); B2 <- realize(beta2, spec2, X2)
+  # realize()/rowSums() below pair X's and B's columns by position, so both
+  # must be built from the same (Intercept)-first-reordered coefficient
+  # vector — using the caller's original beta1/beta2 here would silently
+  # mismatch columns whenever "(Intercept)" isn't listed first.
+  B1 <- realize(b1, spec1, X1); B2 <- realize(b2, spec2, X2)
   mu1 <- exp(rowSums(X1 * B1)); mu2 <- exp(rowSums(X2 * B2))
   m1 <- dispersion[["m1"]]; m2 <- dispersion[["m2"]]
   y1 <- rnbinom(n, size = 1 / m1, mu = mu1)

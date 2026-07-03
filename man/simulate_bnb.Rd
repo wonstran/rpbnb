@@ -11,7 +11,7 @@ simulate_bnb(
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 }
 \arguments{
@@ -29,7 +29,9 @@ valid bounds implied by the marginal means and dispersions.}
 \item{covariates}{Optional data frame of covariates. If \code{NULL}, standard-
 normal columns are generated for every non-intercept coefficient name.}
 
-\item{seed}{Random seed for reproducibility.}
+\item{seed}{Optional random seed. If \code{NULL} (default) the RNG is left
+untouched and draws continue from the caller's current stream, so repeated
+calls yield distinct datasets; supply an integer for reproducible output.}
 }
 \value{
 A list with:
