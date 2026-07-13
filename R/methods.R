@@ -164,6 +164,18 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   )
 }
 
+# Flat natural-scale table (random SDs + dispersion/dependence in one data frame)
+# for summary() objects, which expose `$natural` as a single data frame with a
+# Parameter column. print() uses the split view (.print_natural_scale) instead.
+.natural_scale_flat <- function(object) {
+  nat   <- .natural_scale_table(object)
+  parts <- Filter(Negate(is.null), list(nat$random, nat$dispersion))
+  if (!length(parts)) return(NULL)
+  out <- do.call(rbind, parts)
+  rownames(out) <- NULL
+  out
+}
+
 .print_natural_scale <- function(object, digits = 4) {
   nat <- .natural_scale_table(object)
   if (is.null(nat$random) && is.null(nat$dispersion)) return(invisible(NULL))
@@ -218,7 +230,7 @@ print.bnb_fit <- function(x, digits = 4, ...) {
 #' @export
 summary.bnb_fit <- function(object, ...) {
   structure(list(coefficients = .coef_matrix(object),
-                 natural = .natural_scale_table(object),
+                 natural = .natural_scale_flat(object),
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
                  dependence = object$dependence, call = object$call,
@@ -330,7 +342,7 @@ print.rpbnb_fit <- function(x, digits = 4, ...) {
 #' @export
 summary.rpbnb_fit <- function(object, ...) {
   structure(list(coefficients = .coef_matrix(object),
-                 natural = .natural_scale_table(object),
+                 natural = .natural_scale_flat(object),
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
                  draws = object$draws, call = object$call,
