@@ -120,3 +120,37 @@ test_that("predict() on a copula fit errors without newdata but works with it", 
   expect_true(all(c("mu1", "mu2") %in% names(pred)))
   expect_equal(nrow(pred), nrow(sim$data))
 })
+
+recover_copula <- function(fam, par, n = 2000, draws = 200, seed = 7) {
+  sim <- simulate_rpbnb_copula(
+    n = n,
+    beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    random_1 = list(x1 = list(sd = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula(fam, par = par), seed = seed)
+  # compute_se = FALSE: these tests assert only the point estimate (est vs true);
+  # the numeric Hessian for SEs is unused here and dominates runtime.
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   random_1 = "x1", random_2 = "x1",
+                   dependence = copula(fam),
+                   draws = draws, seed = 1,
+                   control = rpbnb_control(compute_se = FALSE, print_level = 0))
+  z <- fit$coef[["z_theta"]]
+  list(true = par, est = z_to_native(fam, z), sim_tau = sim$true$tau)
+}
+
+test_that("Gaussian copula parameter is recovered", {
+  r <- recover_copula("normal", par = 0.5)
+  expect_equal(r$est, r$true, tolerance = 0.12)
+})
+
+test_that("Frank copula parameter is recovered", {
+  r <- recover_copula("frank", par = 4)
+  expect_equal(r$est, r$true, tolerance = 1.2)   # theta on its native (wide) scale
+})
+
+test_that("Clayton copula parameter is recovered", {
+  r <- recover_copula("kimeldorf", par = 1.0)
+  expect_equal(r$est, r$true, tolerance = 0.5)
+})
