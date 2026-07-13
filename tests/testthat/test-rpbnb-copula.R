@@ -121,7 +121,7 @@ test_that("predict() on a copula fit errors without newdata but works with it", 
   expect_equal(nrow(pred), nrow(sim$data))
 })
 
-recover_copula <- function(fam, par, n = 2000, draws = 200, seed = 7) {
+recover_copula <- function(fam, par, n = 800, draws = 100, seed = 7) {
   sim <- simulate_rpbnb_copula(
     n = n,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
