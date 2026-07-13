@@ -98,3 +98,25 @@ test_that("fit_rpbnb default dependence is unchanged (famoye) and has z_lambda",
   expect_true("z_lambda" %in% names(fit$coef))
   expect_null(fit$cop_family)
 })
+
+test_that("predict() on a copula fit errors without newdata but works with it", {
+  sim <- simulate_rpbnb_copula(
+    n = 300,
+    beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("normal", par = 0.5), seed = 41)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   dependence = copula("normal"),
+                   draws = 40, seed = 1,
+                   control = rpbnb_control(compute_se = FALSE))
+  expect_true(is.null(fit$mu1))
+  expect_true(is.null(fit$mu2))
+
+  expect_error(predict(fit), "copula")
+
+  pred <- predict(fit, newdata = sim$data)
+  expect_s3_class(pred, "data.frame")
+  expect_true(all(c("mu1", "mu2") %in% names(pred)))
+  expect_equal(nrow(pred), nrow(sim$data))
+})

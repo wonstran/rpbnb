@@ -285,7 +285,13 @@ logLik.rpbnb_fit <- function(object, ...) {
 
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
-  if (is.null(newdata)) return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+  if (is.null(newdata)) {
+    if (is.null(object$mu1)) {
+      stop("predict() without 'newdata' is not supported for copula fits ",
+           "(fitted means are not stored); pass newdata.", call. = FALSE)
+    }
+    return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+  }
   data.frame(
     mu1 = .bnb_predict_mu(object$formula_1, object$coef, "b1", "log_sd1", newdata),
     mu2 = .bnb_predict_mu(object$formula_2, object$coef, "b2", "log_sd2", newdata)
