@@ -71,6 +71,66 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   ll
 }
 
+#' Per-observation copula score scalars (shared by the fixed and RP estimators)
+#'
+#' Returns dlogP/deta1, dlogP/deta2, dlogP/dlog_m1, dlogP/dlog_m2, dlogP/dz_theta
+#' per observation (bad observations zeroed), given per-observation means and the
+#' scalar dispersion/dependence parameters. `copula_grad_vec` contracts these with
+#' the design; the RP estimator reuses them per simulation draw.
+#' @keywords internal
+#' @noRd
+.copula_score_scalars <- function(y1, y2, mu1, mu2, r1, r2, theta, dth_dz, family) {
+  a  <- pnbinom(y1,       size = r1, mu = mu1)
+  am <- ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
+  b  <- pnbinom(y2,       size = r2, mu = mu2)
+  bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
+  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
+
+  cop_cdf <- switch(family, frank = frank_cdf, normal = normal_cdf, kimeldorf = kimeldorf_cdf)
+  c_ab   <- cop_cdf(a,  b,  theta); c_amb  <- cop_cdf(am, b,  theta)
+  c_abm  <- cop_cdf(a,  bm, theta); c_ambm <- cop_cdf(am, bm, theta)
+  p_obs  <- c_ab - c_amb - c_abm + c_ambm
+  ok     <- ok & is.finite(p_obs)
+  p_obs  <- pmax(p_obs, 1e-300)
+
+  cu_ab   <- .cop_du(a,  b,  theta, family); cu_amb  <- .cop_du(am, b,  theta, family)
+  cu_abm  <- .cop_du(a,  bm, theta, family); cu_ambm <- .cop_du(am, bm, theta, family)
+  cv_ab   <- .cop_dv(a,  b,  theta, family); cv_amb  <- .cop_dv(am, b,  theta, family)
+  cv_abm  <- .cop_dv(a,  bm, theta, family); cv_ambm <- .cop_dv(am, bm, theta, family)
+  ct_rect <- .cop_dtheta(a, b, theta, family) - .cop_dtheta(am, b, theta, family) -
+             .cop_dtheta(a, bm, theta, family) + .cop_dtheta(am, bm, theta, family)
+
+  da_dmu1  <- -(y1 + 1L) * dnbinom(y1 + 1L, size = r1, mu = mu1) / mu1
+  dam_dmu1 <- ifelse(y1 > 0L, -y1 * dnbinom(y1, size = r1, mu = mu1) / mu1, 0)
+  delta_u_a  <- cu_ab - cu_abm
+  delta_u_am <- -cu_amb + cu_ambm
+  s_eta1 <- (delta_u_a * da_dmu1 * mu1 + delta_u_am * dam_dmu1 * mu1) / p_obs
+
+  db_dmu2  <- -(y2 + 1L) * dnbinom(y2 + 1L, size = r2, mu = mu2) / mu2
+  dbm_dmu2 <- ifelse(y2 > 0L, -y2 * dnbinom(y2, size = r2, mu = mu2) / mu2, 0)
+  delta_v_b  <- cv_ab - cv_amb
+  delta_v_bm <- -cv_abm + cv_ambm
+  s_eta2 <- (delta_v_b * db_dmu2 * mu2 + delta_v_bm * dbm_dmu2 * mu2) / p_obs
+
+  da_dr1  <- mapply(.dnb_cdf_dr, y1,      mu1, r1)
+  dam_dr1 <- ifelse(y1 > 0L, mapply(.dnb_cdf_dr, y1 - 1L, mu1, r1), 0)
+  s_logm1 <- (-r1) * (delta_u_a * da_dr1 + delta_u_am * dam_dr1) / p_obs
+
+  db_dr2  <- mapply(.dnb_cdf_dr, y2,      mu2, r2)
+  dbm_dr2 <- ifelse(y2 > 0L, mapply(.dnb_cdf_dr, y2 - 1L, mu2, r2), 0)
+  s_logm2 <- (-r2) * (delta_v_b * db_dr2 + delta_v_bm * dbm_dr2) / p_obs
+
+  s_ztheta <- ct_rect * dth_dz / p_obs
+
+  bad <- !ok | !is.finite(s_eta1) | !is.finite(s_eta2) |
+         !is.finite(s_logm1) | !is.finite(s_logm2) | !is.finite(s_ztheta)
+  s_eta1[bad] <- 0; s_eta2[bad] <- 0
+  s_logm1[bad] <- 0; s_logm2[bad] <- 0; s_ztheta[bad] <- 0
+
+  list(p_obs = p_obs, s_eta1 = s_eta1, s_eta2 = s_eta2,
+       s_logm1 = s_logm1, s_logm2 = s_logm2, s_ztheta = s_ztheta)
+}
+
 #' Per-observation analytic gradient of the discrete-copula log-likelihood
 #'
 #' Returns a matrix (n × k) where columns are the per-obs gradient contributions.
@@ -87,104 +147,19 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
   log_m1  <- par[p1 + p2 + 1L]
   log_m2  <- par[p1 + p2 + 2L]
   z_theta <- par[p1 + p2 + 3L]
-  n       <- length(y1)
 
   r1  <- exp(-log_m1); r2 <- exp(-log_m2)
   mu1 <- .bound_mu(X1, beta1)
   mu2 <- .bound_mu(X2, beta2)
-  theta   <- z_to_native(family, z_theta)
-  dth_dz  <- dnative_dz(family, z_theta)
+  theta  <- z_to_native(family, z_theta)
+  dth_dz <- dnative_dz(family, z_theta)
 
-  a  <- pnbinom(y1,       size = r1, mu = mu1)
-  am <- ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
-  b  <- pnbinom(y2,       size = r2, mu = mu2)
-  bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
+  sc <- .copula_score_scalars(y1, y2, mu1, mu2, r1, r2, theta, dth_dz, family)
 
-  # Same validity check as copula_loglik_vec's ok mask; see its comment.
-  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
-
-  # Copula values for the PMF
-  c_ab   <- switch(family, frank=frank_cdf(a,b,theta),   normal=normal_cdf(a,b,theta),   kimeldorf=kimeldorf_cdf(a,b,theta))
-  c_amb  <- switch(family, frank=frank_cdf(am,b,theta),  normal=normal_cdf(am,b,theta),  kimeldorf=kimeldorf_cdf(am,b,theta))
-  c_abm  <- switch(family, frank=frank_cdf(a,bm,theta),  normal=normal_cdf(a,bm,theta),  kimeldorf=kimeldorf_cdf(a,bm,theta))
-  c_ambm <- switch(family, frank=frank_cdf(am,bm,theta), normal=normal_cdf(am,bm,theta), kimeldorf=kimeldorf_cdf(am,bm,theta))
-
-  p_obs <- c_ab - c_amb - c_abm + c_ambm
-  ok <- ok & is.finite(p_obs)
-  p_obs <- pmax(p_obs, 1e-300)
-
-  # dC/du at four corners
-  cu_ab   <- .cop_du(a,  b,  theta, family)
-  cu_amb  <- .cop_du(am, b,  theta, family)
-  cu_abm  <- .cop_du(a,  bm, theta, family)
-  cu_ambm <- .cop_du(am, bm, theta, family)
-
-  # dC/dv at four corners
-  cv_ab   <- .cop_dv(a,  b,  theta, family)
-  cv_amb  <- .cop_dv(am, b,  theta, family)
-  cv_abm  <- .cop_dv(a,  bm, theta, family)
-  cv_ambm <- .cop_dv(am, bm, theta, family)
-
-  # dC/dtheta (rectangle sum) — boundary zeros handled by .cop_dtheta guards
-  ct_rect <- .cop_dtheta(a,b,theta,family) - .cop_dtheta(am,b,theta,family) -
-             .cop_dtheta(a,bm,theta,family) + .cop_dtheta(am,bm,theta,family)
-
-  # ---- beta1 gradient ----
-  # da/dmu1 = -(y1+1)*P(y1+1)/mu1; dam/dmu1 = -y1*P(y1)/mu1 (when y1>0)
-  da_dmu1  <- -(y1 + 1L) * dnbinom(y1 + 1L, size = r1, mu = mu1) / mu1
-  dam_dmu1 <- ifelse(y1 > 0L, -y1 * dnbinom(y1, size = r1, mu = mu1) / mu1, 0)
-
-  # Per-obs scalar factor for beta1 (multiply by mu1 * x1_ij since mu1 = exp(X1 b1))
-  # d(a)/d(beta1_j) = da/dmu1 * mu1 * x1_ij
-  delta_u_a  <- cu_ab - cu_abm     # C_u(a,b) - C_u(a,bm)
-  delta_u_am <- -cu_amb + cu_ambm  # -C_u(am,b) + C_u(am,bm)
-
-  # Per-obs scalar contribution to d(loglik)/d(b1) before multiplying by x1_i
-  sc_beta1 <- (delta_u_a * da_dmu1 * mu1 + delta_u_am * dam_dmu1 * mu1) / p_obs
-
-  # ---- beta2 gradient ----
-  db_dmu2  <- -(y2 + 1L) * dnbinom(y2 + 1L, size = r2, mu = mu2) / mu2
-  dbm_dmu2 <- ifelse(y2 > 0L, -y2 * dnbinom(y2, size = r2, mu = mu2) / mu2, 0)
-
-  delta_v_b  <- cv_ab - cv_amb
-  delta_v_bm <- -cv_abm + cv_ambm
-
-  sc_beta2 <- (delta_v_b * db_dmu2 * mu2 + delta_v_bm * dbm_dmu2 * mu2) / p_obs
-
-  # ---- log_m1 gradient ----
-  # da/dr1 = .dnb_cdf_dr(y1, mu1, r1); dam/dr1 = .dnb_cdf_dr(y1-1, mu1, r1) [y1>0]
-  # d(r1)/d(log_m1) = -r1
-  da_dr1  <- mapply(.dnb_cdf_dr, y1,      mu1, r1)
-  dam_dr1 <- ifelse(y1 > 0L, mapply(.dnb_cdf_dr, y1 - 1L, mu1, r1), 0)
-
-  sc_logm1 <- (-r1) * (delta_u_a * da_dr1 + delta_u_am * dam_dr1) / p_obs
-
-  # ---- log_m2 gradient ----
-  db_dr2  <- mapply(.dnb_cdf_dr, y2,      mu2, r2)
-  dbm_dr2 <- ifelse(y2 > 0L, mapply(.dnb_cdf_dr, y2 - 1L, mu2, r2), 0)
-
-  sc_logm2 <- (-r2) * (delta_v_b * db_dr2 + delta_v_bm * dbm_dr2) / p_obs
-
-  # ---- z_theta gradient ----
-  sc_z <- ct_rect * dth_dz / p_obs
-
-  # Zero degenerate observations' score contributions BEFORE summing, at the
-  # same per-observation granularity copula_loglik_vec uses for its -Inf. A
-  # blanket check on the final summed gradient would let one bad observation
-  # zero out every other (valid) observation's contribution to that
-  # coordinate; masking first means only the bad observations drop out.
-  bad <- !ok | !is.finite(sc_beta1) | !is.finite(sc_beta2) |
-         !is.finite(sc_logm1) | !is.finite(sc_logm2) | !is.finite(sc_z)
-  sc_beta1[bad] <- 0; sc_beta2[bad] <- 0
-  sc_logm1[bad] <- 0; sc_logm2[bad] <- 0
-  sc_z[bad]     <- 0
-
-  # ---- Assemble gradient: sum over observations ----
-  g_beta1  <- as.vector(t(X1) %*% sc_beta1)
-  g_beta2  <- as.vector(t(X2) %*% sc_beta2)
-  g_logm1  <- sum(sc_logm1)
-  g_logm2  <- sum(sc_logm2)
-  g_z      <- sum(sc_z)
-
+  g_beta1 <- as.vector(t(X1) %*% sc$s_eta1)
+  g_beta2 <- as.vector(t(X2) %*% sc$s_eta2)
+  g_logm1 <- sum(sc$s_logm1)
+  g_logm2 <- sum(sc$s_logm2)
+  g_z     <- sum(sc$s_ztheta)
   c(g_beta1, g_beta2, g_logm1, g_logm2, g_z)
 }
