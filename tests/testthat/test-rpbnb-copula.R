@@ -204,3 +204,23 @@ test_that("copula RP analytic gradient matches numeric (lognormal random coef)",
                  dists1 = "lognormal", dists2 = "normal", signs1 = 1, signs2 = 1)
   expect_equal(as.numeric(attr(r$ana, "gradient")), r$num, tolerance = 1e-6)
 })
+
+test_that("copula fit with se_method='opg' gives finite SEs; 'analytic' errors", {
+  sim <- simulate_rpbnb_copula(
+    n = 600, beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    random_1 = list(x1 = list(sd = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("normal", par = 0.4), seed = 41)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   random_1 = "x1", random_2 = "x1", dependence = copula("normal"),
+                   draws = 80, seed = 1,
+                   control = rpbnb_control(se_method = "opg"))
+  expect_true(is.finite(fit$se[["z_theta"]]))
+  expect_true(all(is.finite(diag(fit$vcov))))
+  expect_error(
+    fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1", random_2 = "x1",
+              dependence = copula("normal"), draws = 40, seed = 1,
+              control = rpbnb_control(se_method = "analytic")),
+    "opg|numeric")
+})

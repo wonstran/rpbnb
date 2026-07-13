@@ -52,7 +52,10 @@ mixture formula) -- exact and much faster than "numeric" for larger models;
 "opg" uses the BHHH / outer-product-of-gradients information from the
 per-observation scores -- fastest, but relies on the information-matrix
 equality so it is unreliable for parameters at a boundary (e.g. a random-
-coefficient SD estimated near 0). Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
+coefficient SD estimated near 0). For copula dependence (\code{\link[=fit_rpbnb]{fit_rpbnb()}} with
+\code{dependence = copula(...)}), only "opg" (recommended) and "numeric" are
+available; "analytic" is not implemented for the copula path and errors.
+Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
 
 \item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}
 (used only when \code{hessian = "numeric"}).}

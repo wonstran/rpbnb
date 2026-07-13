@@ -1,6 +1,8 @@
 # Estimator for the copula random-parameter BNB model. Optimizes the copula
-# simulated log-likelihood (R/rpbnb_copula_likelihood.R) with BFGS + numeric
-# gradient; standard errors from the numeric Hessian. Internal.
+# simulated log-likelihood (R/rpbnb_copula_likelihood.R) with BFGS + the
+# analytic gradient (bnbr_rp_copula_ll_grad); standard errors from OPG
+# (default recommendation) or the numeric Hessian, per control$se_method.
+# Internal.
 
 #' @keywords internal
 #' @noRd
@@ -52,11 +54,13 @@
                log(0.5), log(0.5), 0)
   names(start) <- par_names
 
+  se_method <- if (is.null(control$se_method)) "numeric" else control$se_method
+
   ll_trace <- numeric(0)
   ll_fun <- function(p) {
-    v <- bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
-                           Z1, Z2, family, dist1, dist2, sign1, sign2)
-    ll_trace[[length(ll_trace) + 1L]] <<- v
+    v <- bnbr_rp_copula_ll_grad(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
+                                Z1, Z2, family, dist1, dist2, sign1, sign2)
+    ll_trace[[length(ll_trace) + 1L]] <<- as.numeric(v)
     v
   }
   fit <- maxLik::maxLik(logLik = ll_fun, start = start, method = "BFGS",
@@ -67,12 +71,25 @@
   npar <- length(par_hat)
 
   if (isTRUE(control$compute_se)) {
-    H <- numDeriv::hessian(ll_fun, par_hat,
-                           method.args = list(r = control$hess_r, eps = control$hess_eps))
-    info <- -(H + t(H)) / 2
-    vc <- try(solve(info), silent = TRUE)
-    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-    se <- sqrt(pmax(diag(vc), 0))
+    if (identical(se_method, "analytic")) {
+      stop("se_method = 'analytic' is not available for copula dependence; use ",
+           "'opg' (recommended) or 'numeric'.", call. = FALSE)
+    } else if (identical(se_method, "opg")) {
+      res <- bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
+                                    rand_idx1, rand_idx2, Z1, Z2, family,
+                                    dist1, dist2, sign1, sign2, want_scores = TRUE)
+      vc <- opg_vcov(attr(res, "scores"), par_names)
+      se <- sqrt(pmax(diag(vc), 0)); names(se) <- par_names
+    } else {  # "numeric"
+      H <- numDeriv::hessian(function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
+                             rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2),
+                             par_hat,
+                             method.args = list(r = control$hess_r, eps = control$hess_eps))
+      info <- -(H + t(H)) / 2
+      vc <- try(solve(info), silent = TRUE)
+      if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
+      se <- sqrt(pmax(diag(vc), 0))
+    }
   } else {
     vc <- matrix(NA_real_, npar, npar); se <- rep(NA_real_, npar)
   }

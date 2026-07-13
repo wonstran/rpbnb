@@ -23,7 +23,10 @@
 #'   "opg" uses the BHHH / outer-product-of-gradients information from the
 #'   per-observation scores -- fastest, but relies on the information-matrix
 #'   equality so it is unreliable for parameters at a boundary (e.g. a random-
-#'   coefficient SD estimated near 0). Ignored by [fit_bnb()].
+#'   coefficient SD estimated near 0). For copula dependence ([fit_rpbnb()] with
+#'   `dependence = copula(...)`), only "opg" (recommended) and "numeric" are
+#'   available; "analytic" is not implemented for the copula path and errors.
+#'   Ignored by [fit_bnb()].
 #' @param hess_eps,hess_r Step and Richardson order for [numDeriv::hessian()]
 #'   (used only when `hessian = "numeric"`).
 #'
