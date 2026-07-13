@@ -14,7 +14,8 @@ fit_rpbnb(
   draw_type = "halton",
   seed = 1234,
   start = NULL,
-  control = rpbnb_control()
+  control = rpbnb_control(),
+  dependence = "famoye"
 )
 }
 \arguments{
@@ -39,6 +40,10 @@ lognormal-only). NULL means all-fixed for that equation.}
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. Estimation uses BFGS;
 \code{control$method} is not currently honored by \code{fit_rpbnb} (the
 simulated-likelihood objective returns an aggregate gradient).}
+
+\item{dependence}{Dependence structure: "famoye" (default; Famoye/Sarmanov,
+the multithreaded C++ path) or an \code{\link[=copula]{copula()}} object for copula dependence
+(Frank / Gaussian / Clayton; estimated on a slower R path).}
 }
 \value{
 An object of class \code{rpbnb_fit}.

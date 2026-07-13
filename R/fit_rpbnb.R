@@ -9,7 +9,8 @@
 new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           m1, m2, lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                           rand_idx1, rand_idx2, formula_1, formula_2,
-                          draws, draw_type, seed, ll_trace, convergence, call) {
+                          draws, draw_type, seed, ll_trace, convergence,
+                          cop_family = NULL, call) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
@@ -19,6 +20,7 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          formula_1 = formula_1, formula_2 = formula_2,
          draws = draws, draw_type = draw_type, seed = seed,
          ll_trace = ll_trace, convergence = convergence,
+         cop_family = cop_family,
          AIC = -2 * logLik + 2 * npar, BIC = -2 * logLik + log(nobs) * npar,
          call = call),
     class = "rpbnb_fit"
@@ -45,6 +47,9 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #' @param control An [rpbnb_control()] object. Estimation uses BFGS;
 #'   `control$method` is not currently honored by `fit_rpbnb` (the
 #'   simulated-likelihood objective returns an aggregate gradient).
+#' @param dependence Dependence structure: "famoye" (default; Famoye/Sarmanov,
+#'   the multithreaded C++ path) or an [copula()] object for copula dependence
+#'   (Frank / Gaussian / Clayton; estimated on a slower R path).
 #' @return An object of class `rpbnb_fit`.
 #' @export
 #' @examples
@@ -60,8 +65,16 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                       random_1 = NULL, random_2 = NULL,
                       draws = 400, draw_type = "halton",
                       seed = 1234, start = NULL,
-                      control = rpbnb_control()) {
+                      control = rpbnb_control(),
+                      dependence = "famoye") {
   stopifnot(is.data.frame(data))
+
+  if (inherits(dependence, "rpbnb_copula")) {
+    return(.fit_rpbnb_copula(formula_1, formula_2, data, random_1, random_2,
+                             draws, draw_type, seed, start, control,
+                             family = dependence$family))
+  }
+
   draw_type <- match.arg(draw_type, "halton")
 
   spec1 <- parse_rand_spec(random_1)

@@ -66,3 +66,35 @@ test_that("copula simulator with rho=0 yields near-independent margins", {
   )
   expect_lt(abs(cor(sim$data$y1, sim$data$y2, method = "spearman")), 0.05)
 })
+
+test_that("fit_rpbnb dispatches to the copula path and returns a copula fit", {
+  sim <- simulate_rpbnb_copula(
+    n = 800,
+    beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("normal", par = 0.5), seed = 21)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   dependence = copula("normal"),
+                   draws = 50, seed = 1,
+                   control = rpbnb_control(compute_se = FALSE))
+  expect_s3_class(fit, "rpbnb_fit")
+  expect_identical(fit$cop_family, "normal")
+  expect_true("z_theta" %in% names(fit$coef))
+  expect_true(is.null(fit$lambda))
+  # print() must use the copula branch (native param + Kendall's tau)
+  out <- paste(capture.output(print(fit)), collapse = "\n")
+  expect_match(out, "rho|tau|Gaussian")
+})
+
+test_that("fit_rpbnb default dependence is unchanged (famoye) and has z_lambda", {
+  sim <- simulate_rpbnb_copula(
+    n = 400, beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("normal", par = 0.3), seed = 31)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, draws = 50, seed = 1,
+                   control = rpbnb_control(compute_se = FALSE))
+  expect_true("z_lambda" %in% names(fit$coef))
+  expect_null(fit$cop_family)
+})
