@@ -1,9 +1,13 @@
 # Discrete-copula NB2 log-likelihood and analytic gradient. Internal.
 
 # ∂F(y; mu, r)/∂r = sum_{k=0}^y P(k) [psi(k+r) - psi(r) + log(r/(r+mu)) + 1 - (r+k)/(r+mu)]
-# Returns 0 when y < 0.
+# Returns 0 when y < 0. As r -> Inf (the NB2 -> Poisson boundary reached when
+# log_m -> -Inf) every term of wk analytically vanishes, so the derivative's
+# true limit is 0; guard it explicitly since digamma(Inf) - digamma(Inf) and
+# log(r/(r+mu)) both evaluate to NaN in floating point at literal Inf.
 .dnb_cdf_dr <- function(y, mu, r) {
   if (y < 0L) return(0)
+  if (!is.finite(r)) return(0)
   k  <- 0L:y
   pk <- dnbinom(k, size = r, mu = mu)
   wk <- digamma(k + r) - digamma(r) + log(r / (r + mu)) + 1 - (r + k) / (r + mu)
@@ -34,8 +38,8 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   z_theta <- par[p1 + p2 + 3L]
 
   r1  <- exp(-log_m1); r2 <- exp(-log_m2)
-  mu1 <- as.vector(exp(X1 %*% beta1))
-  mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1)
+  mu2 <- .bound_mu(X2, beta2)
   theta <- z_to_native(family, z_theta)
 
   .cop_cdf <- switch(family,
@@ -49,10 +53,22 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   b  <- pnbinom(y2,       size = r2, mu = mu2)
   bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
 
+  # A parameter proposal that leaves a/am/b/bm non-finite (e.g. NaN inherited
+  # from an earlier non-finite gradient step) is invalid regardless of what
+  # the copula CDF does with it; -Inf lets the optimizer reject it outright
+  # instead of possibly landing on a finite-looking but bogus plateau. The
+  # copula CDF itself can also produce a non-finite p_obs from finite a/am/b/bm
+  # (e.g. an unbounded frank theta driving exp(-theta*u) to Inf), so p_obs's
+  # own finiteness must be checked too, not just its four finite inputs.
+  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
+
   p_obs <- .cop_cdf(a, b, theta) - .cop_cdf(am, b, theta) -
            .cop_cdf(a, bm, theta) + .cop_cdf(am, bm, theta)
+  ok <- ok & is.finite(p_obs)
 
-  log(pmax(p_obs, 1e-300))
+  ll <- log(pmax(p_obs, 1e-300))
+  ll[!ok] <- -Inf
+  ll
 }
 
 #' Per-observation analytic gradient of the discrete-copula log-likelihood
@@ -74,8 +90,8 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
   n       <- length(y1)
 
   r1  <- exp(-log_m1); r2 <- exp(-log_m2)
-  mu1 <- as.vector(exp(X1 %*% beta1))
-  mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1)
+  mu2 <- .bound_mu(X2, beta2)
   theta   <- z_to_native(family, z_theta)
   dth_dz  <- dnative_dz(family, z_theta)
 
@@ -84,6 +100,9 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
   b  <- pnbinom(y2,       size = r2, mu = mu2)
   bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
 
+  # Same validity check as copula_loglik_vec's ok mask; see its comment.
+  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
+
   # Copula values for the PMF
   c_ab   <- switch(family, frank=frank_cdf(a,b,theta),   normal=normal_cdf(a,b,theta),   kimeldorf=kimeldorf_cdf(a,b,theta))
   c_amb  <- switch(family, frank=frank_cdf(am,b,theta),  normal=normal_cdf(am,b,theta),  kimeldorf=kimeldorf_cdf(am,b,theta))
@@ -91,6 +110,7 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
   c_ambm <- switch(family, frank=frank_cdf(am,bm,theta), normal=normal_cdf(am,bm,theta), kimeldorf=kimeldorf_cdf(am,bm,theta))
 
   p_obs <- c_ab - c_amb - c_abm + c_ambm
+  ok <- ok & is.finite(p_obs)
   p_obs <- pmax(p_obs, 1e-300)
 
   # dC/du at four corners
@@ -147,6 +167,17 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
 
   # ---- z_theta gradient ----
   sc_z <- ct_rect * dth_dz / p_obs
+
+  # Zero degenerate observations' score contributions BEFORE summing, at the
+  # same per-observation granularity copula_loglik_vec uses for its -Inf. A
+  # blanket check on the final summed gradient would let one bad observation
+  # zero out every other (valid) observation's contribution to that
+  # coordinate; masking first means only the bad observations drop out.
+  bad <- !ok | !is.finite(sc_beta1) | !is.finite(sc_beta2) |
+         !is.finite(sc_logm1) | !is.finite(sc_logm2) | !is.finite(sc_z)
+  sc_beta1[bad] <- 0; sc_beta2[bad] <- 0
+  sc_logm1[bad] <- 0; sc_logm2[bad] <- 0
+  sc_z[bad]     <- 0
 
   # ---- Assemble gradient: sum over observations ----
   g_beta1  <- as.vector(t(X1) %*% sc_beta1)

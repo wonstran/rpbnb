@@ -8,12 +8,13 @@ rpbnb_control(
   method = c("BFGS", "NR", "BHHH", "NM"),
   iterlim = 300L,
   reltol = 1e-08,
-  print_level = 0L,
+  print_level = 2L,
   draws_hessian = 100L,
   halton_burn = 300L,
   n_cores = 1L,
   compute_se = TRUE,
   hessian = c("numeric", "analytic"),
+  se_method = c("numeric", "opg", "analytic"),
   hess_eps = 1e-05,
   hess_r = 4L
 )
@@ -26,7 +27,7 @@ rpbnb_control(
 
 \item{reltol}{Relative convergence tolerance.}
 
-\item{print_level}{Verbosity passed to the optimizer (0 = silent).}
+\item{print_level}{Verbosity passed to the optimizer (0 = silent, default = 2 for detailed progress).}
 
 \item{draws_hessian}{Number of simulation draws used for the random-parameter
 Hessian (smaller than the optimization draws for speed). Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
@@ -42,6 +43,16 @@ the simulation draws.}
 errors: "numeric" (default, \code{\link[numDeriv:hessian]{numDeriv::hessian()}}) or "analytic" (the
 closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
 at the optimum and yield the same observed-information SEs.}
+
+\item{se_method}{Standard-error method for \code{\link[=fit_rpbnb]{fit_rpbnb()}} (the random-parameter
+model): "numeric" (default) uses the \code{\link[numDeriv:hessian]{numDeriv::hessian()}} observed-
+information Hessian; "analytic" uses the closed-form observed-information
+Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+mixture formula) -- exact and much faster than "numeric" for larger models;
+"opg" uses the BHHH / outer-product-of-gradients information from the
+per-observation scores -- fastest, but relies on the information-matrix
+equality so it is unreliable for parameters at a boundary (e.g. a random-
+coefficient SD estimated near 0). Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
 
 \item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}
 (used only when \code{hessian = "numeric"}).}

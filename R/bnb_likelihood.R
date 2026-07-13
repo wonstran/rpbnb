@@ -27,8 +27,8 @@ bnb_loglik_vec <- function(par, y1, y2, X1, X2) {
 
   m1 <- exp(log_m1); m2 <- exp(log_m2)
   r1 <- 1/m1;        r2 <- 1/m2
-  mu1 <- as.vector(exp(X1 %*% beta1))
-  mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1)
+  mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   # Data-adaptive bounds and interior logistic map (strictly inside)
@@ -59,8 +59,8 @@ bnb_score_mat <- function(par, y1, y2, X1, X2) {
 
   m1 <- exp(log_m1); m2 <- exp(log_m2)
   r1 <- 1/m1;        r2 <- 1/m2
-  mu1 <- as.vector(exp(X1 %*% beta1))
-  mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1)
+  mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   bnds <- lambda_bounds_vec(c1, c2); lamLo <- bnds[1]; lamHi <- bnds[2]
@@ -124,8 +124,8 @@ bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi, tiny = 1
 
   m1 <- exp(log_m1); m2 <- exp(log_m2)
   r1 <- 1/m1;        r2 <- 1/m2
-  mu1 <- as.vector(exp(X1 %*% beta1))
-  mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1)
+  mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   eps <- 1e-6; sig <- plogis(zlam)
@@ -175,7 +175,7 @@ bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi) {
 
   m1 <- exp(log_m1); m2 <- exp(log_m2)
   r1 <- 1 / m1;      r2 <- 1 / m2
-  mu1 <- as.vector(exp(X1 %*% beta1)); mu2 <- as.vector(exp(X2 %*% beta2))
+  mu1 <- .bound_mu(X1, beta1); mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   # Frozen logistic-bounds map for lambda, with first/second derivatives in z.

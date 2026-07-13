@@ -1,0 +1,7 @@
+# Makevars for rpbnb - Enable OpenMP for multithreading (Unix/Linux/Mac).
+# Use SHLIB_OPENMP_CXXFLAGS for both compile and link so -fopenmp is present at
+# link time and the compiler's own OpenMP runtime is pulled in. Do not hard-code
+# -fopenmp/-lomp (wrong on clang/Mac, where these variables expand differently).
+
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
+PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS)

@@ -4,10 +4,13 @@
 \alias{copula}
 \title{Specify a copula dependence structure for fit_bnb()}
 \usage{
-copula(family = c("frank", "normal", "kimeldorf"))
+copula(family = c("frank", "normal", "kimeldorf"), par = NULL)
 }
 \arguments{
 \item{family}{One of \code{"frank"}, \code{"normal"}, or \code{"kimeldorf"} (Clayton).}
+
+\item{par}{Optional dependence parameter value for simulation (not used
+by \code{\link[=fit_bnb]{fit_bnb()}}, which estimates it).}
 }
 \value{
 An object of class \code{rpbnb_copula}.
@@ -17,6 +20,6 @@ Specify a copula dependence structure for fit_bnb()
 }
 \examples{
 copula("frank")
-copula("normal")
+copula("normal", par = 0.3)
 copula("kimeldorf")
 }

@@ -18,7 +18,10 @@ Imports:
     numDeriv,
     randtoolbox,
     MASS,
-    pbivnorm
+    pbivnorm,
+    Rcpp
+LinkingTo:
+    Rcpp
 Suggests:
     testthat (>= 3.0.0),
     knitr,

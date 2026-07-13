@@ -16,3 +16,14 @@ signif_stars <- function(p) {
     symbols   = c("***", "**", "*", ".", " ")
   ))
 }
+
+#' Conditional mean bounded away from both overflow (exp() -> Inf feeding
+#' downstream NB functions) and underflow (mu -> 0, a 0/0 NaN source in
+#' several analytic gradients). Used by every likelihood family so the
+#' objective, gradient, and Hessian for a given fit always see the exact
+#' same (implicitly capped) function of the parameters.
+#' @keywords internal
+#' @noRd
+.bound_mu <- function(X, beta) {
+  pmin(pmax(as.vector(exp(X %*% beta)), 1e-300), 1e15)
+}

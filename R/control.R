@@ -4,7 +4,7 @@
 #'   "BHHH", "NM".
 #' @param iterlim Maximum optimizer iterations.
 #' @param reltol Relative convergence tolerance.
-#' @param print_level Verbosity passed to the optimizer (0 = silent).
+#' @param print_level Verbosity passed to the optimizer (0 = silent, default = 2 for detailed progress).
 #' @param draws_hessian Number of simulation draws used for the random-parameter
 #'   Hessian (smaller than the optimization draws for speed). Ignored by [fit_bnb()].
 #' @param halton_burn Number of leading Halton points discarded before forming
@@ -15,6 +15,15 @@
 #'   errors: "numeric" (default, [numDeriv::hessian()]) or "analytic" (the
 #'   closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
 #'   at the optimum and yield the same observed-information SEs.
+#' @param se_method Standard-error method for [fit_rpbnb()] (the random-parameter
+#'   model): "numeric" (default) uses the [numDeriv::hessian()] observed-
+#'   information Hessian; "analytic" uses the closed-form observed-information
+#'   Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+#'   mixture formula) -- exact and much faster than "numeric" for larger models;
+#'   "opg" uses the BHHH / outer-product-of-gradients information from the
+#'   per-observation scores -- fastest, but relies on the information-matrix
+#'   equality so it is unreliable for parameters at a boundary (e.g. a random-
+#'   coefficient SD estimated near 0). Ignored by [fit_bnb()].
 #' @param hess_eps,hess_r Step and Richardson order for [numDeriv::hessian()]
 #'   (used only when `hessian = "numeric"`).
 #'
@@ -26,12 +35,13 @@
 rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
                           iterlim = 300L,
                           reltol = 1e-8,
-                          print_level = 0L,
+                          print_level = 2L,
                           draws_hessian = 100L,
                           halton_burn = 300L,
                           n_cores = 1L,
                           compute_se = TRUE,
                           hessian = c("numeric", "analytic"),
+                          se_method = c("numeric", "opg", "analytic"),
                           hess_eps = 1e-5,
                           hess_r = 4L) {
   if (length(method) > 1) method <- method[1]
@@ -42,6 +52,10 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
   if (length(hessian) > 1) hessian <- hessian[1]
   if (!hessian %in% c("numeric", "analytic")) {
     stop("`hessian` must be one of: numeric, analytic", call. = FALSE)
+  }
+  if (length(se_method) > 1) se_method <- se_method[1]
+  if (!se_method %in% c("opg", "numeric", "analytic")) {
+    stop("`se_method` must be one of: numeric, analytic, opg", call. = FALSE)
   }
   if (!is.numeric(n_cores) || n_cores < 1) {
     stop("`n_cores` must be a positive integer.", call. = FALSE)
@@ -61,7 +75,8 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
          draws_hessian = as.integer(draws_hessian),
          halton_burn = as.integer(halton_burn),
          n_cores = as.integer(n_cores), compute_se = isTRUE(compute_se),
-         hessian = hessian, hess_eps = hess_eps, hess_r = as.integer(hess_r)),
+         hessian = hessian, se_method = se_method,
+         hess_eps = hess_eps, hess_r = as.integer(hess_r)),
     class = "rpbnb_control"
   )
 }

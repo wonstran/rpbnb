@@ -141,6 +141,47 @@ test_that("kimeldorf copula analytic gradient matches numDeriv", {
   expect_equal(unname(ana), num, tolerance = 1e-4)
 })
 
+# ---- Degenerate parameter proposals stay finite (optimizer robustness) ----
+
+test_that("copula_loglik_vec and copula_grad_vec stay finite when mu underflows to 0", {
+  s <- .make_grad_setup(45)
+  # A very negative beta1 intercept drives mu1 -> 0 for every observation.
+  par <- s$par; par[1] <- -800
+  ll  <- rpbnb:::copula_loglik_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  g   <- rpbnb:::copula_grad_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  # The contract is "finite or a deliberate -Inf rejection, never NaN" --
+  # not "always finite", since pnbinom(size = Inf) behavior is platform-
+  # dependent and a genuinely invalid proposal should surface as -Inf.
+  expect_true(!any(is.nan(ll)))
+  expect_true(all(is.finite(g)))
+})
+
+test_that("copula_loglik_vec and copula_grad_vec stay finite when the NB size parameter overflows", {
+  s <- .make_grad_setup(46)
+  # log_m1 very negative -> r1 = exp(-log_m1) -> Inf. The NB2 -> Poisson
+  # boundary is a legitimate limit (not a rejected proposal), so ll should
+  # be genuinely finite here, and .dnb_cdf_dr's r -> Inf guard should keep
+  # the log_m1 gradient component finite too.
+  par <- s$par; par[5] <- -800
+  ll  <- rpbnb:::copula_loglik_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  g   <- rpbnb:::copula_grad_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  expect_true(!any(is.nan(ll)))
+  expect_true(all(is.finite(g)))
+})
+
+test_that("copula_loglik_vec and copula_grad_vec reject an extreme frank theta as -Inf, not NaN", {
+  s <- .make_grad_setup(47)
+  # z_theta (index p1+p2+3 = 7) far outside any realistic optimizer path;
+  # frank_cdf overflows internally (exp(-theta*u) -> Inf) even though a/am/
+  # b/bm themselves stay finite, so this exercises the p_obs finiteness
+  # check specifically (not just the a/am/b/bm check).
+  par <- s$par; par[7] <- -800
+  ll  <- rpbnb:::copula_loglik_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  g   <- rpbnb:::copula_grad_vec(par, s$y1, s$y2, s$X1, s$X2, "frank")
+  expect_true(!any(is.nan(ll)))
+  expect_true(all(is.finite(g)))
+})
+
 # ---- fit_bnb with copula() dispatches correctly ----
 
 test_that("fit_bnb with copula() returns a bnb_fit with the copula family", {

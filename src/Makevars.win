@@ -1,0 +1,7 @@
+# Makevars.win for rpbnb - Enable OpenMP for multithreading on Windows.
+# On Rtools, $(SHLIB_OPENMP_CXXLIBS) can expand to empty, dropping -fopenmp from
+# the link step (undefined reference to GOMP_*). Use SHLIB_OPENMP_CXXFLAGS for
+# PKG_LIBS as well so -fopenmp is present at link and GCC pulls in libgomp.
+
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
+PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS)

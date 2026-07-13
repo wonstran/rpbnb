@@ -5,6 +5,8 @@
 #' random-parameter negative binomial model.
 #'
 #' @keywords internal
+#' @useDynLib rpbnb, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
 "_PACKAGE"
 
 #' @importFrom stats model.frame
@@ -21,6 +23,8 @@
 #' @importFrom stats predict
 #' @importFrom stats vcov
 #' @importFrom stats dnbinom
+#' @importFrom stats pnbinom
+#' @importFrom stats qnbinom
 #' @importFrom stats rnbinom
 #' @importFrom stats rnorm
 #' @importFrom stats runif

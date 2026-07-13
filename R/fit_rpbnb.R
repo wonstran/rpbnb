@@ -71,6 +71,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   halton_burn  <- control$halton_burn
   n_cores      <- control$n_cores
   compute_se   <- control$compute_se
+  se_method    <- if (is.null(control$se_method)) "numeric" else control$se_method
   method       <- "BFGS"
   ml_control   <- list(iterlim = control$iterlim,
                        reltol = control$reltol,
@@ -134,9 +135,17 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
   names(start) <- par_names
 
-  # Optional cluster (for optimization draws); fall back to sequential.
-  use_parallel <- n_cores > 1 && requireNamespace("parallel", quietly = TRUE)
-  if (n_cores > 1 && !use_parallel) {
+  # Preferred fast path: multithreaded (OpenMP) C++ likelihood. When available
+  # it supersedes the process-based cluster entirely -- the draw loop is
+  # parallelised across threads inside C++ with shared memory (no per-call
+  # serialization), so n_cores is interpreted as the OpenMP thread count.
+  use_cpp <- rpbnb_cpp_available()
+  cpp_threads <- max(1L, as.integer(n_cores))
+
+  # Optional cluster (R fallback for the optimization draws) -- only when the
+  # C++ core is not compiled. Falls back to sequential if 'parallel' is missing.
+  use_parallel <- !use_cpp && n_cores > 1 && requireNamespace("parallel", quietly = TRUE)
+  if (!use_cpp && n_cores > 1 && !requireNamespace("parallel", quietly = TRUE)) {
     warning("Package 'parallel' not available; running sequentially.", call. = FALSE)
   }
   cl <- NULL
@@ -158,9 +167,14 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # LL trace (one total logLik per function evaluation)
   ll_trace <- numeric(0)
   ll_fun <- function(p) {
-    v <- bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
-                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                             dist1, dist2, sign1, sign2, cl = cl)
+    v <- if (use_cpp)
+      bnbr_rp_ll_and_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
+                              rand_idx1, rand_idx2, Z1_opt, Z2_opt,
+                              dist1, dist2, sign1, sign2, n_threads = cpp_threads)
+    else
+      bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
+                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
+                          dist1, dist2, sign1, sign2, cl = cl)
     ll_trace <<- c(ll_trace, as.numeric(v))
     v
   }
@@ -197,9 +211,42 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     warning("Frozen bounds invalid at optimum; SEs may be unstable.", call. = FALSE)
   }
 
-  # --- Standard errors via small-draw Hessian with frozen bounds ---
+  # --- Standard errors ---
   npar <- length(par_hat)
-  if (isTRUE(compute_se)) {
+  use_opg      <- isTRUE(compute_se) && use_cpp && identical(se_method, "opg")
+  use_analytic <- isTRUE(compute_se) && identical(se_method, "analytic")
+  if (use_opg) {
+    # Analytic BHHH / outer-product-of-gradients covariance from the
+    # per-observation scores, evaluated at the optimum with the SAME simulation
+    # draws used for estimation. One score pass -- no numeric Hessian, so no
+    # finite-difference digamma singularities.
+    S <- bnbr_rp_scores_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2,
+                            rand_idx1, rand_idx2, Z1_opt, Z2_opt,
+                            dist1, dist2, sign1, sign2, n_threads = cpp_threads)
+    vc <- opg_vcov(S, par_names)
+    se <- sqrt(pmax(diag(vc), 0))
+    names(se) <- par_names
+  } else if (use_analytic) {
+    # Closed-form observed-information Hessian (Famoye 2010 per-draw second
+    # derivatives + Louis mixture formula), at the optimum with the SAME draws
+    # and the frozen lambda-bounds used for the objective. Exact, and far faster
+    # than the numeric Hessian for larger models.
+    H <- bnbr_rp_hessian(par_hat, Y1, Y2, X1, X2, XR1, XR2,
+                         rand_idx1, rand_idx2, Z1_opt, Z2_opt,
+                         dist1, dist2, sign1, sign2,
+                         lamLo = lamLo_h, lamHi = lamHi_h)
+    info <- -H; info <- (info + t(info)) / 2
+    ok <- try(eigen(info, symmetric = TRUE, only.values = TRUE), silent = TRUE)
+    if (inherits(ok, "try-error") || any(!is.finite(ok$values)) || min(ok$values) <= 0) {
+      ridge <- if (inherits(ok, "try-error") || any(!is.finite(ok$values))) 1e-2
+               else 1e-8 - min(ok$values)
+      info <- info + diag(ridge, nrow(info))
+    }
+    vc <- try(solve(info), silent = TRUE)
+    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
+    se <- sqrt(pmax(diag(vc), 0))
+    dimnames(vc) <- list(par_names, par_names); names(se) <- par_names
+  } else if (isTRUE(compute_se)) {
     set.seed(seed + 1L)
     if ((q1 + q2) > 0) {
       Z_h  <- halton_uniform(n_draws_hess, q1 + q2,
@@ -223,11 +270,18 @@ fit_rpbnb <- function(formula_1, formula_2, data,
         envir = environment())
     }
 
-    ll_fb <- function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
-                                                 rand_idx1, rand_idx2, Z1_h, Z2_h,
-                                                 lamLo_h, lamHi_h,
-                                                 dist1, dist2, sign1, sign2,
-                                                 cl = cl_h)
+    ll_fb <- if (use_cpp)
+      function(p) bnbr_rp_ll_fixed_bounds_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
+                                              rand_idx1, rand_idx2, Z1_h, Z2_h,
+                                              lamLo_h, lamHi_h,
+                                              dist1, dist2, sign1, sign2,
+                                              n_threads = cpp_threads)
+    else
+      function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
+                                          rand_idx1, rand_idx2, Z1_h, Z2_h,
+                                          lamLo_h, lamHi_h,
+                                          dist1, dist2, sign1, sign2,
+                                          cl = cl_h)
     H <- numDeriv::hessian(ll_fb, par_hat,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2

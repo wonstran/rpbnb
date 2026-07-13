@@ -8,7 +8,7 @@
 #' @noRd
 frank_cdf <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]
@@ -27,7 +27,7 @@ frank_cdf <- function(u, v, theta) {
 #' @noRd
 normal_cdf <- function(u, v, rho) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- pmin(pmax(if (length(u) == 1L) rep(u, sum(ok)) else u[ok], 1e-15), 1 - 1e-15)
     vi <- pmin(pmax(if (length(v) == 1L) rep(v, sum(ok)) else v[ok], 1e-15), 1 - 1e-15)
@@ -41,7 +41,7 @@ normal_cdf <- function(u, v, rho) {
 #' @noRd
 kimeldorf_cdf <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]
@@ -62,7 +62,7 @@ kimeldorf_cdf <- function(u, v, theta) {
 #' @noRd
 frank_du <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]
@@ -82,7 +82,7 @@ frank_du <- function(u, v, theta) {
 #' @noRd
 normal_du <- function(u, v, rho) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- pmin(pmax(if (length(u) == 1L) rep(u, sum(ok)) else u[ok], 1e-15), 1 - 1e-15)
     vi <- pmin(pmax(if (length(v) == 1L) rep(v, sum(ok)) else v[ok], 1e-15), 1 - 1e-15)
@@ -96,7 +96,7 @@ normal_du <- function(u, v, rho) {
 #' @noRd
 kimeldorf_du <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]
@@ -127,7 +127,7 @@ kimeldorf_du <- function(u, v, theta) {
 #' @noRd
 frank_dtheta <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]
@@ -153,7 +153,7 @@ frank_dtheta <- function(u, v, theta) {
 #' @noRd
 normal_drho <- function(u, v, rho) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- pmin(pmax(if (length(u) == 1L) rep(u, sum(ok)) else u[ok], 1e-15), 1 - 1e-15)
     vi <- pmin(pmax(if (length(v) == 1L) rep(v, sum(ok)) else v[ok], 1e-15), 1 - 1e-15)
@@ -169,7 +169,7 @@ normal_drho <- function(u, v, rho) {
 #' @noRd
 kimeldorf_dtheta <- function(u, v, theta) {
   out <- numeric(max(length(u), length(v)))
-  ok  <- (u > 0) & (v > 0)
+  ok  <- is.finite(u) & is.finite(v) & (u > 0) & (v > 0)
   if (any(ok)) {
     ui <- if (length(u) == 1L) rep(u, sum(ok)) else u[ok]
     vi <- if (length(v) == 1L) rep(v, sum(ok)) else v[ok]

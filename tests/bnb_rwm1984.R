@@ -10,11 +10,14 @@
 # Also executed by R CMD check, so it must run end-to-end without error.
 # =====================================================================
 
-# Load the package: try development version first, fall back to installed
-tryCatch(
-  devtools::load_all(quiet = TRUE),
-  error = function(e) library(rpbnb)
-)
+# Load the package: try development version first, fall back to installed.
+# devtools::load_all() is a thin wrapper around pkgload::load_all(), so
+# checking for pkgload alone covers both.
+if (requireNamespace("pkgload", quietly = TRUE)) {
+  tryCatch(pkgload::load_all(quiet = TRUE), error = function(e) library(rpbnb))
+} else {
+  library(rpbnb)
+}
 
 # ---- Load the bundled sample data (works both installed and in-source) ------
 csv <- system.file("extdata", "rwm1984_clean.csv", package = "rpbnb")

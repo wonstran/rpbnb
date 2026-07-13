@@ -77,23 +77,49 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 
 # Natural-scale view of the transformed parameters: random-coefficient SDs
 # (exp(log_sd)), NB2 dispersions m = exp(log_m), and the Famoye dependence lambda
-# (stored on the object), each with a delta-method standard error. Returns NULL
-# when there is nothing to report (e.g. an independence fit shows only m1, m2).
+# (stored on the object), each with a delta-method standard error and p-value.
+# Returns a list with $random (random SDs) and $dispersion (m1, m2, lambda) components.
 .natural_scale_table <- function(object) {
   cf <- object$coef
   se <- object$se
   se_of <- function(nm) if (!is.null(se) && nm %in% names(se) && is.finite(se[[nm]])) se[[nm]] else NA_real_
-  rows <- list()
-  add <- function(name, est, stderr) rows[[length(rows) + 1L]] <<-
-    data.frame(Parameter = name, Estimate = est, StdErr = stderr,
-               check.names = FALSE)
 
+  random_rows <- list()
+  dispersion_rows <- list()
+
+  add_random <- function(name, est, stderr) {
+    z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
+    p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
+    random_rows[[length(random_rows) + 1L]] <<-
+      data.frame(Parameter = name, Estimate = est, StdErr = stderr,
+                 z = z_val, p = p_val, Signif = signif_stars(p_val),
+                 check.names = FALSE)
+  }
+
+  add_dispersion <- function(name, est, stderr) {
+    z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
+    p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
+    dispersion_rows[[length(dispersion_rows) + 1L]] <<-
+      data.frame(Parameter = name, Estimate = est, StdErr = stderr,
+                 z = z_val, p = p_val, Signif = signif_stars(p_val),
+                 check.names = FALSE)
+  }
+
+  # Random coefficient SDs
   for (nm in grep("^log_sd[12]:", names(cf), value = TRUE)) {
     val <- exp(cf[[nm]])
-    add(sub("^log_sd", "sd", nm), val, val * se_of(nm))  # d(exp)/d. = exp
+    add_random(sub("^log_sd", "sd", nm), val, val * se_of(nm))  # d(exp)/d. = exp
   }
-  if ("log_m1" %in% names(cf)) { m1 <- exp(cf[["log_m1"]]); add("m1 (dispersion)", m1, m1 * se_of("log_m1")) }
-  if ("log_m2" %in% names(cf)) { m2 <- exp(cf[["log_m2"]]); add("m2 (dispersion)", m2, m2 * se_of("log_m2")) }
+
+  # Dispersion parameters
+  if ("log_m1" %in% names(cf)) {
+    m1 <- exp(cf[["log_m1"]])
+    add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"))
+  }
+  if ("log_m2" %in% names(cf)) {
+    m2 <- exp(cf[["log_m2"]])
+    add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"))
+  }
 
   # Only models with an estimated dependence parameter (z_lambda present, i.e.
   # famoye) get a lambda row; an independence fit has no dependence parameter.
@@ -105,7 +131,7 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
       dlam_dz <- (object$bounds[2] - object$bounds[1]) * (1 - 2 * eps) * sig * (1 - sig)
       lam_se <- abs(dlam_dz) * se_of("z_lambda")
     }
-    add("lambda (dependence)", object$lambda, lam_se)
+    add_dispersion("lambda (dependence)", object$lambda, lam_se)
   }
 
   # Copula models have z_theta; report native param and Kendall's tau
@@ -117,22 +143,46 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     dn_dz <- dnative_dz(fam, z)
     nat_se <- if (is.finite(se_z)) abs(dn_dz) * se_z else NA_real_
     param_label <- switch(fam, frank="theta (Frank)", normal="rho (Gaussian)", kimeldorf="theta (Clayton)")
-    add(param_label, nat, nat_se)
+    add_dispersion(param_label, nat, nat_se)
     td <- copula_tau_and_deriv(fam, z)
     tau_se <- if (is.finite(se_z)) abs(td$dtau_dz) * se_z else NA_real_
-    add("Kendall's tau", td$tau, tau_se)
+    add_dispersion("Kendall's tau", td$tau, tau_se)
   }
-  if (!length(rows)) return(NULL)
-  out <- do.call(rbind, rows)
-  rownames(out) <- NULL
-  out
+
+  # Return list with both components (NULL if empty)
+  list(
+    random = if (length(random_rows)) {
+      out <- do.call(rbind, random_rows)
+      rownames(out) <- NULL
+      out
+    } else NULL,
+    dispersion = if (length(dispersion_rows)) {
+      out <- do.call(rbind, dispersion_rows)
+      rownames(out) <- NULL
+      out
+    } else NULL
+  )
 }
 
 .print_natural_scale <- function(object, digits = 4) {
   nat <- .natural_scale_table(object)
-  if (is.null(nat)) return(invisible(NULL))
-  cat("\nNatural-scale dispersion / dependence (delta-method SE):\n")
-  .print_coef_matrix(nat, digits)
+  if (is.null(nat$random) && is.null(nat$dispersion)) return(invisible(NULL))
+
+  # Print random coefficient standard deviations
+  if (!is.null(nat$random)) {
+    cat("\nRandom coefficient standard deviations:\n")
+    .print_coef_matrix(nat$random, digits)
+  }
+
+  # Print dispersion and dependence parameters with separator
+  if (!is.null(nat$dispersion)) {
+    cat("\n")
+    cat(paste(rep("-", 70), collapse = ""), "\n")
+    cat("Natural-scale dispersion / dependence (delta-method SE):\n")
+    .print_coef_matrix(nat$dispersion, digits)
+    cat("Signif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
+  }
+
   invisible(nat)
 }
 
