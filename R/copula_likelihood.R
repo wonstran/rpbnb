@@ -88,7 +88,17 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   p_obs <- cop_cdf(a, b, theta) - cop_cdf(am, b, theta) -
            cop_cdf(a, bm, theta) + cop_cdf(am, bm, theta)
   ok <- ok & is.finite(p_obs)
-  list(a = a, am = am, b = b, bm = bm, p_obs = pmax(p_obs, 1e-300), ok = ok)
+  # An extreme count makes both NB CDF corners round to 1 (e.g. pnbinom(120)==
+  # pnbinom(119)==1 to machine precision), so the rectangle cancels to ~0 and gets
+  # floored. There the log-lik is a clamped constant, so its gradient is 0 -- but
+  # score = numerator/floor would instead be a huge *finite* number that the
+  # is.finite mask cannot catch. `underflow` flags these for the score path only;
+  # it must NOT enter `ok`, or the value would collapse to -Inf instead of the
+  # finite log-floor penalty. `ok` observations already dominate the floor test,
+  # so only guard where the raw pmf actually failed to clear the floor.
+  underflow <- !(p_obs > 1e-300)
+  list(a = a, am = am, b = b, bm = bm, p_obs = pmax(p_obs, 1e-300),
+       ok = ok, underflow = underflow)
 }
 
 #' Per-observation copula score scalars (shared by the fixed and RP estimators)
@@ -132,7 +142,7 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
 
   s_ztheta <- ct_rect * dth_dz / p_obs
 
-  bad <- !ok | !is.finite(s_eta1) | !is.finite(s_eta2) |
+  bad <- !ok | pm$underflow | !is.finite(s_eta1) | !is.finite(s_eta2) |
          !is.finite(s_logm1) | !is.finite(s_logm2) | !is.finite(s_ztheta)
   s_eta1[bad] <- 0; s_eta2[bad] <- 0
   s_logm1[bad] <- 0; s_logm2[bad] <- 0; s_ztheta[bad] <- 0

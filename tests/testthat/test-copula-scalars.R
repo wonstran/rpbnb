@@ -31,6 +31,24 @@ test_that(".copula_score_scalars contracts to copula_grad_vec output", {
   }
 })
 
+test_that("extreme-count observations do not blow up the copula score", {
+  # y2=120 with mu=1 makes pnbinom(120)==pnbinom(119)==1 to machine precision:
+  # the joint pmf cancels to 0 and gets floored to 1e-300. The value path takes a
+  # finite log-floor penalty there, so the *score* of that clamped-constant term
+  # must be 0 (not numerator/1e-300 ~ 1e279). Guards against the BFGS iter-1 stall.
+  X1 <- cbind(`(Intercept)` = 1, x1 = 0)
+  X2 <- cbind(`(Intercept)` = 1, x2 = 0)
+  y1 <- 20L; y2 <- 120L
+  for (fam in c("frank", "normal", "kimeldorf")) {
+    mu1 <- 1; mu2 <- 1; r1 <- exp(-log(0.5)); r2 <- exp(-log(0.5))
+    theta <- z_to_native(fam, 0); dth <- dnative_dz(fam, 0)
+    sc <- .copula_score_scalars(y1, y2, mu1, mu2, r1, r2, theta, dth, fam)
+    scores <- c(sc$s_eta1, sc$s_eta2, sc$s_logm1, sc$s_logm2, sc$s_ztheta)
+    expect_true(all(is.finite(scores)), info = fam)
+    expect_true(max(abs(scores)) < 1e6, info = fam)   # was ~1e279 before the fix
+  }
+})
+
 test_that("refactored copula_grad_vec still matches numeric gradient", {
   cs <- make_cop_case()
   par <- c(0.3, 0.2, 0.2, -0.1, log(0.5), log(0.6), 0.4)

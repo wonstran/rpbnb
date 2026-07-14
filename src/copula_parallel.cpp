@@ -248,7 +248,14 @@ List rpbnb_copula_ll_grad_cpp(
         bool ok = R_finite(a)&&R_finite(am)&&R_finite(b)&&R_finite(bm);
         double p = cop_cdf(a,b,theta,family_code)-cop_cdf(am,b,theta,family_code)
                  - cop_cdf(a,bm,theta,family_code)+cop_cdf(am,bm,theta,family_code);
-        ok = ok && R_finite(p); p = std::fmax(p,1e-300);
+        ok = ok && R_finite(p);
+        // Raw pmf underflowed (extreme count -> both NB CDF corners round to 1 ->
+        // rectangle cancels to ~0): there the log-lik is a clamped constant so its
+        // gradient is 0, but numerator/floor would be a huge *finite* score that
+        // R_finite cannot reject. Flag it for the score mask (mirrors R's
+        // .copula_pmf `underflow`); the value path keeps the finite log-floor.
+        bool underflow = !(p > DNEG);
+        p = std::fmax(p, DNEG);
 
         double cu_ab=cop_du(a,b,theta,family_code),  cu_amb=cop_du(am,b,theta,family_code);
         double cu_abm=cop_du(a,bm,theta,family_code), cu_ambm=cop_du(am,bm,theta,family_code);
@@ -275,7 +282,7 @@ List rpbnb_copula_ll_grad_cpp(
         double s_logm2 = (-r2)*(dv_b*db_dr2 + dv_bm*dbm_dr2)/p;
         double s_z = ct*dth_dz/p;
 
-        bool bad = !ok || !R_finite(s_eta1)||!R_finite(s_eta2)||!R_finite(s_logm1)
+        bool bad = !ok || underflow || !R_finite(s_eta1)||!R_finite(s_eta2)||!R_finite(s_logm1)
                    ||!R_finite(s_logm2)||!R_finite(s_z);
         if (bad){ s_eta1=0;s_eta2=0;s_logm1=0;s_logm2=0;s_z=0; }
 
