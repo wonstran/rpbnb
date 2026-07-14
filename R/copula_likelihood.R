@@ -128,7 +128,7 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   s_logm1[bad] <- 0; s_logm2[bad] <- 0; s_ztheta[bad] <- 0
 
   list(p_obs = p_obs, s_eta1 = s_eta1, s_eta2 = s_eta2,
-       s_logm1 = s_logm1, s_logm2 = s_logm2, s_ztheta = s_ztheta)
+       s_logm1 = s_logm1, s_logm2 = s_logm2, s_ztheta = s_ztheta, ok = ok)
 }
 
 #' Per-observation analytic gradient of the discrete-copula log-likelihood

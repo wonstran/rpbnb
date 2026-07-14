@@ -116,11 +116,14 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
     mu1 <- pmin(pmax(exp(eta1), 1e-300), 1e15); mu2 <- pmin(pmax(exp(eta2), 1e-300), 1e15)
     mu1M[, r] <- mu1; mu2M[, r] <- mu2
     sc <- .copula_score_scalars(y1, y2, mu1, mu2, r1, r2, theta, dth_dz, family)
-    LL[, r] <- log(sc$p_obs)   # p_obs already floored at 1e-300 in the helper
+    col <- log(sc$p_obs)   # p_obs already floored at 1e-300 in the helper
+    col[!sc$ok] <- -Inf
+    LL[, r] <- col
   }
   lse <- row_log_sum_exp(LL)
   value <- sum(lse - log(R))
   W <- exp(LL - lse)   # n x R softmax weights
+  W[!is.finite(W)] <- 0
 
   # Pass 2: accumulate weighted per-draw scores into the total gradient (+ scores).
   grad <- numeric(npar)
