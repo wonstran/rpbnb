@@ -10,6 +10,19 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// pbivnorm_cpp
+NumericVector pbivnorm_cpp(NumericVector h, NumericVector k, double rho);
+RcppExport SEXP _rpbnb_pbivnorm_cpp(SEXP hSEXP, SEXP kSEXP, SEXP rhoSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type h(hSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type k(kSEXP);
+    Rcpp::traits::input_parameter< double >::type rho(rhoSEXP);
+    rcpp_result_gen = Rcpp::wrap(pbivnorm_cpp(h, k, rho));
+    return rcpp_result_gen;
+END_RCPP
+}
 // get_num_threads
 int get_num_threads();
 RcppExport SEXP _rpbnb_get_num_threads() {
@@ -79,6 +92,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_rpbnb_pbivnorm_cpp", (DL_FUNC) &_rpbnb_pbivnorm_cpp, 3},
     {"_rpbnb_get_num_threads", (DL_FUNC) &_rpbnb_get_num_threads, 0},
     {"_rpbnb_set_rcpp_parallel_threads", (DL_FUNC) &_rpbnb_set_rcpp_parallel_threads, 1},
     {"_rpbnb_rpbnb_openmp_enabled", (DL_FUNC) &_rpbnb_rpbnb_openmp_enabled, 0},
