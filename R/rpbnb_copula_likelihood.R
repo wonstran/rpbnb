@@ -143,3 +143,51 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
   if (want_scores) attr(out, "scores") <- S
   out
 }
+
+#' @keywords internal
+#' @noRd
+rpbnb_copula_cpp_available <- function() exists("rpbnb_copula_ll_grad_cpp", mode = "function")
+
+#' Multithreaded C++ copula RP-BNB LL + gradient (+ scores). Same interface as
+#' bnbr_rp_copula_ll_grad; used by the fit when the DLL is compiled.
+#' @keywords internal
+#' @noRd
+bnbr_rp_copula_ll_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
+                                       rand_idx1, rand_idx2, Z1, Z2, family,
+                                       dist1 = NULL, dist2 = NULL,
+                                       sign1 = NULL, sign2 = NULL,
+                                       want_scores = FALSE, n_threads = 0L) {
+  k1 <- ncol(X1); k2 <- ncol(X2)
+  q1 <- length(rand_idx1); q2 <- length(rand_idx2)
+  R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
+  beta1 <- par[1:k1]; beta2 <- par[(k1+1):(k1+k2)]
+  lg1 <- if (q1>0) (k1+k2+1):(k1+k2+q1) else integer(0)
+  lg2 <- if (q2>0) (k1+k2+q1+1):(k1+k2+q1+q2) else integer(0)
+  sd1 <- if (q1>0) exp(par[lg1]) else numeric(0)
+  sd2 <- if (q2>0) exp(par[lg2]) else numeric(0)
+  idx_end <- k1+k2+q1+q2
+  log_m1 <- par[idx_end+1]; log_m2 <- par[idx_end+2]; z_theta <- par[idx_end+3]
+  r1 <- exp(-log_m1); r2 <- exp(-log_m2)
+  theta <- z_to_native(family, z_theta); dth_dz <- dnative_dz(family, z_theta)
+  if (is.null(dist1) && q1>0) dist1 <- rep("normal", q1)
+  if (is.null(dist2) && q2>0) dist2 <- rep("normal", q2)
+  if (is.null(sign1) && q1>0) sign1 <- rep(1, q1)
+  if (is.null(sign2) && q2>0) sign2 <- rep(1, q2)
+  real1 <- if (q1>0) rand_realize(Z1, dist1, sign1, beta1[rand_idx1], sd1)
+           else list(dev=matrix(0,R,0), dloc=matrix(0,R,0), dscale=matrix(0,R,0))
+  real2 <- if (q2>0) rand_realize(Z2, dist2, sign2, beta2[rand_idx2], sd2)
+           else list(dev=matrix(0,R,0), dloc=matrix(0,R,0), dscale=matrix(0,R,0))
+  xr1 <- if (q1>0) X1[, rand_idx1, drop=FALSE] else matrix(0, nrow(X1), 0)
+  xr2 <- if (q2>0) X2[, rand_idx2, drop=FALSE] else matrix(0, nrow(X2), 0)
+  fam_code <- match(family, c("frank","normal","kimeldorf")) - 1L
+  res <- rpbnb_copula_ll_grad_cpp(
+    y1, y2, X1, X2, xr1, xr2, as.integer(rand_idx1-1L), as.integer(rand_idx2-1L),
+    real1$dev, real2$dev, real1$dloc, real2$dloc, real1$dscale, real2$dscale,
+    as.vector(X1 %*% beta1), as.vector(X2 %*% beta2),
+    r1, r2, theta, dth_dz, as.integer(fam_code),
+    as.integer(isTRUE(want_scores)), as.integer(n_threads))
+  val <- res$value
+  attr(val, "gradient") <- res$gradient
+  if (isTRUE(want_scores)) attr(val, "scores") <- res$scores
+  val
+}

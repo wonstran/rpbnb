@@ -23,6 +23,39 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// rpbnb_copula_ll_grad_cpp
+List rpbnb_copula_ll_grad_cpp(NumericVector y1, NumericVector y2, NumericMatrix X1, NumericMatrix X2, NumericMatrix XR1, NumericMatrix XR2, IntegerVector rand_idx1, IntegerVector rand_idx2, NumericMatrix dev1, NumericMatrix dev2, NumericMatrix dloc1, NumericMatrix dloc2, NumericMatrix dscale1, NumericMatrix dscale2, NumericVector xb1, NumericVector xb2, double r1, double r2, double theta, double dth_dz, int family_code, int want_scores, int num_threads);
+RcppExport SEXP _rpbnb_rpbnb_copula_ll_grad_cpp(SEXP y1SEXP, SEXP y2SEXP, SEXP X1SEXP, SEXP X2SEXP, SEXP XR1SEXP, SEXP XR2SEXP, SEXP rand_idx1SEXP, SEXP rand_idx2SEXP, SEXP dev1SEXP, SEXP dev2SEXP, SEXP dloc1SEXP, SEXP dloc2SEXP, SEXP dscale1SEXP, SEXP dscale2SEXP, SEXP xb1SEXP, SEXP xb2SEXP, SEXP r1SEXP, SEXP r2SEXP, SEXP thetaSEXP, SEXP dth_dzSEXP, SEXP family_codeSEXP, SEXP want_scoresSEXP, SEXP num_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type y1(y1SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type y2(y2SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type X1(X1SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type X2(X2SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type XR1(XR1SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type XR2(XR2SEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type rand_idx1(rand_idx1SEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type rand_idx2(rand_idx2SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dev1(dev1SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dev2(dev2SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dloc1(dloc1SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dloc2(dloc2SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dscale1(dscale1SEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type dscale2(dscale2SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type xb1(xb1SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type xb2(xb2SEXP);
+    Rcpp::traits::input_parameter< double >::type r1(r1SEXP);
+    Rcpp::traits::input_parameter< double >::type r2(r2SEXP);
+    Rcpp::traits::input_parameter< double >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< double >::type dth_dz(dth_dzSEXP);
+    Rcpp::traits::input_parameter< int >::type family_code(family_codeSEXP);
+    Rcpp::traits::input_parameter< int >::type want_scores(want_scoresSEXP);
+    Rcpp::traits::input_parameter< int >::type num_threads(num_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(rpbnb_copula_ll_grad_cpp(y1, y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2, dev1, dev2, dloc1, dloc2, dscale1, dscale2, xb1, xb2, r1, r2, theta, dth_dz, family_code, want_scores, num_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // get_num_threads
 int get_num_threads();
 RcppExport SEXP _rpbnb_get_num_threads() {
@@ -93,6 +126,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rpbnb_pbivnorm_cpp", (DL_FUNC) &_rpbnb_pbivnorm_cpp, 3},
+    {"_rpbnb_rpbnb_copula_ll_grad_cpp", (DL_FUNC) &_rpbnb_rpbnb_copula_ll_grad_cpp, 23},
     {"_rpbnb_get_num_threads", (DL_FUNC) &_rpbnb_get_num_threads, 0},
     {"_rpbnb_set_rcpp_parallel_threads", (DL_FUNC) &_rpbnb_set_rcpp_parallel_threads, 1},
     {"_rpbnb_rpbnb_openmp_enabled", (DL_FUNC) &_rpbnb_rpbnb_openmp_enabled, 0},

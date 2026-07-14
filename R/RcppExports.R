@@ -5,6 +5,10 @@ pbivnorm_cpp <- function(h, k, rho) {
     .Call(`_rpbnb_pbivnorm_cpp`, h, k, rho)
 }
 
+rpbnb_copula_ll_grad_cpp <- function(y1, y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2, dev1, dev2, dloc1, dloc2, dscale1, dscale2, xb1, xb2, r1, r2, theta, dth_dz, family_code, want_scores, num_threads) {
+    .Call(`_rpbnb_rpbnb_copula_ll_grad_cpp`, y1, y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2, dev1, dev2, dloc1, dloc2, dscale1, dscale2, xb1, xb2, r1, r2, theta, dth_dz, family_code, want_scores, num_threads)
+}
+
 get_num_threads <- function() {
     .Call(`_rpbnb_get_num_threads`)
 }
