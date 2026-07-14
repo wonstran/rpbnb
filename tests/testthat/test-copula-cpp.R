@@ -55,3 +55,19 @@ test_that("C++ copula matches R oracle (q=0 and lognormal)", {
                       "frank", d1="lognormal", d2="normal")
   expect_equal(attr(ol$c,"gradient"), attr(ol$r,"gradient"), tolerance=1e-7, ignore_attr=TRUE)
 })
+
+test_that("fit_rpbnb copula path uses C++ and recovers the parameter", {
+  skip_if_not(rpbnb_copula_cpp_available(), "copula C++ not compiled")
+  sim <- simulate_rpbnb_copula(
+    n = 800, beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    random_1 = list(x1 = list(sd = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("frank", par = 4), seed = 7)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   random_1 = "x1", random_2 = "x1", dependence = copula("frank"),
+                   draws = 120, seed = 1,
+                   control = rpbnb_control(se_method = "opg", n_cores = 2))
+  expect_equal(fit$coef[["z_theta"]], 4, tolerance = 1.2)  # frank theta native scale
+  expect_true(is.finite(fit$se[["z_theta"]]))
+})

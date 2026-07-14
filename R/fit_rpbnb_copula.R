@@ -56,10 +56,21 @@
 
   se_method <- if (is.null(control$se_method)) "numeric" else control$se_method
 
+  # Preferred fast path: multithreaded (OpenMP) C++ likelihood, mirroring the
+  # Famoye path in fit_rpbnb.R -- n_cores is interpreted as the OpenMP thread
+  # count for the C++ core (there is no process-cluster fallback here).
+  use_cpp <- rpbnb_copula_cpp_available()
+  cpp_threads <- max(1L, as.integer(control$n_cores))
+
   ll_trace <- numeric(0)
   ll_fun <- function(p) {
-    v <- bnbr_rp_copula_ll_grad(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
-                                Z1, Z2, family, dist1, dist2, sign1, sign2)
+    v <- if (use_cpp)
+      bnbr_rp_copula_ll_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
+                                 Z1, Z2, family, dist1, dist2, sign1, sign2,
+                                 n_threads = cpp_threads)
+    else
+      bnbr_rp_copula_ll_grad(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
+                             Z1, Z2, family, dist1, dist2, sign1, sign2)
     ll_trace[[length(ll_trace) + 1L]] <<- as.numeric(v)
     v
   }
@@ -75,9 +86,14 @@
       stop("se_method = 'analytic' is not available for copula dependence; use ",
            "'opg' (recommended) or 'numeric'.", call. = FALSE)
     } else if (identical(se_method, "opg")) {
-      res <- bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
-                                    rand_idx1, rand_idx2, Z1, Z2, family,
-                                    dist1, dist2, sign1, sign2, want_scores = TRUE)
+      res <- if (use_cpp)
+        bnbr_rp_copula_ll_grad_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
+                                   Z1, Z2, family, dist1, dist2, sign1, sign2,
+                                   want_scores = TRUE, n_threads = cpp_threads)
+      else
+        bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
+                              rand_idx1, rand_idx2, Z1, Z2, family,
+                              dist1, dist2, sign1, sign2, want_scores = TRUE)
       vc <- opg_vcov(attr(res, "scores"), par_names)
       se <- sqrt(pmax(diag(vc), 0)); names(se) <- par_names
     } else {  # "numeric"
