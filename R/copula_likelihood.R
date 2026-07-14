@@ -71,6 +71,26 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   ll
 }
 
+#' Discrete-copula joint pmf and finiteness mask for one (per-observation) set of
+#' means. The single source of the four NB-CDF corners + rectangle pmf, reused by
+#' `.copula_score_scalars`, `bnbr_rp_copula_ll`, and its gradient twin so their
+#' masking cannot silently diverge. `p_obs` is floored at 1e-300; `ok` is FALSE
+#' where any corner or the raw pmf is non-finite.
+#' @keywords internal
+#' @noRd
+.copula_pmf <- function(y1, y2, mu1, mu2, r1, r2, theta, family) {
+  a  <- pnbinom(y1,       size = r1, mu = mu1)
+  am <- ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
+  b  <- pnbinom(y2,       size = r2, mu = mu2)
+  bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
+  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
+  cop_cdf <- switch(family, frank = frank_cdf, normal = normal_cdf, kimeldorf = kimeldorf_cdf)
+  p_obs <- cop_cdf(a, b, theta) - cop_cdf(am, b, theta) -
+           cop_cdf(a, bm, theta) + cop_cdf(am, bm, theta)
+  ok <- ok & is.finite(p_obs)
+  list(a = a, am = am, b = b, bm = bm, p_obs = pmax(p_obs, 1e-300), ok = ok)
+}
+
 #' Per-observation copula score scalars (shared by the fixed and RP estimators)
 #'
 #' Returns dlogP/deta1, dlogP/deta2, dlogP/dlog_m1, dlogP/dlog_m2, dlogP/dz_theta
@@ -80,18 +100,8 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
 #' @keywords internal
 #' @noRd
 .copula_score_scalars <- function(y1, y2, mu1, mu2, r1, r2, theta, dth_dz, family) {
-  a  <- pnbinom(y1,       size = r1, mu = mu1)
-  am <- ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
-  b  <- pnbinom(y2,       size = r2, mu = mu2)
-  bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
-  ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
-
-  cop_cdf <- switch(family, frank = frank_cdf, normal = normal_cdf, kimeldorf = kimeldorf_cdf)
-  c_ab   <- cop_cdf(a,  b,  theta); c_amb  <- cop_cdf(am, b,  theta)
-  c_abm  <- cop_cdf(a,  bm, theta); c_ambm <- cop_cdf(am, bm, theta)
-  p_obs  <- c_ab - c_amb - c_abm + c_ambm
-  ok     <- ok & is.finite(p_obs)
-  p_obs  <- pmax(p_obs, 1e-300)
+  pm <- .copula_pmf(y1, y2, mu1, mu2, r1, r2, theta, family)
+  a <- pm$a; am <- pm$am; b <- pm$b; bm <- pm$bm; p_obs <- pm$p_obs; ok <- pm$ok
 
   cu_ab   <- .cop_du(a,  b,  theta, family); cu_amb  <- .cop_du(am, b,  theta, family)
   cu_abm  <- .cop_du(a,  bm, theta, family); cu_ambm <- .cop_du(am, bm, theta, family)

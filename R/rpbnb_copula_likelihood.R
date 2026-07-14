@@ -39,25 +39,14 @@ bnbr_rp_copula_ll <- function(par, y1, y2, X1, X2, XR1, XR2,
   XR1m <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else NULL
   XR2m <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else NULL
 
-  cop_cdf <- switch(family, frank = frank_cdf, normal = normal_cdf,
-                    kimeldorf = kimeldorf_cdf)
-
   LL <- matrix(0, n, R)
   for (r in seq_len(R)) {
     eta1 <- xb1 + if (q1 > 0) as.vector(XR1m %*% real1$dev[r, ]) else 0
     eta2 <- xb2 + if (q2 > 0) as.vector(XR2m %*% real2$dev[r, ]) else 0
     mu1 <- pmin(pmax(exp(eta1), 1e-300), 1e15)
     mu2 <- pmin(pmax(exp(eta2), 1e-300), 1e15)
-    a  <- pnbinom(y1, size = r1, mu = mu1)
-    am <- ifelse(y1 > 0, pnbinom(y1 - 1, size = r1, mu = mu1), 0)
-    b  <- pnbinom(y2, size = r2, mu = mu2)
-    bm <- ifelse(y2 > 0, pnbinom(y2 - 1, size = r2, mu = mu2), 0)
-    p_obs <- cop_cdf(a, b, theta) - cop_cdf(am, b, theta) -
-             cop_cdf(a, bm, theta) + cop_cdf(am, bm, theta)
-    ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm) &
-          is.finite(p_obs)
-    col <- log(pmax(p_obs, 1e-300))
-    col[!ok] <- -Inf
+    pm  <- .copula_pmf(y1, y2, mu1, mu2, r1, r2, theta, family)  # single pmf source
+    col <- log(pm$p_obs); col[!pm$ok] <- -Inf
     LL[, r] <- col
   }
   lse <- row_log_sum_exp(LL)
