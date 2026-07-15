@@ -41,9 +41,15 @@ lognormal-only). NULL means all-fixed for that equation.}
 \code{control$method} is not currently honored by \code{fit_rpbnb} (the
 simulated-likelihood objective returns an aggregate gradient).}
 
-\item{dependence}{Dependence structure: "famoye" (default; Famoye/Sarmanov,
-the multithreaded C++ path) or an \code{\link[=copula]{copula()}} object for copula dependence
-(Frank / Gaussian / Clayton; estimated on a slower R path).}
+\item{dependence}{Dependence structure: "famoye" (default; Famoye/Sarmanov)
+or an \code{\link[=copula]{copula()}} object for copula dependence (Frank / Gaussian /
+Clayton). Both paths use the multithreaded (OpenMP) C++ simulated
+likelihood; the copula path is more numerically expensive per evaluation
+(discrete-copula pmf + per-draw NB CDF corners), so fits typically take
+noticeably longer than the Famoye path at comparable \code{draws}/\code{n}. Random
+coefficients on 0/1 dummy regressors are weakly identified under the
+copula path (NB dispersion trades off against the random-coefficient
+scale); prefer random coefficients on continuous regressors.}
 }
 \value{
 An object of class \code{rpbnb_fit}.
@@ -62,4 +68,19 @@ sim <- simulate_rpbnb(n = 600,
 fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
                  draws = 100, control = rpbnb_control(compute_se = FALSE))
 coef(fit)
+
+\donttest{
+# Copula dependence instead of Famoye/Sarmanov (slower; fewer draws here
+# for a quick example -- use more in practice)
+sim_cop <- simulate_rpbnb_copula(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.3)),
+  dispersion = c(m1 = 0.4, m2 = 0.5),
+  copula = copula("normal", par = 0.5), seed = 1)
+fit_cop <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim_cop$data, random_1 = "x1",
+                     dependence = copula("normal"), draws = 100,
+                     control = rpbnb_control(compute_se = FALSE))
+tanh(coef(fit_cop)[["z_theta"]])  # estimated copula rho
+}
 }

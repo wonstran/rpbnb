@@ -2,21 +2,30 @@
 % Please edit documentation in R/copula.R
 \name{copula}
 \alias{copula}
-\title{Specify a copula dependence structure for fit_bnb()}
+\title{Specify a copula dependence structure}
 \usage{
 copula(family = c("frank", "normal", "kimeldorf"), par = NULL)
 }
 \arguments{
-\item{family}{One of \code{"frank"}, \code{"normal"}, or \code{"kimeldorf"} (Clayton).}
+\item{family}{One of \code{"frank"}, \code{"normal"} (Gaussian), or \code{"kimeldorf"}
+(Clayton).}
 
-\item{par}{Optional dependence parameter value for simulation (not used
-by \code{\link[=fit_bnb]{fit_bnb()}}, which estimates it).}
+\item{par}{Optional native dependence parameter (Frank's theta, the
+Gaussian rho, or Clayton's theta) used by \code{\link[=simulate_rpbnb_copula]{simulate_rpbnb_copula()}} to
+generate data. Ignored by \code{\link[=fit_bnb]{fit_bnb()}} and \code{\link[=fit_rpbnb]{fit_rpbnb()}}, which estimate
+the parameter from the data.}
 }
 \value{
 An object of class \code{rpbnb_copula}.
 }
 \description{
-Specify a copula dependence structure for fit_bnb()
+Pass the result as the \code{dependence} argument to \code{\link[=fit_bnb]{fit_bnb()}} or
+\code{\link[=fit_rpbnb]{fit_rpbnb()}} to estimate a discrete-copula bivariate NB model instead of
+the default Famoye/Sarmanov dependence, or as the \code{copula} argument to
+\code{\link[=simulate_rpbnb_copula]{simulate_rpbnb_copula()}} to simulate from one. The joint pmf is built from
+the two NB2 marginal CDFs and the chosen copula CDF (rectangle
+differencing); see the package vignette for the "Copula dependence"
+section.
 }
 \examples{
 copula("frank")

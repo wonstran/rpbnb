@@ -3,11 +3,12 @@ Type: Package
 Title: Bivariate and Random-Parameter Negative Binomial Regression
 Version: 0.1.0
 Authors@R: person("Project", "Author", email = "wonstran@gmail.com", role = c("aut", "cre"))
-Description: Maximum-likelihood estimation of the Famoye/Sarmanov bivariate
-    negative binomial (NB2) regression model and maximum-simulated-likelihood
-    estimation of a bivariate random-parameter negative binomial model, with a
-    normal random-coefficient data simulator, diagnostics, and standard model
-    methods.
+Description: Maximum-likelihood estimation of bivariate negative binomial
+    (NB2) regression models with Famoye/Sarmanov or discrete-copula
+    (Frank, Gaussian, or Clayton) dependence, and maximum-simulated-likelihood
+    estimation of a bivariate random-parameter negative binomial model under
+    either dependence structure, with a random-coefficient data simulator,
+    diagnostics, and standard model methods.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1)

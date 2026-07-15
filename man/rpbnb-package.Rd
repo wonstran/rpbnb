@@ -6,9 +6,11 @@
 \alias{rpbnb-package}
 \title{rpbnb: Bivariate and Random-Parameter Negative Binomial Regression}
 \description{
-Maximum-likelihood estimation of the Famoye/Sarmanov bivariate negative
-binomial model and maximum-simulated-likelihood estimation of a bivariate
-random-parameter negative binomial model.
+Maximum-likelihood estimation of bivariate negative binomial models with
+Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
+(see \code{\link[=fit_bnb]{fit_bnb()}}, \code{\link[=copula]{copula()}}), and maximum-simulated-likelihood estimation
+of a bivariate random-parameter negative binomial model under either
+dependence structure (see \code{\link[=fit_rpbnb]{fit_rpbnb()}}).
 }
 \author{
 \strong{Maintainer}: Project Author \email{wonstran@gmail.com}

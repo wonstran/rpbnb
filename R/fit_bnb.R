@@ -262,10 +262,13 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #' @param formula_1,formula_2 Model formulas for the two count outcomes.
 #' @param data A data frame.
 #' @param dependence Dependence structure: "independence" (two univariate NB2
-#'   margins) or "famoye" (Famoye/Sarmanov bivariate NB).
+#'   margins), "famoye" (Famoye/Sarmanov bivariate NB), or a [copula()] object
+#'   (Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
+#'   parameter is estimated).
 #' @param start Optional starting parameter vector.
-#' @param control An [rpbnb_control()] object. The famoye estimator uses BFGS;
-#'   `control$method` is currently honored only by the optimizer's internal setup.
+#' @param control An [rpbnb_control()] object. The famoye and copula estimators
+#'   both use BFGS; `control$method` is currently honored only by the
+#'   optimizer's internal setup.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples
@@ -273,6 +276,11 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #' fit <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #'                dependence = "famoye")
 #' summary(fit)
+#'
+#' # Gaussian copula dependence instead of Famoye/Sarmanov
+#' fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+#'                    dependence = copula("normal"))
+#' fit_cop$cop_tau  # estimated Kendall's tau
 fit_bnb <- function(formula_1, formula_2, data,
                     dependence = c("independence", "famoye"),
                     start = NULL, control = rpbnb_control()) {

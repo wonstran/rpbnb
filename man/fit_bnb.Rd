@@ -19,12 +19,15 @@ fit_bnb(
 \item{data}{A data frame.}
 
 \item{dependence}{Dependence structure: "independence" (two univariate NB2
-margins) or "famoye" (Famoye/Sarmanov bivariate NB).}
+margins), "famoye" (Famoye/Sarmanov bivariate NB), or a \code{\link[=copula]{copula()}} object
+(Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
+parameter is estimated).}
 
 \item{start}{Optional starting parameter vector.}
 
-\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye estimator uses BFGS;
-\code{control$method} is currently honored only by the optimizer's internal setup.}
+\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
+both use BFGS; \code{control$method} is currently honored only by the
+optimizer's internal setup.}
 }
 \value{
 An object of class \code{bnb_fit}.
@@ -37,4 +40,9 @@ d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
 fit <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
                dependence = "famoye")
 summary(fit)
+
+# Gaussian copula dependence instead of Famoye/Sarmanov
+fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                   dependence = copula("normal"))
+fit_cop$cop_tau  # estimated Kendall's tau
 }

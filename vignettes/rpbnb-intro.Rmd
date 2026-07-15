@@ -43,6 +43,24 @@ fit_ind <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 c(famoye = as.numeric(logLik(fit)), independence = as.numeric(logLik(fit_ind)))
 ```
 
+## Copula dependence
+
+As an alternative to Famoye/Sarmanov dependence, `fit_bnb()` also supports a
+discrete-copula bivariate NB via `dependence = copula(family)`, with `family`
+one of `"frank"`, `"normal"` (Gaussian), or `"kimeldorf"` (Clayton). The
+dependence parameter is estimated from the data rather than fixed.
+
+```{r}
+fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                   dependence = copula("normal"))
+fit_cop$cop_par   # estimated native parameter (rho, for the Gaussian copula)
+fit_cop$cop_tau   # implied Kendall's tau
+```
+
+`fit_rpbnb()` accepts the same `dependence = copula(...)` argument to combine
+copula dependence with random coefficients (see the copula example at the end
+of the next section).
+
 ## Marginal effects
 
 ```{r}
@@ -65,6 +83,22 @@ rp <- fit_rpbnb(docvis ~ outwork + kids, hospvis ~ outwork, data = d_small,
 coef(rp)
 ```
 
+`fit_rpbnb()` also accepts `dependence = copula(...)` to pair random
+coefficients with copula dependence. Random coefficients are only well
+identified on **continuous** regressors under the copula path -- a random
+coefficient on a 0/1 dummy trades off against the NB dispersion and is weakly
+identified at realistic sample sizes, so we put the random coefficient on the
+continuous `age` variable instead of a dummy:
+
+```{r}
+rp_cop <- fit_rpbnb(docvis ~ outwork + age, hospvis ~ outwork, data = d_small,
+                    random_1 = "age", dependence = copula("normal"),
+                    draws = 100, seed = 1,
+                    control = rpbnb_control(compute_se = FALSE))
+coef(rp_cop)
+tanh(coef(rp_cop)[["z_theta"]])  # estimated copula rho
+```
+
 ## Simulation
 
 Generate data from a known random-parameter process and recover the parameters:
@@ -76,4 +110,19 @@ sim <- simulate_rpbnb(n = 1000,
   random_1 = list(x1 = list(sd = 0.5)),
   dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
 head(sim$data)
+```
+
+`simulate_rpbnb_copula()` does the same, but from a copula-dependent process
+(the joint pmf is built from the two NB2 marginal CDFs and a copula CDF,
+rather than the Famoye/Sarmanov tilt):
+
+```{r}
+sim_cop <- simulate_rpbnb_copula(n = 1000,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5),
+  copula = copula("normal", par = 0.5), seed = 1)
+head(sim_cop$data)
+sim_cop$true$tau   # true Kendall's tau implied by rho = 0.5
 ```

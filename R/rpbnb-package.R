@@ -1,8 +1,10 @@
 #' rpbnb: Bivariate and Random-Parameter Negative Binomial Regression
 #'
-#' Maximum-likelihood estimation of the Famoye/Sarmanov bivariate negative
-#' binomial model and maximum-simulated-likelihood estimation of a bivariate
-#' random-parameter negative binomial model.
+#' Maximum-likelihood estimation of bivariate negative binomial models with
+#' Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
+#' (see [fit_bnb()], [copula()]), and maximum-simulated-likelihood estimation
+#' of a bivariate random-parameter negative binomial model under either
+#' dependence structure (see [fit_rpbnb()]).
 #'
 #' @keywords internal
 #' @useDynLib rpbnb, .registration = TRUE
