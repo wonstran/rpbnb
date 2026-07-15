@@ -267,8 +267,7 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   parameter is estimated).
 #' @param start Optional starting parameter vector.
 #' @param control An [rpbnb_control()] object. The famoye and copula estimators
-#'   both use BFGS; `control$method` is currently honored only by the
-#'   optimizer's internal setup.
+#'   both use BFGS, the only optimizer `control$method` accepts.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples

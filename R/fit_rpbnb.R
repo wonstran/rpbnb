@@ -44,9 +44,8 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #' @param draw_type Quasi-random draw type. Only "halton" is supported in this version.
 #' @param seed Random seed for the simulation draws.
 #' @param start Optional starting parameter vector.
-#' @param control An [rpbnb_control()] object. Estimation uses BFGS;
-#'   `control$method` is not currently honored by `fit_rpbnb` (the
-#'   simulated-likelihood objective returns an aggregate gradient).
+#' @param control An [rpbnb_control()] object. Estimation uses BFGS, the only
+#'   optimizer `control$method` accepts.
 #' @param dependence Dependence structure: "famoye" (default; Famoye/Sarmanov)
 #'   or an [copula()] object for copula dependence (Frank / Gaussian /
 #'   Clayton). Both paths use the multithreaded (OpenMP) C++ simulated

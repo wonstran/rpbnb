@@ -1,7 +1,7 @@
 #' Control parameters for rpbnb estimators
 #'
-#' @param method Optimizer passed to [maxLik::maxLik()]. One of "BFGS", "NR",
-#'   "BHHH", "NM".
+#' @param method Optimizer used by the fitters. Only "BFGS" is implemented and
+#'   wired through; it is the sole accepted value.
 #' @param iterlim Maximum optimizer iterations.
 #' @param reltol Relative convergence tolerance.
 #' @param print_level Verbosity passed to the optimizer (0 = silent, default = 2 for detailed progress).
@@ -35,7 +35,7 @@
 #' @examples
 #' rpbnb_control(method = "BFGS", iterlim = 200)
 #' rpbnb_control(hessian = "analytic")
-rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
+rpbnb_control <- function(method = c("BFGS"),
                           iterlim = 300L,
                           reltol = 1e-8,
                           print_level = 2L,
@@ -48,9 +48,9 @@ rpbnb_control <- function(method = c("BFGS", "NR", "BHHH", "NM"),
                           hess_eps = 1e-5,
                           hess_r = 4L) {
   if (length(method) > 1) method <- method[1]
-  allowed <- c("BFGS", "NR", "BHHH", "NM")
-  if (!method %in% allowed) {
-    stop("`method` must be one of: ", paste(allowed, collapse = ", "), call. = FALSE)
+  if (!identical(method, "BFGS")) {
+    stop("`method` must be \"BFGS\" (the only implemented optimizer).",
+         call. = FALSE)
   }
   if (length(hessian) > 1) hessian <- hessian[1]
   if (!hessian %in% c("numeric", "analytic")) {

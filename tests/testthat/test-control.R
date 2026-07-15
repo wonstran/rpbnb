@@ -23,9 +23,17 @@ test_that("rpbnb_control validates inputs", {
   expect_error(rpbnb_control(reltol = 0), "reltol")
 })
 
+test_that("rpbnb_control rejects unimplemented optimizer methods", {
+  # Only BFGS is wired through to the fitters; NR/BHHH/NM were advertised but
+  # ignored, so they are no longer accepted (P2b).
+  expect_error(rpbnb_control(method = "NR"), "BFGS")
+  expect_error(rpbnb_control(method = "BHHH"), "BFGS")
+  expect_error(rpbnb_control(method = "NM"), "BFGS")
+  expect_equal(rpbnb_control(method = "BFGS")$method, "BFGS")
+})
+
 test_that("rpbnb_control overrides take effect", {
-  ctl <- rpbnb_control(method = "NR", iterlim = 50, compute_se = FALSE)
-  expect_equal(ctl$method, "NR")
+  ctl <- rpbnb_control(iterlim = 50, compute_se = FALSE)
   expect_equal(ctl$iterlim, 50L)
   expect_false(ctl$compute_se)
 })
