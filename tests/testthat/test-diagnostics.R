@@ -25,6 +25,36 @@ test_that("bnb_gof returns NA pseudo-R2 with a warning when the null model fails
   expect_equal(g$AIC, 108)              # full-model metrics still returned
 })
 
+test_that("bnb_gof fits the intercept-only null for a copula fit", {
+  set.seed(7)
+  d <- data.frame(x = rnorm(300))
+  d$y1 <- rnbinom(300, size = 2, mu = exp(0.3 + 0.2 * d$x))
+  d$y2 <- rnbinom(300, size = 2, mu = exp(0.1 - 0.1 * d$x))
+  fit <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = copula("normal"))
+  g <- bnb_gof(fit, print_output = FALSE)
+  # Pre-fix, fit$dependence = "normal" was passed to fit_bnb() and match.arg
+  # rejected it, so the null failed and every pseudo-R^2 was NA.
+  expect_false(is.null(g$null_fit))
+  expect_true(is.finite(g$logLik_null))
+  expect_true(any(is.finite(g$pseudoR2)))
+})
+
+test_that("bnb_gof returns raw (unclamped) pseudo-R2 when the full model is worse than null", {
+  set.seed(11)
+  fake <- structure(
+    list(logLik = -1e5, npar = 4L, nobs = 200L, AIC = 2e5, BIC = 2e5,
+         dependence = "independence", cop_family = NULL,
+         Y1 = rpois(200, 2), Y2 = rpois(200, 2)),
+    class = "bnb_fit")
+  # suppressWarnings: the synthetic intercept-only null trips glm.nb's iteration
+  # limit on this fake data; irrelevant to the clamp behavior under test.
+  g <- suppressWarnings(bnb_gof(fake, print_output = FALSE))
+  # A deliberately terrible full logLik must yield a negative McFadden R^2,
+  # not a value clamped to 0.
+  expect_true(is.finite(g$pseudoR2[["McFadden"]]))
+  expect_lt(g$pseudoR2[["McFadden"]], 0)
+})
+
 test_that("bnb_marginal_effects returns a row per requested variable", {
   me <- bnb_marginal_effects(make_diag_fit(), which = "y1", type = "AME",
                              print_output = FALSE)

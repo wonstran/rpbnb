@@ -33,7 +33,10 @@
 #'
 #' Reports log-likelihood, AIC, BIC, and four pseudo-R-squared measures
 #' (McFadden, McFadden adjusted, Cox-Snell, Nagelkerke) relative to an
-#' intercept-only null model refit with the same dependence structure.
+#' intercept-only null model refit with the same dependence structure (copula
+#' fits rebuild the copula from `fit$cop_family`). Pseudo-R-squared values are
+#' returned raw and are not clamped to `[0, 1]`; a negative value flags a full
+#' model that fits worse than the null.
 #'
 #' @param fit A `bnb_fit` object from [fit_bnb()].
 #' @param digits Number of decimal places for printed output.
@@ -62,27 +65,33 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
   # intercept-only glm.nb / optimizer fail. Treat that as missing pseudo-R^2
   # rather than aborting goodness-of-fit entirely.
   df_null  <- data.frame(Y1 = fit$Y1, Y2 = fit$Y2)
+  # Reconstruct the dependence structure the null must share. A copula fit stores
+  # dependence as a bare family string (e.g. "normal") in fit$dependence, which
+  # fit_bnb() would reject; rebuild the copula() object from fit$cop_family.
+  null_dep <- if (!is.null(fit$cop_family)) copula(fit$cop_family) else fit$dependence
   fit_null <- tryCatch(
-    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = fit$dependence),
+    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = null_dep),
     error = function(e) {
       warning("Null model could not be fitted (", conditionMessage(e),
               "); pseudo-R^2 set to NA.", call. = FALSE)
       NULL
     })
   ll_null <- if (is.null(fit_null)) NA_real_ else as.numeric(fit_null$logLik)
+  if (!is.null(fit_null) && !is.finite(ll_null)) {
+    warning("Null model did not converge to a finite log-likelihood; ",
+            "pseudo-R^2 set to NA.", call. = FALSE)
+    ll_null <- NA_real_
+  }
 
   # ---------- Pseudo R^2 ----------
+  # Returned raw (not clamped to [0, 1]): a negative McFadden or adjusted value
+  # is diagnostically meaningful -- it signals a full model that fits worse than
+  # the null (e.g. under a penalty), which clamping to 0 would silently hide.
   R2_MF  <- 1 - (ll_full / ll_null)
   R2_MFa <- 1 - ((ll_full - k) / ll_null)
   R2_CS  <- 1 - exp((2 / n) * (ll_null - ll_full))
   denom  <- 1 - exp((2 / n) * ll_null)
   R2_NK  <- if (is.na(denom) || abs(denom) < .Machine$double.eps) NA_real_ else R2_CS / denom
-
-  clamp01 <- function(x) ifelse(is.na(x), NA_real_, pmin(pmax(x, 0), 1))
-  R2_MF  <- clamp01(R2_MF)
-  R2_MFa <- clamp01(R2_MFa)
-  R2_CS  <- clamp01(R2_CS)
-  R2_NK  <- clamp01(R2_NK)
 
   pseudoR2 <- c(McFadden = R2_MF, McFadden_adj = R2_MFa,
                 CoxSnell = R2_CS, Nagelkerke = R2_NK)
