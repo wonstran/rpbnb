@@ -1,7 +1,7 @@
 Package: rpbnb
 Type: Package
 Title: Bivariate and Random-Parameter Negative Binomial Regression
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: person("Project", "Author", email = "wonstran@gmail.com", role = c("aut", "cre"))
 Description: Maximum-likelihood estimation of bivariate negative binomial
     (NB2) regression models with Famoye/Sarmanov or discrete-copula
@@ -27,7 +27,8 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    parallel
+    parallel,
+    pkgload
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)

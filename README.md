@@ -50,8 +50,10 @@ See `vignette("rpbnb-intro")` for a worked example.
 
 ## Scope
 
-This is Phase 1 of a larger project (see `docs/scope_rpnbn.md`): porting the mature
-Famoye BNB MLE and random-parameter BNB SIML implementations into an installable,
-tested package. Copula dependence, additional random-coefficient distributions,
-Monte Carlo drivers, a `future`-based parallel backend, and Rcpp acceleration are
-planned for later phases.
+This project ports the mature Famoye BNB MLE and random-parameter BNB SIML
+implementations into an installable, tested package (see `docs/scope_rpnbn.md`).
+Implemented: Famoye/Sarmanov and discrete-copula (Frank / Gaussian / Clayton)
+dependence for both the fixed and random-parameter models, additional
+random-coefficient distributions (normal, lognormal, uniform, triangular), and a
+multithreaded Rcpp/OpenMP core for the copula RP likelihood. A `future`-based
+parallel backend and further Monte Carlo drivers remain planned.

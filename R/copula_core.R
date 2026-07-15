@@ -202,7 +202,7 @@ frank_tau <- function(theta) {
   if (abs(theta) < 1e-10) return(0)
   debye1 <- function(th) {
     if (abs(th) < 1e-10) return(1)
-    integrate(function(t) t / (exp(t) - 1), 0, th, rel.tol = 1e-8)$value / th
+    stats::integrate(function(t) t / (exp(t) - 1), 0, th, rel.tol = 1e-8)$value / th
   }
   1 - 4 / theta * (1 - debye1(theta))
 }

@@ -7,3 +7,13 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^comments$
+^results$
+^AGENTS\.md$
+^RPBNB_PARAMETERS_GUIDE\.md$
+^build_reference\.R$
+^generate_manual\.R$
+^make_pdf.*\.R$
+^fit_results.*$
+^rpbnb-manual.*$
+^rpbnb_parameters_visual\.html$
