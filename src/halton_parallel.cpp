@@ -159,7 +159,10 @@ List rpbnb_ll_grad_cpp(
       mu1[off + i] = m1i; mu2[off + i] = m2i;
       c1[off + i]  = c1i; c2[off + i]  = c2i;
 
-      double lam_min = -1.0 / ((1.0 - c1i) * (1.0 - c2i));
+      // Lower bound binds on the largest positive corner of h1*h2, which is
+      // max((1-c1)(1-c2), c1*c2); the c1*c2 corner dominates at low means.
+      double denom_min = std::max((1.0 - c1i) * (1.0 - c2i), c1i * c2i);
+      double lam_min = -1.0 / denom_min;
       double denom_max = std::max(c1i * (1.0 - c2i), c2i * (1.0 - c1i));
       double lam_max = 1.0 / denom_max;
       if (lam_min > lo) lo = lam_min;

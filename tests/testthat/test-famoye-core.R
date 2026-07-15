@@ -28,6 +28,28 @@ test_that("lambda_bounds_vec returns correct numeric bounds", {
   expect_true(b[1] < b[2])
 })
 
+test_that("lambda_bounds_vec lower bound uses the c1*c2 corner when it dominates", {
+  # At low means c is large; here c1*c2 = 0.81 >> (1-c1)*(1-c2) = 0.01, so the
+  # binding positive corner of h1*h2 is c1*c2, not (1-c1)*(1-c2).
+  c1 <- 0.9; c2 <- 0.9
+  b  <- rpbnb:::lambda_bounds_vec(c1, c2)
+  expect_equal(b[1], -1 / max((1 - c1) * (1 - c2), c1 * c2), tolerance = 1e-10)
+})
+
+test_that("Famoye joint pmf factor is non-negative at the lower lambda bound (low means)", {
+  # Full-support check: 1 + lambda*h1*h2 must stay >= 0 for every count pair at
+  # the returned lower bound. With mu = 0.1, m = 0.5 (large c) the c1*c2 corner
+  # dominates, which the pre-fix bound ignored.
+  mu1 <- 0.1; mu2 <- 0.1; m1 <- 0.5; m2 <- 0.5
+  c1  <- rpbnb:::c_val(mu1, m1); c2 <- rpbnb:::c_val(mu2, m2)
+  lam <- rpbnb:::lambda_bounds_vec(c1, c2)[1]
+  y   <- 0:200
+  h1  <- exp(-y) - c1
+  h2  <- exp(-y) - c2
+  fac <- outer(h1, h2, function(a, b) 1 + lam * a * b)
+  expect_true(all(fac >= 0))
+})
+
 test_that("d_const is Famoye's 1 - exp(-1)", {
   expect_equal(rpbnb:::d_const(), 1 - exp(-1), tolerance = 1e-12)
 })

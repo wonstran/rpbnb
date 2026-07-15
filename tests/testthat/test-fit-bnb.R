@@ -115,16 +115,19 @@ test_that("fit_bnb famoye reproduces legacy bnbr_v2-4 estimates on rwm1984", {
   # z_lambda = 9 estimation-scale parameters.
   expect_equal(length(coef(fit)), 6 + 3)
 
-  # Reference values from the legacy estimator inst/legacy/bnbr_v2-4.R
-  # (bnbr_famoye_bfgs on docvis/hospvis ~ outwork + kids, rwm1984_clean.csv).
-  # These pin the port against future drift (acceptance criterion 6). The new
-  # fit reproduces these to full precision since both use the same BFGS path.
-  expect_equal(unname(cf[["b1:(Intercept)"]]),  1.056637893095, tolerance = 1e-4)
-  expect_equal(unname(cf[["b1:outwork"]]),       0.515812046351, tolerance = 1e-4)
-  expect_equal(unname(cf[["b1:kids"]]),         -0.313782996360, tolerance = 1e-4)
-  expect_equal(unname(cf[["b2:outwork"]]),       0.322182617958, tolerance = 1e-4)
-  expect_equal(unname(cf[["log_m1"]]),           0.850570193675, tolerance = 1e-4)
-  expect_equal(as.numeric(logLik(fit)),      -9642.61529797,    tolerance = 1e-3)
+  # Reference values pin the port against future drift (acceptance criterion 6).
+  # These were re-pinned after correcting the Sarmanov lower lambda bound to use
+  # the max((1-c1)(1-c2), c1*c2) corner (see famoye_core.R). The lambda interval
+  # is reparameterized as lamLo + (lamHi-lamLo)*plogis(zlam), so tightening
+  # lamLo shifts every estimate in the 4th-5th decimal versus the legacy
+  # estimator inst/legacy/bnbr_v2-4.R, which still uses the old (too permissive)
+  # bound. The log-likelihood is essentially unchanged (flat near the optimum).
+  expect_equal(unname(cf[["b1:(Intercept)"]]),  1.056657961791, tolerance = 1e-4)
+  expect_equal(unname(cf[["b1:outwork"]]),       0.515786142444, tolerance = 1e-4)
+  expect_equal(unname(cf[["b1:kids"]]),         -0.313820736204, tolerance = 1e-4)
+  expect_equal(unname(cf[["b2:outwork"]]),       0.322090316901, tolerance = 1e-4)
+  expect_equal(unname(cf[["log_m1"]]),           0.850571235532, tolerance = 1e-4)
+  expect_equal(as.numeric(logLik(fit)),      -9642.61529867,    tolerance = 1e-3)
 })
 
 test_that("fit_bnb independence equals two univariate NB2 fits", {

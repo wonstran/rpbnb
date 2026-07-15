@@ -22,7 +22,12 @@ nb_logpmf_y_mu_r <- function(y, mu, r) {
 #' @keywords internal
 #' @noRd
 lambda_bounds_vec <- function(c1, c2) {
-  lam_min <- -1 / ((1 - c1) * (1 - c2))
+  # h_t(y) = exp(-y) - c_t ranges over (-c_t, 1 - c_t]. For 1 + lambda*h1*h2 >= 0
+  # over the full support, the binding positive corner of h1*h2 is
+  # max((1 - c1)(1 - c2), c1*c2) and the binding negative corner is
+  # -max(c1(1 - c2), c2(1 - c1)). At low means (large c) the c1*c2 corner
+  # dominates the lower bound, so it must be included via pmax().
+  lam_min <- -1 / pmax((1 - c1) * (1 - c2), c1 * c2)
   lam_max <-  1 / pmax(c1 * (1 - c2), c2 * (1 - c1))
   c(max(lam_min), min(lam_max))
 }
