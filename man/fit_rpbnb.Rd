@@ -37,9 +37,8 @@ lognormal-only). NULL means all-fixed for that equation.}
 
 \item{start}{Optional starting parameter vector.}
 
-\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. Estimation uses BFGS;
-\code{control$method} is not currently honored by \code{fit_rpbnb} (the
-simulated-likelihood objective returns an aggregate gradient).}
+\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. Estimation uses BFGS, the only
+optimizer \code{control$method} accepts.}
 
 \item{dependence}{Dependence structure: "famoye" (default; Famoye/Sarmanov)
 or an \code{\link[=copula]{copula()}} object for copula dependence (Frank / Gaussian /

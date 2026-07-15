@@ -26,8 +26,7 @@ parameter is estimated).}
 \item{start}{Optional starting parameter vector.}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
-both use BFGS; \code{control$method} is currently honored only by the
-optimizer's internal setup.}
+both use BFGS, the only optimizer \code{control$method} accepts.}
 }
 \value{
 An object of class \code{bnb_fit}.

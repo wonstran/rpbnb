@@ -5,7 +5,7 @@
 \title{Control parameters for rpbnb estimators}
 \usage{
 rpbnb_control(
-  method = c("BFGS", "NR", "BHHH", "NM"),
+  method = c("BFGS"),
   iterlim = 300L,
   reltol = 1e-08,
   print_level = 2L,
@@ -20,8 +20,8 @@ rpbnb_control(
 )
 }
 \arguments{
-\item{method}{Optimizer passed to \code{\link[maxLik:maxLik]{maxLik::maxLik()}}. One of "BFGS", "NR",
-"BHHH", "NM".}
+\item{method}{Optimizer used by the fitters. Only "BFGS" is implemented and
+wired through; it is the sole accepted value.}
 
 \item{iterlim}{Maximum optimizer iterations.}
 

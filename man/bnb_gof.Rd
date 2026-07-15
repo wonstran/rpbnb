@@ -21,7 +21,10 @@ Invisibly, a list with \code{n}, \code{k}, \code{logLik_full}, \code{logLik_null
 \description{
 Reports log-likelihood, AIC, BIC, and four pseudo-R-squared measures
 (McFadden, McFadden adjusted, Cox-Snell, Nagelkerke) relative to an
-intercept-only null model refit with the same dependence structure.
+intercept-only null model refit with the same dependence structure (copula
+fits rebuild the copula from \code{fit$cop_family}). Pseudo-R-squared values are
+returned raw and are not clamped to \verb{[0, 1]}; a negative value flags a full
+model that fits worse than the null.
 }
 \examples{
 d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
