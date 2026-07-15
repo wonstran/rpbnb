@@ -34,6 +34,20 @@ test_that("summary surfaces natural-scale dispersion and dependence with finite 
   expect_true(is.finite(m1_row$StdErr))
 })
 
+test_that("natural-scale scale/dispersion rows carry no Wald test; lambda keeps one", {
+  ff  <- make_small_bnb()
+  nat <- summary(ff)$natural
+  m1_row  <- nat[grepl("^m1", nat$Parameter), ]
+  lam_row <- nat[grepl("lambda", nat$Parameter), ]
+  # m = exp(log_m) is a positive scale: z = est/SE reduces to 1/SE(log_m) and is
+  # not a Wald test of m = 0 (m = 0 is log_m = -Inf, a boundary). No z/p/stars.
+  expect_true(is.na(m1_row$z))
+  expect_true(is.na(m1_row$p))
+  expect_true(is.finite(m1_row$Estimate) && is.finite(m1_row$StdErr))  # est/SE stay
+  # lambda has an interior zero (independence), so a Wald test remains valid.
+  expect_true(is.finite(lam_row$z) && is.finite(lam_row$p))
+})
+
 test_that("independence summary shows no lambda row (no dependence parameter)", {
   set.seed(21)
   d <- data.frame(x = rnorm(400))

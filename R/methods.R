@@ -77,7 +77,9 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 
 # Natural-scale view of the transformed parameters: random-coefficient SDs
 # (exp(log_sd)), NB2 dispersions m = exp(log_m), and the Famoye dependence lambda
-# (stored on the object), each with a delta-method standard error and p-value.
+# (stored on the object), each with a delta-method standard error. Positive scale
+# components (SDs, dispersions) report no z/p/stars because their Wald ratio does
+# not test the boundary null a = 0; dependence parameters keep the Wald test.
 # Returns a list with $random (random SDs) and $dispersion (m1, m2, lambda) components.
 .natural_scale_table <- function(object) {
   cf <- object$coef
@@ -87,18 +89,25 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   random_rows <- list()
   dispersion_rows <- list()
 
+  # `test = FALSE` for positive scale/dispersion parameters a = exp(eta): there
+  # z = est/SE reduces to 1/SE(eta), which is not a Wald test of a = 0 (a = 0 is
+  # eta = -Inf, a boundary). Report the estimate and delta-method SE but no
+  # z/p/stars. Dependence parameters (lambda, copula native/tau) have an
+  # interior zero and keep the regular Wald test (test = TRUE).
   add_random <- function(name, est, stderr) {
-    z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
-    p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
     random_rows[[length(random_rows) + 1L]] <<-
       data.frame(Parameter = name, Estimate = est, StdErr = stderr,
-                 z = z_val, p = p_val, Signif = signif_stars(p_val),
+                 z = NA_real_, p = NA_real_, Signif = signif_stars(NA_real_),
                  check.names = FALSE)
   }
 
-  add_dispersion <- function(name, est, stderr) {
-    z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
-    p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
+  add_dispersion <- function(name, est, stderr, test = TRUE) {
+    if (test) {
+      z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
+      p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
+    } else {
+      z_val <- NA_real_; p_val <- NA_real_
+    }
     dispersion_rows[[length(dispersion_rows) + 1L]] <<-
       data.frame(Parameter = name, Estimate = est, StdErr = stderr,
                  z = z_val, p = p_val, Signif = signif_stars(p_val),
@@ -114,11 +123,11 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   # Dispersion parameters
   if ("log_m1" %in% names(cf)) {
     m1 <- exp(cf[["log_m1"]])
-    add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"))
+    add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"), test = FALSE)
   }
   if ("log_m2" %in% names(cf)) {
     m2 <- exp(cf[["log_m2"]])
-    add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"))
+    add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"), test = FALSE)
   }
 
   # Only models with an estimated dependence parameter (z_lambda present, i.e.
