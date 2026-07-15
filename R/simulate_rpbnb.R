@@ -32,23 +32,10 @@ simulate_rpbnb <- function(n, beta1, beta2,
                            dispersion = c(m1 = 0.5, m2 = 0.5),
                            lambda = 0, covariates = NULL, seed = NULL) {
   stopifnot("(Intercept)" %in% names(beta1), "(Intercept)" %in% names(beta2))
-  if (!all(c("m1", "m2") %in% names(dispersion))) {
-    stop("`dispersion` must be a named vector c(m1 = ., m2 = .).", call. = FALSE)
-  }
+  chk_dispersion(dispersion)
   spec1 <- parse_rand_spec(random_1)
   spec2 <- parse_rand_spec(random_2)
-  chk_rand <- function(spec, bv, lbl) {
-    miss <- spec$names[!spec$names %in% names(bv)]
-    if (length(miss)) {
-      stop("random name(s) ", paste(miss, collapse = ", "), " not in ", lbl,
-           ".", call. = FALSE)
-    }
-    if (length(spec$names) && any(is.na(spec$scale))) {
-      stop("each random coefficient needs a `scale` (or `sd`) in ", lbl, ".",
-           call. = FALSE)
-    }
-  }
-  chk_rand(spec1, beta1, "beta1"); chk_rand(spec2, beta2, "beta2")
+  chk_rand_spec(spec1, beta1, "beta1"); chk_rand_spec(spec2, beta2, "beta2")
   if (lambda != 0) {
     stop("Phase 1 simulate_rpbnb supports lambda = 0 (independent margins) only.",
          call. = FALSE)

@@ -47,7 +47,9 @@ simulate_rpbnb_copula <- function(n, beta1, beta2,
                                   copula, covariates = NULL, seed = NULL) {
   stopifnot(inherits(copula, "rpbnb_copula"), !is.null(copula$par),
             "(Intercept)" %in% names(beta1), "(Intercept)" %in% names(beta2))
+  chk_dispersion(dispersion)
   spec1 <- parse_rand_spec(random_1); spec2 <- parse_rand_spec(random_2)
+  chk_rand_spec(spec1, beta1, "beta1"); chk_rand_spec(spec2, beta2, "beta2")
   if (!is.null(seed)) set.seed(seed)
   if (is.null(covariates)) covariates <- .sim_default_covariates(beta1, beta2, n)
   .check_sim_covariates(covariates, beta1, beta2, n)

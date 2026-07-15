@@ -95,6 +95,11 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                              draws, draw_type, seed, start, control,
                              family = dependence$family))
   }
+  if (!identical(dependence, "famoye")) {
+    stop("`dependence` must be \"famoye\" or a copula() object; got ",
+         if (is.character(dependence)) dQuote(dependence) else class(dependence)[1],
+         ".", call. = FALSE)
+  }
 
   draw_type <- match.arg(draw_type, "halton")
 

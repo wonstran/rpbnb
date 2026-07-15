@@ -22,5 +22,21 @@
 #' copula("kimeldorf")
 copula <- function(family = c("frank", "normal", "kimeldorf"), par = NULL) {
   family <- match.arg(family)
+  if (!is.null(par)) {
+    if (!is.numeric(par) || length(par) != 1L) {
+      stop("`par` must be a single numeric value (or NULL).", call. = FALSE)
+    }
+    if (!is.finite(par)) {
+      stop("`par` must be finite.", call. = FALSE)
+    }
+    if (family == "normal" && abs(par) >= 1) {
+      stop("Gaussian copula requires the correlation `par` (rho) in (-1, 1).",
+           call. = FALSE)
+    }
+    if (family == "kimeldorf" && par <= 0) {
+      stop("Clayton (kimeldorf) copula requires a positive `par` (theta > 0).",
+           call. = FALSE)
+    }
+  }
   structure(list(family = family, par = par), class = "rpbnb_copula")
 }

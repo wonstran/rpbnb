@@ -116,6 +116,40 @@ parse_rand_spec <- function(spec) {
   list(names = nm, dist = dist, sign = sgn, scale = scale)
 }
 
+#' Validate a parsed random spec against the available coefficient names.
+#'
+#' Shared by both simulators: every random name must appear in the coefficient
+#' vector and every random coefficient must carry a finite scale.
+#' @keywords internal
+#' @noRd
+chk_rand_spec <- function(spec, bv, lbl) {
+  miss <- spec$names[!spec$names %in% names(bv)]
+  if (length(miss)) {
+    stop("random name(s) ", paste(miss, collapse = ", "), " not in ", lbl, ".",
+         call. = FALSE)
+  }
+  if (length(spec$names) && any(is.na(spec$scale))) {
+    stop("each random coefficient needs a `scale` (or `sd`) in ", lbl, ".",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Validate an NB2 dispersion vector: named c(m1=, m2=), finite and positive.
+#' @keywords internal
+#' @noRd
+chk_dispersion <- function(dispersion) {
+  if (!all(c("m1", "m2") %in% names(dispersion))) {
+    stop("`dispersion` must be a named vector c(m1 = ., m2 = .).", call. = FALSE)
+  }
+  m <- dispersion[c("m1", "m2")]
+  if (any(!is.finite(m)) || any(m <= 0)) {
+    stop("`dispersion` values m1, m2 must be finite and positive.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 #' Per-draw realized coefficients and gradient factors for one equation
 #'
 #' @param U An R x q matrix of uniform Halton draws (one column per random coef).
