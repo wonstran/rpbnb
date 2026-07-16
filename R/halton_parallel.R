@@ -111,20 +111,16 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   res$scores
 }
 
-#' OPG (BHHH) covariance matrix from per-observation scores
+#' OPG (BHHH) covariance from per-observation scores, with curvature diagnostics
 #'
-#' V = (S'S)^{-1}. Falls back to a pseudo-inverse if S'S is singular (e.g. a
-#' random-coefficient SD that has collapsed to ~0 contributes almost no score
-#' variation, so that parameter is weakly identified and gets a large SE).
+#' V = (S'S)^{-1}. Delegates to [.observed_info_vcov()] so a singular S'S (e.g. a
+#' random-coefficient SD collapsed to ~0, contributing almost no score variation
+#' and hence weakly identified) is repaired non-silently and recorded. Returns
+#' the full list(vcov, se, diag).
 #' @keywords internal
 #' @noRd
 opg_vcov <- function(scores, par_names) {
-  info <- crossprod(scores)                 # sum_i s_i s_i'
-  info <- (info + t(info)) / 2
-  vc <- try(solve(info), silent = TRUE)
-  if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-  dimnames(vc) <- list(par_names, par_names)
-  vc
+  .observed_info_vcov(crossprod(scores), par_names, label = "OPG (BHHH)")
 }
 
 #' Fixed-bounds RP-BNB simulated LL (C++ core, value only)

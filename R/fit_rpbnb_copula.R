@@ -94,20 +94,20 @@
         bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1, Z2, family,
                               dist1, dist2, sign1, sign2, want_scores = TRUE)
-      vc <- opg_vcov(attr(res, "scores"), par_names)
-      se <- sqrt(pmax(diag(vc), 0)); names(se) <- par_names
+      inv <- opg_vcov(attr(res, "scores"), par_names)
+      vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     } else {  # "numeric"
       H <- numDeriv::hessian(function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
                              rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2),
                              par_hat,
                              method.args = list(r = control$hess_r, eps = control$hess_eps))
-      info <- -(H + t(H)) / 2
-      vc <- try(solve(info), silent = TRUE)
-      if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-      se <- sqrt(pmax(diag(vc), 0))
+      inv <- .observed_info_vcov(-H, par_names,
+                                 label = paste0(family, " copula RP-BNB (numeric Hessian)"))
+      vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     }
   } else {
     vc <- matrix(NA_real_, npar, npar); se <- rep(NA_real_, npar)
+    hdiag <- NULL
   }
   dimnames(vc) <- list(par_names, par_names); names(se) <- par_names
 
@@ -128,6 +128,6 @@
     formula_1 = formula_1, formula_2 = formula_2,
     draws = draws, draw_type = draw_type, seed = seed,
     ll_trace = ll_trace, convergence = convergence,
-    cop_family = family, call = match.call()
+    cop_family = family, call = match.call(), hessian_diag = hdiag
   )
 }

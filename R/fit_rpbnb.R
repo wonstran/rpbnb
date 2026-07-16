@@ -10,7 +10,7 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           m1, m2, lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                           rand_idx1, rand_idx2, formula_1, formula_2,
                           draws, draw_type, seed, ll_trace, convergence,
-                          cop_family = NULL, call) {
+                          cop_family = NULL, call, hessian_diag = NULL) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
@@ -22,7 +22,7 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          ll_trace = ll_trace, convergence = convergence,
          cop_family = cop_family,
          AIC = -2 * logLik + 2 * npar, BIC = -2 * logLik + log(nobs) * npar,
-         call = call),
+         call = call, hessian_diag = hessian_diag),
     class = "rpbnb_fit"
   )
 }
@@ -261,9 +261,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     S <- bnbr_rp_scores_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                             dist1, dist2, sign1, sign2, n_threads = cpp_threads)
-    vc <- opg_vcov(S, par_names)
-    se <- sqrt(pmax(diag(vc), 0))
-    names(se) <- par_names
+    inv <- opg_vcov(S, par_names)
+    vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (use_analytic) {
     # Closed-form observed-information Hessian (Famoye 2010 per-draw second
     # derivatives + Louis mixture formula), at the optimum with the SAME draws
@@ -273,17 +272,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                          dist1, dist2, sign1, sign2,
                          lamLo = lamLo_h, lamHi = lamHi_h)
-    info <- -H; info <- (info + t(info)) / 2
-    ok <- try(eigen(info, symmetric = TRUE, only.values = TRUE), silent = TRUE)
-    if (inherits(ok, "try-error") || any(!is.finite(ok$values)) || min(ok$values) <= 0) {
-      ridge <- if (inherits(ok, "try-error") || any(!is.finite(ok$values))) 1e-2
-               else 1e-8 - min(ok$values)
-      info <- info + diag(ridge, nrow(info))
-    }
-    vc <- try(solve(info), silent = TRUE)
-    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-    se <- sqrt(pmax(diag(vc), 0))
-    dimnames(vc) <- list(par_names, par_names); names(se) <- par_names
+    info <- -H
+    inv <- .observed_info_vcov(info, par_names, label = "RP-BNB (analytic Hessian)")
+    vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (isTRUE(compute_se)) {
     set.seed(seed + 1L)
     if ((q1 + q2) > 0) {
@@ -331,25 +322,14 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                                                 eps = max(1e-4, 5 * control$hess_eps)))
       info <- -H; info <- (info + t(info)) / 2
     }
-    ok <- try(eigen(info, symmetric = TRUE, only.values = TRUE), silent = TRUE)
-    if (inherits(ok, "try-error") || any(!is.finite(ok$values)) || min(ok$values) <= 0) {
-      ridge <- if (inherits(ok, "try-error") || any(!is.finite(ok$values))) {
-        1e-2
-      } else {
-        1e-8 - min(ok$values)
-      }
-      info <- info + diag(ridge, nrow(info))
-    }
-    vc <- try(solve(info), silent = TRUE)
-    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-    se <- sqrt(pmax(diag(vc), 0))
-    dimnames(vc) <- list(par_names, par_names)
-    names(se) <- par_names
+    inv <- .observed_info_vcov(info, par_names, label = "RP-BNB (numeric Hessian)")
+    vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else {
     # Keep vcov() type-consistent with bnb_fit (an NA-filled matrix, not NULL)
     # when SEs are skipped, so downstream code can rely on a matrix shape.
     vc <- matrix(NA_real_, npar, npar, dimnames = list(par_names, par_names))
     se <- rep(NA_real_, npar); names(se) <- par_names
+    hdiag <- NULL
   }
 
   # --- Natural-scale fields ---
@@ -397,5 +377,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
     formula_1 = formula_1, formula_2 = formula_2,
     draws = n_draws, draw_type = draw_type, seed = seed,
-    ll_trace = ll_trace, convergence = convergence, call = match.call())
+    ll_trace = ll_trace, convergence = convergence, call = match.call(),
+    hessian_diag = hdiag)
 }

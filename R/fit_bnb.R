@@ -7,7 +7,8 @@
 new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
                         lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                         formula_1, formula_2, ll_trace, convergence, call,
-                        cop_family = NULL, cop_par = NULL, cop_tau = NULL) {
+                        cop_family = NULL, cop_par = NULL, cop_tau = NULL,
+                        hessian_diag = NULL) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, dependence = dependence,
@@ -17,7 +18,8 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
          ll_trace = ll_trace, convergence = convergence,
          AIC = -2 * logLik + 2 * npar, BIC = -2 * logLik + log(nobs) * npar,
          call = call,
-         cop_family = cop_family, cop_par = cop_par, cop_tau = cop_tau),
+         cop_family = cop_family, cop_par = cop_par, cop_tau = cop_tau,
+         hessian_diag = hessian_diag),
     class = "bnb_fit"
   )
 }
@@ -96,22 +98,12 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
                                                 eps = max(1e-4, 5 * control$hess_eps)))
       info <- -H; info <- (info + t(info)) / 2
     }
-    ok_eig <- try(eigen(info, symmetric = TRUE, only.values = TRUE), silent = TRUE)
-    if (inherits(ok_eig, "try-error") || any(!is.finite(ok_eig$values)) ||
-        min(ok_eig$values) <= 0) {
-      ridge <- if (inherits(ok_eig, "try-error") || any(!is.finite(ok_eig$values))) {
-        1e-2
-      } else {
-        1e-8 - min(ok_eig$values)
-      }
-      info <- info + diag(ridge, nrow(info))
-    }
-    vc <- try(solve(info), silent = TRUE)
-    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-    se <- sqrt(pmax(diag(vc), 0))
+    inv <- .observed_info_vcov(info, names(par_hat), label = "famoye BNB")
+    vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else {
     vc <- matrix(NA_real_, length(par_hat), length(par_hat))
     se <- rep(NA_real_, length(par_hat))
+    hdiag <- NULL
   }
   dimnames(vc) <- list(names(par_hat), names(par_hat))
   names(se) <- names(par_hat)
@@ -123,7 +115,7 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
        npar = length(par_hat),
        lambda = lambda_hat, bounds = c(bnds_hat[1], bnds_hat[2]),
        mu1 = mu1_hat, mu2 = mu2_hat,
-       ll_trace = .ll_eval, convergence = convergence)
+       ll_trace = .ll_eval, convergence = convergence, hessian_diag = hdiag)
 }
 
 #' Internal estimator: copula with NB2 margins via maxLik BFGS + analytic gradient
@@ -180,20 +172,13 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
                                                    eps = max(1e-4, 5 * control$hess_eps)))
       info <- -H; info <- (info + t(info)) / 2
     }
-    ok_eig <- try(eigen(info, symmetric = TRUE, only.values = TRUE), silent = TRUE)
-    if (inherits(ok_eig, "try-error") || any(!is.finite(ok_eig$values)) ||
-        min(ok_eig$values) <= 0) {
-      ridge <- if (inherits(ok_eig, "try-error") || any(!is.finite(ok_eig$values))) {
-        1e-2
-      } else { 1e-8 - min(ok_eig$values) }
-      info <- info + diag(ridge, nrow(info))
-    }
-    vc <- try(solve(info), silent = TRUE)
-    if (inherits(vc, "try-error")) vc <- MASS::ginv(info)
-    se <- sqrt(pmax(diag(vc), 0))
+    inv <- .observed_info_vcov(info, names(par_hat),
+                               label = paste0(family, " copula BNB"))
+    vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else {
     vc <- matrix(NA_real_, length(par_hat), length(par_hat))
     se <- rep(NA_real_, length(par_hat))
+    hdiag <- NULL
   }
   dimnames(vc) <- list(names(par_hat), names(par_hat))
   names(se) <- names(par_hat)
@@ -205,7 +190,8 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
        npar = length(par_hat),
        mu1 = mu1_hat, mu2 = mu2_hat,
        ll_trace = .ll_eval, convergence = convergence,
-       cop_family = family, cop_par = native_hat, cop_tau = td$tau)
+       cop_family = family, cop_par = native_hat, cop_tau = td$tau,
+       hessian_diag = hdiag)
 }
 
 #' Internal estimator: independence = two univariate NB2 margins via MASS::glm.nb
@@ -300,7 +286,8 @@ fit_bnb <- function(formula_1, formula_2, data,
       mu1 = res$mu1, mu2 = res$mu2, X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
       formula_1 = formula_1, formula_2 = formula_2,
       ll_trace = res$ll_trace, convergence = res$convergence, call = match.call(),
-      cop_family = res$cop_family, cop_par = res$cop_par, cop_tau = res$cop_tau
+      cop_family = res$cop_family, cop_par = res$cop_par, cop_tau = res$cop_tau,
+      hessian_diag = res$hessian_diag
     ))
   }
 
@@ -318,5 +305,5 @@ fit_bnb <- function(formula_1, formula_2, data,
               mu1 = res$mu1, mu2 = res$mu2, X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
               formula_1 = formula_1, formula_2 = formula_2,
               ll_trace = res$ll_trace, convergence = res$convergence,
-              call = match.call())
+              call = match.call(), hessian_diag = res$hessian_diag)
 }

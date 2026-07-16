@@ -117,7 +117,7 @@ test_that("OPG vcov is symmetric positive-(semi)definite", {
                           out$rand_idx1, out$rand_idx2, out$Z1, out$Z2,
                           out$dists1, out$dists2, out$signs1, out$signs2,
                           n_threads = 2L)
-  vc <- opg_vcov(S, paste0("p", seq_len(ncol(S))))
+  vc <- opg_vcov(S, paste0("p", seq_len(ncol(S))))$vcov
   expect_equal(vc, t(vc), tolerance = 1e-10)
   expect_true(all(diag(vc) >= 0))
 })
