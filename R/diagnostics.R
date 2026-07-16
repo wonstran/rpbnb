@@ -436,3 +436,254 @@ bnb_elasticities <- function(fit,
   }
   invisible(tab)
 }
+
+# ============================================================================
+# Random-parameter interpretation (rpbnb_fit): marginal effects & elasticities
+# ----------------------------------------------------------------------------
+# Built on the Monte-Carlo integrated population mean mu_i = E_beta[exp(x_i'b)]
+# that predict.rpbnb_fit() computes over the stored draws. The mean depends only
+# on an equation's mean coefficients (b{e}:col) and its log-scale parameters
+# (log_sd/log_w/log_s), never on log_m or z_lambda/z_theta, so the delta-method
+# parameter block is exactly (b{e}, log-scale{e}).
+# ============================================================================
+
+# Per-draw n x R matrix of pmin(exp(x'b + XR %*% dev_r), cap) for one design X.
+# `dev` is the R x q deviation matrix from rand_realize(); q == 0 collapses to R
+# identical columns of exp(x'b) (so a fully-fixed equation reduces cleanly).
+.rp_g_matrix <- function(X, b, rand_idx, dev, cap = RP_PRED_CAP) {
+  xb <- as.vector(X %*% b)
+  R  <- nrow(dev)
+  if (length(rand_idx) == 0) {
+    return(matrix(pmin(exp(xb), cap), nrow = length(xb), ncol = R))
+  }
+  XR <- X[, rand_idx, drop = FALSE]
+  g  <- vapply(seq_len(R),
+               function(r) pmin(exp(xb + as.vector(XR %*% dev[r, ])), cap),
+               numeric(length(xb)))
+  matrix(g, nrow = length(xb))
+}
+
+# Rows whose integrated mean is analytically infinite: a lognormal random
+# coefficient j with sign_j * X_ij > 0 (mirrors .rp_integrated_mu in methods.R).
+.rp_inf_rows <- function(X, rand_idx, dist, sign) {
+  inf <- logical(nrow(X))
+  for (j in seq_along(rand_idx)) {
+    if (identical(dist[j], "lognormal")) {
+      inf <- inf | (sign[j] * X[, rand_idx[j]] > 0)
+    }
+  }
+  inf
+}
+
+# Assemble the static metadata for one equation's interpretation computation:
+# design, coefficient names, random metadata, the delta-method parameter names,
+# the selected-variable indices and their binary/continuous classification.
+.rp_diag_meta <- function(fit, eq, type, vars, include_intercept) {
+  X  <- if (eq == 1L) fit$X1 else fit$X2
+  cn <- colnames(X)
+  p  <- ncol(X)
+  b_names  <- paste0("b", eq, ":", cn)
+  rand_idx <- if (eq == 1L) fit$rand_idx1 else fit$rand_idx2
+  dist <- if (eq == 1L) fit$rp_meta$dist1 else fit$rp_meta$dist2
+  sign <- if (eq == 1L) fit$rp_meta$sign1 else fit$rp_meta$sign2
+  Z    <- if (eq == 1L) fit$rp_meta$Z1 else fit$rp_meta$Z2
+
+  scale_names <- if (length(rand_idx)) {
+    vapply(seq_along(rand_idx), function(j) {
+      lbl <- rand_dist_registry[[dist[j]]]$scale_label
+      paste0(lbl, eq, ":", cn[rand_idx[j]])
+    }, character(1))
+  } else character(0)
+
+  # --- variable selection (mirrors bnb_marginal_effects) ---
+  if (is.null(vars)) {
+    idx <- seq_len(p)
+  } else if (is.numeric(vars)) {
+    if (any(vars < 1 | vars > p)) stop("Index out of range in `vars`.", call. = FALSE)
+    idx <- vars
+  } else {
+    idx <- match(vars, cn)
+    if (anyNA(idx)) {
+      stop("Unknown vars in equation ", eq, ": ",
+           paste(vars[is.na(idx)], collapse = ", "),
+           ". Available: ", paste(cn, collapse = ", "), call. = FALSE)
+    }
+  }
+  if (!include_intercept) idx <- idx[cn[idx] != "(Intercept)"]
+  if (!length(idx)) stop("No variables selected after filtering the intercept.",
+                         call. = FALSE)
+
+  is_bin <- vapply(idx, function(j) {
+    x <- X[, j]; x <- x[!is.na(x)]
+    length(x) > 0 && all(x %in% c(0, 1))
+  }, logical(1))
+  is_rand <- idx %in% rand_idx
+
+  Xbar <- matrix(colMeans(X), nrow = 1, dimnames = list(NULL, cn))
+
+  list(X = X, Xbar = Xbar, cn = cn, b_names = b_names, scale_names = scale_names,
+       rand_idx = rand_idx, dist = dist, sign = sign, Z = Z, type = type,
+       sel = idx, is_bin = is_bin, is_rand = is_rand)
+}
+
+# Deterministic, vector-valued estimand over theta = c(b, log-scales), holding
+# the draws Z fixed. `quantity` is "me" (marginal effect) or "elas" (elasticity/
+# semi-elasticity). `mark_inf = TRUE` propagates analytic Inf on lognormal rows
+# (for the reported point estimate); the jacobian path uses `mark_inf = FALSE`
+# so the finite-difference gradient stays smooth.
+.rp_estimand <- function(theta, meta, quantity, mark_inf) {
+  cn <- meta$cn
+  b  <- theta[meta$b_names]; names(b) <- cn
+  scales <- if (length(meta$rand_idx)) exp(theta[meta$scale_names]) else numeric(0)
+  Z   <- meta$Z
+  rr  <- if (length(meta$rand_idx))
+           rand_realize(Z, meta$dist, meta$sign, b[meta$rand_idx], scales)
+         else NULL
+  dev      <- if (is.null(rr)) matrix(0, nrow(Z), 0) else rr$dev
+  coef_mat <- if (is.null(rr)) NULL else rr$coef
+
+  X   <- if (meta$type == "MEM") meta$Xbar else meta$X
+  inf_rows <- if (mark_inf && length(meta$rand_idx))
+                .rp_inf_rows(X, meta$rand_idx, meta$dist, meta$sign)
+              else logical(nrow(X))
+
+  g  <- .rp_g_matrix(X, b, meta$rand_idx, dev)
+  mu <- rowMeans(g)
+
+  out <- numeric(length(meta$sel))
+  for (m in seq_along(meta$sel)) {
+    j <- meta$sel[m]
+    if (meta$is_bin[m]) {
+      X0 <- X; X0[, j] <- 0
+      X1 <- X; X1[, j] <- 1
+      mu0 <- rowMeans(.rp_g_matrix(X0, b, meta$rand_idx, dev))
+      mu1 <- rowMeans(.rp_g_matrix(X1, b, meta$rand_idx, dev))
+      val <- if (quantity == "me") mu1 - mu0 else mu1 / mu0 - 1
+    } else {
+      rk <- match(j, meta$rand_idx)
+      coef_row <- if (!is.na(rk)) coef_mat[, rk] else rep(b[[j]], nrow(Z))
+      dmu <- rowMeans(sweep(g, 2, coef_row, `*`))
+      val <- if (quantity == "me") dmu else X[, j] * dmu / mu
+    }
+    if (any(inf_rows)) val[inf_rows] <- Inf
+    out[m] <- mean(val)
+  }
+  names(out) <- cn[meta$sel]
+  out
+}
+
+# Compute point estimates + delta-method SEs for one equation and assemble the
+# tidy output frame (Name/Estimate/StdErr/z/p/Signif/var_type).
+.rp_diag_one <- function(fit, eq, quantity, type, vars, include_intercept,
+                         digits, print_output, resp_name) {
+  meta <- .rp_diag_meta(fit, eq, type, vars, include_intercept)
+
+  est <- .rp_estimand(fit$coef, meta, quantity, mark_inf = TRUE)
+
+  # Warn once if any reported estimate is a lognormal analytic infinity.
+  if (any(!is.finite(est))) {
+    warning(sum(!is.finite(est)), " selected variable(s) in ", resp_name,
+            " have an analytically infinite estimate (a lognormal random ",
+            "coefficient with sign * covariate > 0); reporting Inf.",
+            call. = FALSE)
+  }
+
+  theta_names <- c(meta$b_names, meta$scale_names)
+  V <- fit$vcov[theta_names, theta_names, drop = FALSE]
+  if (any(!is.finite(V))) {
+    warning("vcov is unavailable (fit made with compute_se = FALSE?); ",
+            "standard errors set to NA for ", resp_name, ".", call. = FALSE)
+    se <- rep(NA_real_, length(est))
+  } else {
+    theta_hat <- fit$coef[theta_names]
+    G <- numDeriv::jacobian(
+      function(t) { names(t) <- theta_names
+                    .rp_estimand(t, meta, quantity, mark_inf = FALSE) },
+      theta_hat)
+    se <- vapply(seq_len(nrow(G)), function(m) {
+      g <- G[m, ]
+      sqrt(as.numeric(t(g) %*% V %*% g))
+    }, numeric(1))
+    # A non-finite point estimate (analytic Inf) has no meaningful SE.
+    se[!is.finite(est)] <- NA_real_
+  }
+
+  tab <- .bnb_me_tidy(names(est), as.numeric(est), se, digits)
+  base <- if (quantity == "me") {
+    ifelse(meta$is_bin, "binary(0->1)", "continuous")
+  } else {
+    ifelse(meta$is_bin, "semi-elasticity", "elasticity")
+  }
+  tab$var_type <- ifelse(meta$is_rand, paste0(base, " (random)"), base)
+
+  if (print_output) {
+    label <- if (quantity == "me") "Marginal effects" else "Elasticities"
+    cat(sprintf("\n--- %s (RP integrated mean) for %s (%s) ---\n",
+                label, resp_name, type))
+    .bnb_me_print(tab, digits = digits)
+    if (quantity == "me") {
+      cat("continuous: dE[Y]/dx_j = mean_r coef_rj * exp(lp_r)\n")
+      cat("binary: E[Y|x_j=1] - E[Y|x_j=0] (integrated over draws)\n")
+    } else {
+      cat("continuous: elasticity = x_j * (dE[Y]/dx_j) / E[Y]\n")
+      cat("binary: semi-elasticity = E[Y|x_j=1]/E[Y|x_j=0] - 1\n")
+    }
+    cat("'(random)' vars use the draw-integrated formula.\n")
+  }
+  tab
+}
+
+#' Marginal effects for a random-parameter bivariate NB model
+#'
+#' Average marginal effects (AME) or marginal effects at the mean (MEM) for each
+#' margin of an [fit_rpbnb()] fit, built on the Monte-Carlo integrated population
+#' mean \eqn{\mu_i = E_\beta[\exp(x_i'\beta)]} (the same estimand as
+#' [predict.rpbnb_fit()], reusing the fit's stored draws). Continuous effects are
+#' \eqn{\partial \mu_i/\partial x_{ij} = \mathrm{mean}_r\, \mathrm{coef}_{rj}
+#' \exp(\mathrm{lp}_{ir})} (the realized coefficient per draw, so random and fixed
+#' columns are handled uniformly); binary (0/1) effects are the integrated
+#' discrete difference \eqn{E[Y|x_j=1] - E[Y|x_j=0]}. Standard errors use a
+#' numeric delta method over the equation's mean and log-scale parameters.
+#'
+#' @param fit An `rpbnb_fit` object from [fit_rpbnb()].
+#' @param which Which margin(s): "y1", "y2", "both", or "all".
+#' @param type "AME" (average over the sample) or "MEM" (effect at the mean row).
+#' @param vars Optional variable names or indices to restrict output.
+#' @param include_intercept Logical; include the intercept term.
+#' @param digits Number of decimal places for printed output.
+#' @param print_output Logical; if `FALSE`, suppress printing.
+#' @return A data frame (single margin, invisibly) or a named list of data frames
+#'   (`both`/`all`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
+#'   `Signif`, `var_type`.
+#' @seealso [bnb_marginal_effects()] for fixed-coefficient `bnb_fit` models.
+#' @export
+#' @examples
+#' sim <- simulate_rpbnb(n = 400,
+#'   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+#'   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+#'   random_1 = list(x1 = list(sd = 0.5)),
+#'   dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+#' fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+#'                  draws = 100)
+#' rpbnb_marginal_effects(fit, which = "y1", type = "AME")
+rpbnb_marginal_effects <- function(fit,
+                                   which = c("y1", "y2", "both", "all"),
+                                   type  = c("AME", "MEM"),
+                                   vars  = NULL,
+                                   include_intercept = FALSE,
+                                   digits = 4,
+                                   print_output = TRUE) {
+  stopifnot(inherits(fit, "rpbnb_fit"))
+  which <- match.arg(which)
+  type  <- match.arg(type)
+  if (which %in% c("both", "all")) {
+    return(invisible(list(
+      y1 = .rp_diag_one(fit, 1L, "me", type, vars, include_intercept,
+                        digits, print_output, "y1"),
+      y2 = .rp_diag_one(fit, 2L, "me", type, vars, include_intercept,
+                        digits, print_output, "y2"))))
+  }
+  eq <- if (which == "y1") 1L else 2L
+  invisible(.rp_diag_one(fit, eq, "me", type, vars, include_intercept,
+                         digits, print_output, which))
+}
