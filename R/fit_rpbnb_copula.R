@@ -133,6 +133,8 @@
     formula_1 = formula_1, formula_2 = formula_2,
     draws = draws, draw_type = draw_type, seed = seed,
     ll_trace = ll_trace, convergence = convergence,
-    cop_family = family, call = match.call(), hessian_diag = hdiag
+    cop_family = family, call = match.call(), hessian_diag = hdiag,
+    rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
+                   Z1 = Z1, Z2 = Z2)
   )
 }

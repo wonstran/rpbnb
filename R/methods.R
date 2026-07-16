@@ -114,10 +114,14 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
                  check.names = FALSE)
   }
 
-  # Random coefficient SDs
-  for (nm in grep("^log_sd[12]:", names(cf), value = TRUE)) {
-    val <- exp(cf[[nm]])
-    add_random(sub("^log_sd", "sd", nm), val, val * se_of(nm))  # d(exp)/d. = exp
+  # Random-coefficient scales, all distributions: normal SD (log_sd -> sd),
+  # uniform/triangular half-width (log_w -> w), lognormal log-scale (log_s -> s).
+  scale_pfx <- c(log_sd = "sd", log_w = "w", log_s = "s")
+  for (pfx in names(scale_pfx)) {
+    for (nm in grep(paste0("^", pfx, "[12]:"), names(cf), value = TRUE)) {
+      val <- exp(cf[[nm]])
+      add_random(sub(paste0("^", pfx), scale_pfx[[pfx]], nm), val, val * se_of(nm))
+    }
   }
 
   # Dispersion parameters
@@ -304,18 +308,66 @@ logLik.rpbnb_fit <- function(object, ...) {
             nobs = object$nobs, class = "logLik")
 }
 
+# Integrated (population) mean E[exp(x'beta)] for one RP equation on a design X,
+# averaged over the stored optimization draws. Distribution-aware: uses the same
+# rand_realize() deviations as the fitter, so normal, uniform, triangular, and
+# sign-constrained lognormal random coefficients are all handled correctly (the
+# previous code applied a normal-only 0.5*sd^2*x^2 correction and ignored log_w/
+# log_s scales). For a lognormal coefficient with a positive covariate the
+# population mean can be effectively unbounded; the per-draw exp() is capped at
+# 1e15 to match the fitter, so very large values signal that regime.
+.rp_integrated_mu <- function(X, b, rand_idx, dist, sign, Z, scales) {
+  xb <- as.vector(X %*% b)
+  if (length(rand_idx) == 0 || is.null(Z) || ncol(Z) == 0) return(exp(xb))
+  dev <- rand_realize(Z, dist, sign, b[rand_idx], scales)$dev   # R x q deviations
+  XR  <- X[, rand_idx, drop = FALSE]
+  mu_mat <- vapply(seq_len(nrow(Z)),
+                   function(r) pmin(exp(xb + as.vector(XR %*% dev[r, ])), 1e15),
+                   numeric(nrow(X)))
+  rowMeans(mu_mat)
+}
+
+# Build the integrated mean for equation `eq` (1 or 2) on design matrix X, using
+# the fit's stored random-distribution metadata and draws.
+.rp_predict_mu <- function(object, eq, X) {
+  bpfx <- paste0("b", eq)
+  b <- object$coef[grep(paste0("^", bpfx, ":"), names(object$coef))]
+  names(b) <- sub(paste0("^", bpfx, ":"), "", names(b))
+  b <- b[colnames(X)]                       # align coefficients to design columns
+  if (anyNA(b)) {
+    stop("newdata produces design columns absent from the fitted model: ",
+         paste(colnames(X)[is.na(b)], collapse = ", "),
+         ". Ensure factor levels match the training data.", call. = FALSE)
+  }
+  meta     <- object$rp_meta
+  rand_idx <- if (eq == 1) object$rand_idx1 else object$rand_idx2
+  if (is.null(meta) || length(rand_idx) == 0) return(exp(as.vector(X %*% b)))
+  dist <- if (eq == 1) meta$dist1 else meta$dist2
+  sgn  <- if (eq == 1) meta$sign1 else meta$sign2
+  Z    <- if (eq == 1) meta$Z1 else meta$Z2
+  cols <- colnames(X)[rand_idx]
+  scales <- vapply(seq_along(rand_idx), function(j) {
+    lbl <- rand_dist_registry[[dist[j]]]$scale_label
+    exp(object$coef[[paste0(lbl, eq, ":", cols[j])]])
+  }, numeric(1))
+  .rp_integrated_mu(X, b, rand_idx, dist, sgn, Z, scales)
+}
+
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
   if (is.null(newdata)) {
-    if (is.null(object$mu1)) {
-      stop("predict() without 'newdata' is not supported for copula fits ",
-           "(fitted means are not stored); pass newdata.", call. = FALSE)
+    if (!is.null(object$mu1)) return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+    # Copula fits do not cache fitted means; recompute from the stored design.
+    if (is.null(object$rp_meta)) {
+      stop("predict() without 'newdata' is unavailable for this fit ",
+           "(no fitted means or draws stored); pass newdata.", call. = FALSE)
     }
-    return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+    return(data.frame(mu1 = .rp_predict_mu(object, 1, object$X1),
+                      mu2 = .rp_predict_mu(object, 2, object$X2)))
   }
   data.frame(
-    mu1 = .bnb_predict_mu(object$formula_1, object$coef, "b1", "log_sd1", newdata),
-    mu2 = .bnb_predict_mu(object$formula_2, object$coef, "b2", "log_sd2", newdata)
+    mu1 = .rp_predict_mu(object, 1, stats::model.matrix(object$formula_1[-2L], newdata)),
+    mu2 = .rp_predict_mu(object, 2, stats::model.matrix(object$formula_2[-2L], newdata))
   )
 }
 

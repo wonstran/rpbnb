@@ -10,7 +10,8 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           m1, m2, lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                           rand_idx1, rand_idx2, formula_1, formula_2,
                           draws, draw_type, seed, ll_trace, convergence,
-                          cop_family = NULL, call, hessian_diag = NULL) {
+                          cop_family = NULL, call, hessian_diag = NULL,
+                          rp_meta = NULL) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
@@ -22,7 +23,11 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          ll_trace = ll_trace, convergence = convergence,
          cop_family = cop_family,
          AIC = -2 * logLik + 2 * npar, BIC = -2 * logLik + log(nobs) * npar,
-         call = call, hessian_diag = hessian_diag),
+         call = call, hessian_diag = hessian_diag,
+         # Random-coefficient distributions, signs, and the optimization draws:
+         # everything predict() needs to reproduce the integrated (population)
+         # mean E[exp(x'beta)] for any supported distribution on new data.
+         rp_meta = rp_meta),
     class = "rpbnb_fit"
   )
 }
@@ -377,5 +382,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     formula_1 = formula_1, formula_2 = formula_2,
     draws = n_draws, draw_type = draw_type, seed = seed,
     ll_trace = ll_trace, convergence = convergence, call = match.call(),
-    hessian_diag = hdiag)
+    hessian_diag = hdiag,
+    rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
+                   Z1 = Z1_opt, Z2 = Z2_opt))
 }
