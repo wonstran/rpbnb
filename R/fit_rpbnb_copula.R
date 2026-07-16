@@ -48,10 +48,15 @@
                  if (q1 > 0) scale_lab(dist1, paste0("1:", colnames(X1)[rand_idx1])),
                  if (q2 > 0) scale_lab(dist2, paste0("2:", colnames(X2)[rand_idx2])),
                  "log_m1", "log_m2", "z_theta")
-  if (is.null(start))
+  # Zero mean-coefficient starts (consistent with the Famoye RP path); user
+  # starts are validated for length and finiteness.
+  if (is.null(start)) {
     start <- c(rep(0, k1 + k2),
                if (q1 > 0) rep(log(0.2), q1), if (q2 > 0) rep(log(0.2), q2),
                log(0.5), log(0.5), 0)
+  } else {
+    .check_start(start, k1 + k2 + q1 + q2 + 3L, "start")
+  }
   names(start) <- par_names
 
   se_method <- if (is.null(control$se_method)) "numeric" else control$se_method

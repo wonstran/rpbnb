@@ -26,6 +26,37 @@ test_that("fit_rpbnb rejects a dependence string that is not 'famoye'", {
   )
 })
 
+test_that("fit_bnb validates a user-supplied start vector", {
+  set.seed(4)
+  d <- data.frame(x = rnorm(200))
+  d$y1 <- rnbinom(200, size = 2, mu = exp(0.2 + 0.1 * d$x))
+  d$y2 <- rnbinom(200, size = 2, mu = exp(0.1 - 0.1 * d$x))
+  # famoye needs 4 betas + log_m1 + log_m2 + z_lambda = 7 values
+  expect_error(
+    fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye", start = c(1, 2, 3)),
+    "length"
+  )
+  expect_error(
+    fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye",
+            start = c(0, 0, 0, 0, log(0.5), log(0.5), NA)),
+    "finite"
+  )
+})
+
+test_that(".marginal_nb_starts recovers the glm.nb marginal coefficients", {
+  skip_if_not_installed("MASS")
+  set.seed(5)
+  n <- 500
+  x <- rnorm(n)
+  X1 <- cbind(1, x); X2 <- cbind(1, x)
+  Y1 <- rnbinom(n, size = 2, mu = exp(0.3 + 0.4 * x))
+  Y2 <- rnbinom(n, size = 3, mu = exp(0.1 - 0.2 * x))
+  st <- rpbnb:::.marginal_nb_starts(Y1, X1, Y2, X2)
+  g1 <- MASS::glm.nb(Y1 ~ X1 - 1)
+  expect_equal(st$b1, unname(coef(g1)), tolerance = 1e-8)
+  expect_equal(st$log_m1, log(1 / g1$theta), tolerance = 1e-8)
+})
+
 test_that("simulate_rpbnb_copula validates dispersion, random names, and scales", {
   b1 <- c("(Intercept)" = 0.2, x1 = 0.3)
   b2 <- c("(Intercept)" = 0.1, x1 = 0.2)

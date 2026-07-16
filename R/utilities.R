@@ -17,6 +17,39 @@ signif_stars <- function(p) {
   ))
 }
 
+#' Marginal NB2 starting values for the two equations.
+#'
+#' Fits each margin with `MASS::glm.nb` (no intercept term added -- the design
+#' matrices already carry their own), returning regression-coefficient and
+#' log-dispersion starts. Falls back to zeros / log(0.5) if a margin fails.
+#' @return list(b1, b2, log_m1, log_m2).
+#' @keywords internal
+#' @noRd
+.marginal_nb_starts <- function(Y1, X1, Y2, X2) {
+  g1 <- tryCatch(MASS::glm.nb(Y1 ~ X1 - 1), error = function(e) NULL)
+  g2 <- tryCatch(MASS::glm.nb(Y2 ~ X2 - 1), error = function(e) NULL)
+  list(
+    b1     = if (!is.null(g1)) unname(stats::coef(g1)) else rep(0, NCOL(X1)),
+    b2     = if (!is.null(g2)) unname(stats::coef(g2)) else rep(0, NCOL(X2)),
+    log_m1 = if (!is.null(g1)) log(1 / g1$theta) else log(0.5),
+    log_m2 = if (!is.null(g2)) log(1 / g2$theta) else log(0.5)
+  )
+}
+
+#' Validate a user-supplied starting-value vector before optimization.
+#' @keywords internal
+#' @noRd
+.check_start <- function(start, npar, label = "start") {
+  if (!is.numeric(start) || length(start) != npar) {
+    stop("`", label, "` must be a numeric vector of length ", npar, " (got ",
+         length(start), ").", call. = FALSE)
+  }
+  if (any(!is.finite(start))) {
+    stop("`", label, "` must contain only finite values.", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 #' Invert an observed-information matrix, recording curvature diagnostics.
 #'
 #' `info` is the (symmetric) observed information -Hessian (or an OPG S'S). The
