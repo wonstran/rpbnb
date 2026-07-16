@@ -2,7 +2,7 @@
 # comments/review_2026-07-15-17-32-20.md).
 
 test_that("predict integrated means match stored draw-averaged means (uniform RP)", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb(400,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.5),
     beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
@@ -22,7 +22,7 @@ test_that("predict integrated means match stored draw-averaged means (uniform RP
 })
 
 test_that("natural-scale summary includes a uniform (log_w) random-scale row", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb(300,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.5),
     beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
@@ -37,7 +37,7 @@ test_that("natural-scale summary includes a uniform (log_w) random-scale row", {
 })
 
 test_that("predict(fit) and predict(fit, newdata=training) agree for lognormal, both signs", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   for (sgn in c(1, -1)) {
     sim <- simulate_rpbnb(300,
       beta1 = c("(Intercept)" = 0.1, x1 = 0.2),
@@ -59,7 +59,7 @@ test_that("predict(fit) and predict(fit, newdata=training) agree for lognormal, 
 })
 
 test_that("predict works for a one-row newdata (Famoye RP)", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb(300,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.5),
     beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
@@ -79,7 +79,7 @@ test_that("predict works for a one-row newdata (Famoye RP)", {
 })
 
 test_that("triangular RP prediction matches stored means and tags estimand metadata", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb(300,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.4),
     beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
@@ -97,7 +97,7 @@ test_that("triangular RP prediction matches stored means and tags estimand metad
 })
 
 test_that("lognormal RP prediction returns Inf where the population mean is infinite", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb(300,
     beta1 = c("(Intercept)" = 0.1, x1 = 0.2),
     beta2 = c("(Intercept)" = 0.1, x1 = -0.1),
@@ -115,7 +115,7 @@ test_that("lognormal RP prediction returns Inf where the population mean is infi
 })
 
 test_that("lognormal copula RP prediction returns Inf where infinite (both signs, both branches)", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   for (sgn in c(1, -1)) {
     sim <- simulate_rpbnb_copula(300,
       beta1 = c("(Intercept)" = 0.1, x1 = 0.2),
@@ -137,7 +137,7 @@ test_that("lognormal copula RP prediction returns Inf where infinite (both signs
 })
 
 test_that("predict works for a one-row newdata (copula RP)", {
-  skip_on_cran()
+  skip_on_cran(); skip_slow()   # end-to-end fits; logic covered by test-predict-unit.R
   sim <- simulate_rpbnb_copula(300,
     beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
     beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
