@@ -20,8 +20,14 @@ make_rp_fixture <- function(dist1 = "uniform", sign1 = 1, R = 64L) {
   Z1 <- matrix((seq_len(R) - 0.5) / R, ncol = 1L)   # deterministic uniform grid
   xtrain <- data.frame(x1 = seq(-1, 1, length.out = 10))
   X1 <- stats::model.matrix(~ x1, xtrain)
+  # A small positive-definite (diagonal) covariance over ALL coefficients, so
+  # the delta-method SE path in the interpretation functions has a finite,
+  # well-conditioned vcov to subset. Values are arbitrary but realistic.
+  V <- diag(0.01, length(coef))
+  dimnames(V) <- list(names(coef), names(coef))
+  se <- sqrt(diag(V)); names(se) <- names(coef)
   structure(list(
-    coef = coef,
+    coef = coef, vcov = V, se = se,
     rand_idx1 = 2L, rand_idx2 = integer(0),
     rp_meta = list(dist1 = dist1, dist2 = character(0),
                    sign1 = sign1, sign2 = numeric(0),
