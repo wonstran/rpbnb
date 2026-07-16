@@ -400,9 +400,12 @@ RP_PRED_CAP <- 1e15
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
   if (is.null(newdata)) {
-    if (!is.null(object$mu1)) return(.rp_pred_df(object$mu1, object$mu2, object))
-    # Copula fits do not cache fitted means; recompute from the stored design.
+    # Recompute from the stored design so the SAME estimand (including the
+    # lognormal Inf correction in .rp_integrated_mu) is applied as with an
+    # explicit newdata. The cached object$mu1/mu2 are the capped finite-draw
+    # means and would silently disagree on analytically-infinite rows.
     if (is.null(object$rp_meta)) {
+      if (!is.null(object$mu1)) return(.rp_pred_df(object$mu1, object$mu2, object))
       stop("predict() without 'newdata' is unavailable for this fit ",
            "(no fitted means or draws stored); pass newdata.", call. = FALSE)
     }
