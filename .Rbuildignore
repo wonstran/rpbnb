@@ -4,6 +4,9 @@
 ^\.git$
 ^\.gitignore$
 ^\.claude$
+^\.superpowers$
+^\.agents$
+^pics$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
