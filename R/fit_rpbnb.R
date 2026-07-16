@@ -105,7 +105,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   spec1 <- parse_rand_spec(random_1)
   spec2 <- parse_rand_spec(random_2)
   n_draws      <- draws
-  n_draws_hess <- control$draws_hessian
   halton_burn  <- control$halton_burn
   n_cores      <- control$n_cores
   compute_se   <- control$compute_se
@@ -276,24 +275,19 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     inv <- .observed_info_vcov(info, par_names, label = "RP-BNB (analytic Hessian)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (isTRUE(compute_se)) {
-    set.seed(seed + 1L)
-    if ((q1 + q2) > 0) {
-      Z_h  <- halton_uniform(n_draws_hess, q1 + q2,
-                             burn = max(50, floor(halton_burn / 3)))
-      Z1_h <- if (q1 > 0) Z_h[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)
-      Z2_h <- if (q2 > 0) Z_h[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws_hess, ncol = 0)
-    } else {
-      Z1_h <- matrix(0, nrow = n_draws_hess, ncol = 0)
-      Z2_h <- matrix(0, nrow = n_draws_hess, ncol = 0)
-    }
-
+    # Same-draw curvature: differentiate the frozen-bounds objective on the SAME
+    # optimization draws (Z1_opt/Z2_opt) that produced the estimate, so the
+    # numeric Hessian is the curvature of the actual optimized simulated
+    # likelihood -- matching the analytic and OPG paths. (Previously this path
+    # resimulated a smaller seed+1 Halton set, so `draws_hessian` no longer
+    # affects the Famoye numeric SEs.)
     cl_h <- NULL
     if (use_parallel) {
       cl_h <- parallel::makeCluster(max(1L, as.integer(min(n_cores, 4))))
       on.exit({ try(parallel::stopCluster(cl_h), silent = TRUE) }, add = TRUE)
       y1 <- Y1; y2 <- Y2
       parallel::clusterExport(cl_h,
-        c("X1", "X2", "XR1", "XR2", "y1", "y2", "Z1_h", "Z2_h",
+        c("X1", "X2", "XR1", "XR2", "y1", "y2", "Z1_opt", "Z2_opt",
           "c_val", "lambda_bounds_vec", "nb_logpmf_y_mu_r", "dct_dm",
           "dc_dbeta_mat", "d_const"),
         envir = environment())
@@ -301,13 +295,13 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
     ll_fb <- if (use_cpp)
       function(p) bnbr_rp_ll_fixed_bounds_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
-                                              rand_idx1, rand_idx2, Z1_h, Z2_h,
+                                              rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                                               lamLo_h, lamHi_h,
                                               dist1, dist2, sign1, sign2,
                                               n_threads = cpp_threads)
     else
       function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
-                                          rand_idx1, rand_idx2, Z1_h, Z2_h,
+                                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                                           lamLo_h, lamHi_h,
                                           dist1, dist2, sign1, sign2,
                                           cl = cl_h)

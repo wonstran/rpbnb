@@ -168,6 +168,23 @@ test_that("fit_rpbnb compute_se=TRUE yields a finite covariance and SEs", {
   expect_true(all(diag(V) >= 0))
 })
 
+test_that("numeric RP SEs use the optimization draws (independent of draws_hessian)", {
+  skip_on_cran()
+  sim <- simulate_rpbnb(n = 300,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.3),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.2),
+    random_1 = list(x1 = list(sd = 0.4)),
+    dispersion = c(m1 = 0.4, m2 = 0.4), lambda = 0, seed = 9)
+  base <- function(dh) fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+    draws = 120, seed = 4,
+    control = rpbnb_control(se_method = "numeric", draws_hessian = dh, print_level = 0))
+  f_small <- base(30)
+  f_large <- base(300)
+  # The numeric Hessian is now taken with the SAME optimization draws that
+  # produced the estimate, so it no longer depends on draws_hessian.
+  expect_equal(unname(f_small$se), unname(f_large$se), tolerance = 1e-8)
+})
+
 test_that("fit_rpbnb parallel path matches sequential and respects workers", {
   skip_on_cran()
   skip_if_not_installed("parallel")

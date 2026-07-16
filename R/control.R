@@ -5,8 +5,10 @@
 #' @param iterlim Maximum optimizer iterations.
 #' @param reltol Relative convergence tolerance.
 #' @param print_level Verbosity passed to the optimizer (0 = silent, default = 2 for detailed progress).
-#' @param draws_hessian Number of simulation draws used for the random-parameter
-#'   Hessian (smaller than the optimization draws for speed). Ignored by [fit_bnb()].
+#' @param draws_hessian Retained for backward compatibility but currently unused:
+#'   the random-parameter numeric Hessian is now taken with the same optimization
+#'   draws that produced the estimate (same-draw curvature), so it no longer
+#'   resimulates a separate Hessian draw set. Ignored by [fit_bnb()].
 #' @param halton_burn Number of leading Halton points discarded before forming
 #'   the simulation draws.
 #' @param n_cores Worker processes for the optional cluster path (1 = sequential).
