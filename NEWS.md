@@ -33,8 +33,28 @@
   positive definite.
 * `fit_rpbnb()` numeric standard errors use the optimization draws (same-draw
   curvature); `draws_hessian` is retained but unused.
-* `rpbnb_control(method=)` accepts only the implemented `"BFGS"`. User-supplied
-  `start` vectors are validated for length and finiteness.
+* `rpbnb_control(method=)` accepts only the implemented `"BFGS"`.
+* Starting values: `start` may be positional or **named** (reordered to the
+  canonical order; named partial starts merge into the defaults; unknown or
+  duplicate names are rejected). With no user start, `fit_bnb(dependence =
+  "famoye")` uses a **multi-start** policy — it optimizes from both a zero start
+  and marginal `glm.nb` starts and keeps the best converged objective.
+
+## Follow-up review fixes (2026-07-15 23:07 review)
+
+* `predict.rpbnb_fit()` no longer errors on a one-row `newdata`.
+* `predict.rpbnb_fit()` returns `Inf` (with a warning) where the population mean
+  is analytically infinite (a lognormal random coefficient with sign × covariate
+  > 0), and tags the output with `estimand`, `n_draws`, and `per_draw_cap`
+  attributes.
+* Random-coefficient scales must be finite and strictly positive (previously
+  `Inf`, zero, and negative scales were accepted).
+* `summary()$coefficients` (the raw table) also suppresses Wald p-values for the
+  `log_sd`/`log_w`/`log_s`/`log_m` nuisance parameters.
+* `bnb_gof()` requires the null model to converge, not merely to return a finite
+  log-likelihood.
+* `.superpowers/` is excluded from the source tarball.
+* Validation studies archived under `inst/validation/`.
 
 # rpbnb 0.1.0
 

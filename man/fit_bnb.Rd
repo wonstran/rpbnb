@@ -23,7 +23,14 @@ margins), "famoye" (Famoye/Sarmanov bivariate NB), or a \code{\link[=copula]{cop
 (Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
 parameter is estimated).}
 
-\item{start}{Optional starting parameter vector.}
+\item{start}{Optional starting parameter vector. May be positional (length
+equal to the number of parameters) or named; a named vector is reordered to
+the canonical parameter order and a named partial vector is merged into the
+defaults (unknown or duplicate names are rejected). When \code{start} is \code{NULL},
+the famoye path uses a multi-start policy: it optimizes from both an all-zero
+mean-coefficient start and marginal \code{glm.nb} starts and keeps the better
+converged objective (the frozen-bounds gradient makes the objective
+start-sensitive and neither start dominates).}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
 both use BFGS, the only optimizer \code{control$method} accepts.}
