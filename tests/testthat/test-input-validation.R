@@ -128,4 +128,16 @@ test_that("random-coefficient scales must be finite and strictly positive", {
     invisible(simulate_rpbnb(50, b1, b2, random_1 = list(x1 = list(sd = 0.4)),
                              seed = 1))
   )
+  # A vector-valued scale must be rejected, not silently truncated to its first
+  # element.
+  expect_error(
+    simulate_rpbnb(50, b1, b2, random_1 = list(x1 = list(sd = c(0.2, 0.3))),
+                   seed = 1),
+    "single|length|scalar", ignore.case = TRUE
+  )
+  expect_error(
+    simulate_rpbnb(50, b1, b2, random_1 = list(x1 = list(sd = numeric(0))),
+                   seed = 1),
+    "single|length|scalar", ignore.case = TRUE
+  )
 })

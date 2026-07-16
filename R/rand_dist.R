@@ -111,6 +111,11 @@ parse_rand_spec <- function(spec) {
     if (!this_sign %in% c(-1, 1)) {
       stop("`sign` must be -1 or 1 for '", nm[i], "'.", call. = FALSE)
     }
+    if (length(this_scale) != 1L || !is.numeric(this_scale)) {
+      stop("`scale`/`sd` for '", nm[i],
+           "' must be a single numeric value (got length ", length(this_scale),
+           ").", call. = FALSE)
+    }
     dist[i] <- d; sgn[i] <- this_sign; scale[i] <- this_scale
   }
   list(names = nm, dist = dist, sign = sgn, scale = scale)
