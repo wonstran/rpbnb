@@ -34,6 +34,17 @@ test_that("summary surfaces natural-scale dispersion and dependence with finite 
   expect_true(is.finite(m1_row$StdErr))
 })
 
+test_that("raw summary()$coefficients suppresses Wald tests for log-scale/dispersion", {
+  ff  <- make_small_bnb()
+  cm  <- summary(ff)$coefficients
+  m1  <- cm[cm$Parameter == "log_m1", ]
+  b1x <- cm[cm$Parameter == "b1:x", ]
+  # log_m1 = exp-transformed dispersion: no zero-null Wald test
+  expect_true(is.na(m1$z) && is.na(m1$p))
+  # regression coefficient keeps its test
+  expect_true(is.finite(b1x$z) && is.finite(b1x$p))
+})
+
 test_that("natural-scale scale/dispersion rows carry no Wald test; lambda keeps one", {
   ff  <- make_small_bnb()
   nat <- summary(ff)$natural

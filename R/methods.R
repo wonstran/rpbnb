@@ -49,12 +49,20 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   )
 }
 
-# Shared builder: coefficient matrix Estimate/SE/z/p with stars.
+# Shared builder: coefficient matrix Estimate/SE/z/p with stars. The z/p/stars
+# are suppressed (NA) for positive-scale/dispersion nuisance parameters on the
+# raw (log) scale -- log_sd, log_w, log_s, log_m -- because testing e.g.
+# log_sd = 0 tests that the native SD equals one, not that the variance is zero;
+# it is not a zero-null Wald test. Regression coefficients and the unconstrained
+# dependence parameters keep their tests.
 .coef_matrix <- function(object) {
   est <- object$coef
   se  <- if (is.null(object$se)) rep(NA_real_, length(est)) else object$se[names(est)]
   z   <- est / se
   p   <- 2 * stats::pnorm(-abs(z))
+  no_test <- grepl("^log_(sd|w|s|m)", names(est))
+  z[no_test] <- NA_real_
+  p[no_test] <- NA_real_
   data.frame(Parameter = names(est), Estimate = as.numeric(est),
              StdErr = as.numeric(se), z = as.numeric(z), p = as.numeric(p),
              Signif = signif_stars(p), row.names = NULL, check.names = FALSE)
@@ -308,23 +316,45 @@ logLik.rpbnb_fit <- function(object, ...) {
             nobs = object$nobs, class = "logLik")
 }
 
-# Integrated (population) mean E[exp(x'beta)] for one RP equation on a design X,
-# averaged over the stored optimization draws. Distribution-aware: uses the same
-# rand_realize() deviations as the fitter, so normal, uniform, triangular, and
-# sign-constrained lognormal random coefficients are all handled correctly (the
-# previous code applied a normal-only 0.5*sd^2*x^2 correction and ignored log_w/
-# log_s scales). For a lognormal coefficient with a positive covariate the
-# population mean can be effectively unbounded; the per-draw exp() is capped at
-# 1e15 to match the fitter, so very large values signal that regime.
+# Population mean E[exp(x'beta)] for one RP equation on a design X, ESTIMATED by
+# a Monte Carlo average over the stored optimization draws (RP_PRED_CAP caps each
+# per-draw exp() as a numerical guard). Distribution-aware via the same
+# rand_realize() deviations the fitter uses, so normal, uniform, triangular, and
+# sign-constrained lognormal random coefficients are all handled (the previous
+# code applied a normal-only 0.5*sd^2*x^2 correction and ignored log_w/log_s).
+#
+# The population mean is analytically INFINITE for a lognormal random coefficient
+# j on observation i whenever sign_j * X_ij > 0 (the coefficient exp() term makes
+# the linear predictor grow without bound over the mixing density). Those rows
+# are returned as Inf with a warning rather than a finite, cap-dependent average.
+RP_PRED_CAP <- 1e15
 .rp_integrated_mu <- function(X, b, rand_idx, dist, sign, Z, scales) {
   xb <- as.vector(X %*% b)
   if (length(rand_idx) == 0 || is.null(Z) || ncol(Z) == 0) return(exp(xb))
   dev <- rand_realize(Z, dist, sign, b[rand_idx], scales)$dev   # R x q deviations
   XR  <- X[, rand_idx, drop = FALSE]
   mu_mat <- vapply(seq_len(nrow(Z)),
-                   function(r) pmin(exp(xb + as.vector(XR %*% dev[r, ])), 1e15),
+                   function(r) pmin(exp(xb + as.vector(XR %*% dev[r, ])), RP_PRED_CAP),
                    numeric(nrow(X)))
-  rowMeans(mu_mat)
+  # vapply simplifies to a vector when nrow(X) == 1; force an nrow(X) x R matrix
+  # so rowMeans() (per-observation mean over draws) works for a single row too.
+  mu_mat <- matrix(mu_mat, nrow = nrow(X))
+  mu <- rowMeans(mu_mat)
+
+  # Analytic infinities: a lognormal coefficient with sign_j * X_ij > 0.
+  inf_rows <- logical(nrow(X))
+  for (j in seq_along(rand_idx)) {
+    if (identical(dist[j], "lognormal")) {
+      inf_rows <- inf_rows | (sign[j] * X[, rand_idx[j]] > 0)
+    }
+  }
+  if (any(inf_rows)) {
+    mu[inf_rows] <- Inf
+    warning(sum(inf_rows), " observation(s) have an analytically infinite ",
+            "population mean (a lognormal random coefficient with sign * covariate ",
+            "> 0); returning Inf for those rows.", call. = FALSE)
+  }
+  mu
 }
 
 # Build the integrated mean for equation `eq` (1 or 2) on design matrix X, using
@@ -353,21 +383,36 @@ logLik.rpbnb_fit <- function(object, ...) {
   .rp_integrated_mu(X, b, rand_idx, dist, sgn, Z, scales)
 }
 
+# Assemble the predict() data frame and tag it with the estimand definition and
+# the simulation settings that produced it, so the quantity is self-describing.
+.rp_pred_df <- function(mu1, mu2, object) {
+  n_draws <- if (!is.null(object$rp_meta$Z1)) nrow(object$rp_meta$Z1) else object$draws
+  structure(
+    data.frame(mu1 = mu1, mu2 = mu2),
+    estimand = paste0("population mean E[exp(x'beta)] over the random-coefficient ",
+                      "distribution, estimated by Monte Carlo over the stored ",
+                      "optimization draws (Inf where analytically infinite)"),
+    n_draws  = n_draws,
+    per_draw_cap = RP_PRED_CAP
+  )
+}
+
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
   if (is.null(newdata)) {
-    if (!is.null(object$mu1)) return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+    if (!is.null(object$mu1)) return(.rp_pred_df(object$mu1, object$mu2, object))
     # Copula fits do not cache fitted means; recompute from the stored design.
     if (is.null(object$rp_meta)) {
       stop("predict() without 'newdata' is unavailable for this fit ",
            "(no fitted means or draws stored); pass newdata.", call. = FALSE)
     }
-    return(data.frame(mu1 = .rp_predict_mu(object, 1, object$X1),
-                      mu2 = .rp_predict_mu(object, 2, object$X2)))
+    return(.rp_pred_df(.rp_predict_mu(object, 1, object$X1),
+                       .rp_predict_mu(object, 2, object$X2), object))
   }
-  data.frame(
-    mu1 = .rp_predict_mu(object, 1, stats::model.matrix(object$formula_1[-2L], newdata)),
-    mu2 = .rp_predict_mu(object, 2, stats::model.matrix(object$formula_2[-2L], newdata))
+  .rp_pred_df(
+    .rp_predict_mu(object, 1, stats::model.matrix(object$formula_1[-2L], newdata)),
+    .rp_predict_mu(object, 2, stats::model.matrix(object$formula_2[-2L], newdata)),
+    object
   )
 }
 
