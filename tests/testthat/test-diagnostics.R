@@ -39,6 +39,21 @@ test_that("bnb_gof fits the intercept-only null for a copula fit", {
   expect_true(any(is.finite(g$pseudoR2)))
 })
 
+test_that(".null_model_loglik requires a finite log-likelihood AND convergence", {
+  ok  <- structure(list(logLik = -123.4,
+                        convergence = list(converged = TRUE)), class = "bnb_fit")
+  expect_equal(rpbnb:::.null_model_loglik(ok), -123.4)
+
+  # finite logLik but the optimizer did not converge -> NA + warning
+  bad <- structure(list(logLik = -123.4,
+                        convergence = list(converged = FALSE)), class = "bnb_fit")
+  expect_warning(v <- rpbnb:::.null_model_loglik(bad), "converge")
+  expect_true(is.na(v))
+
+  # NULL (failed) fit -> NA, no error
+  expect_true(is.na(rpbnb:::.null_model_loglik(NULL)))
+})
+
 test_that("bnb_gof returns raw (unclamped) pseudo-R2 when the full model is worse than null", {
   set.seed(11)
   fake <- structure(

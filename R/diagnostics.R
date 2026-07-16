@@ -2,6 +2,23 @@
 # elasticities. Ported from the legacy bnbr_gof / bnbr_me / bnbr_elasticities,
 # adapted to the new bnb_fit object structure (flat coef vector, stored vcov).
 
+# --- internal: usable null-model log-likelihood for pseudo-R^2 --------------
+# Returns the null log-likelihood only if the null fit exists, converged, and is
+# finite; otherwise NA (with a warning for a non-converged/non-finite fit). A
+# finite value from a non-converged optimizer must not be used as the baseline.
+.null_model_loglik <- function(fit_null) {
+  if (is.null(fit_null)) return(NA_real_)
+  ll <- as.numeric(fit_null$logLik)
+  converged <- isTRUE(fit_null$convergence$converged)
+  if (!is.finite(ll) || !converged) {
+    warning("Null model did not converge to a finite log-likelihood",
+            if (!converged) " (optimizer did not converge)" else "",
+            "; pseudo-R^2 set to NA.", call. = FALSE)
+    return(NA_real_)
+  }
+  ll
+}
+
 # --- internal: extract adapted pieces from a bnb_fit ------------------------
 .bnb_diag_parts <- function(fit) {
   p1 <- ncol(fit$X1); p2 <- ncol(fit$X2)
@@ -76,12 +93,7 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
               "); pseudo-R^2 set to NA.", call. = FALSE)
       NULL
     })
-  ll_null <- if (is.null(fit_null)) NA_real_ else as.numeric(fit_null$logLik)
-  if (!is.null(fit_null) && !is.finite(ll_null)) {
-    warning("Null model did not converge to a finite log-likelihood; ",
-            "pseudo-R^2 set to NA.", call. = FALSE)
-    ll_null <- NA_real_
-  }
+  ll_null <- .null_model_loglik(fit_null)
 
   # ---------- Pseudo R^2 ----------
   # Returned raw (not clamped to [0, 1]): a negative McFadden or adjusted value
