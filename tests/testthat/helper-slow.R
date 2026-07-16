@@ -3,8 +3,10 @@
 # is covered fast by fixture-based unit tests (test-predict-unit.R) that build a
 # synthetic rpbnb_fit and never optimize.
 skip_slow <- function() {
-  testthat::skip_if(!nzchar(Sys.getenv("RPBNB_RUN_SLOW")),
-                    "slow end-to-end test (set RPBNB_RUN_SLOW=1 to run)")
+  # Only recognized truthy tokens enable the slow tier; "0", "false", "", etc.
+  # skip, so a conventional false value does not accidentally launch a long run.
+  run <- tolower(Sys.getenv("RPBNB_RUN_SLOW")) %in% c("1", "true", "yes", "on")
+  testthat::skip_if(!run, "slow end-to-end test (set RPBNB_RUN_SLOW=1 to run)")
 }
 
 # Build a synthetic rpbnb_fit with stored draws, for testing predict() semantics

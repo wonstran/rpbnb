@@ -12,6 +12,8 @@
 ^LICENSE\.md$
 ^comments$
 ^results$
+^tools$
+^\.github$
 ^AGENTS\.md$
 ^RPBNB_PARAMETERS_GUIDE\.md$
 ^build_reference\.R$
