@@ -110,15 +110,21 @@ test_that("predict() on a copula fit errors without newdata but works with it", 
                    dependence = copula("normal"),
                    draws = 40, seed = 1,
                    control = rpbnb_control(compute_se = FALSE))
-  expect_true(is.null(fit$mu1))
+  expect_true(is.null(fit$mu1))          # copula fits still do not cache means
   expect_true(is.null(fit$mu2))
 
-  expect_error(predict(fit), "copula")
+  # predict() without newdata now recomputes the integrated means from the
+  # stored design and draws (previously this errored for copula fits).
+  pred0 <- predict(fit)
+  expect_s3_class(pred0, "data.frame")
+  expect_equal(nrow(pred0), nrow(sim$data))
 
   pred <- predict(fit, newdata = sim$data)
   expect_s3_class(pred, "data.frame")
   expect_true(all(c("mu1", "mu2") %in% names(pred)))
   expect_equal(nrow(pred), nrow(sim$data))
+  # Recompute-from-stored-design and predict-on-training-data agree.
+  expect_equal(pred0$mu1, pred$mu1, tolerance = 1e-6)
 })
 
 recover_copula <- function(fam, par, n = 800, draws = 100, seed = 7) {

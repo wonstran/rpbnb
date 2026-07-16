@@ -113,7 +113,7 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
 
 #' OPG (BHHH) covariance from per-observation scores, with curvature diagnostics
 #'
-#' V = (S'S)^{-1}. Delegates to [.observed_info_vcov()] so a singular S'S (e.g. a
+#' V = (S'S)^{-1}. Delegates to `.observed_info_vcov()` so a singular S'S (e.g. a
 #' random-coefficient SD collapsed to ~0, contributing almost no score variation
 #' and hence weakly identified) is repaired non-silently and recorded. Returns
 #' the full list(vcov, se, diag).

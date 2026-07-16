@@ -6,6 +6,36 @@
   list `list(dist = ..., sign = ...)` for sign-constrained lognormal. The
   previous character-vector interface (all-Normal) is fully preserved.
 
+## Review fixes (2026-07-15 model review)
+
+* **Famoye/Sarmanov lower `lambda` bound corrected** (model-validity fix): the
+  admissible lower bound now uses `max((1-c1)(1-c2), c1*c2)`, including the
+  `c1*c2` corner that dominates at low means. The previous bound admitted
+  `lambda` values that made the joint pmf negative in the count tails. Fixed in
+  both the R core and the C++ core. Existing negative-`lambda` estimates should
+  be re-validated.
+* `predict.rpbnb_fit()` now returns the integrated (population) mean
+  `E[exp(x'beta)]`, distribution-aware for normal, uniform, triangular, and
+  lognormal random coefficients, replacing a normal-only correction that ignored
+  non-normal scales. `summary()` reports uniform/triangular and lognormal scale
+  rows.
+* Natural-scale `summary()` no longer attaches Wald p-values / significance
+  stars to positive scale and dispersion parameters (the ratio did not test the
+  boundary null); dependence parameters keep their tests.
+* `copula()` validates native parameters (`|rho| < 1`, Clayton `theta > 0`,
+  finite Frank `theta`); `fit_rpbnb()` rejects a `dependence` that is not
+  `"famoye"` or a `copula()` object; the copula simulator validates dispersions,
+  random names, and scales.
+* `bnb_gof()` refits the correct copula null model and returns pseudo-R-squared
+  values raw (no longer clamped to `[0, 1]`).
+* Hessian repair is no longer silent: SE paths record curvature diagnostics on
+  the fit as `$hessian_diag` and warn when the observed information is not
+  positive definite.
+* `fit_rpbnb()` numeric standard errors use the optimization draws (same-draw
+  curvature); `draws_hessian` is retained but unused.
+* `rpbnb_control(method=)` accepts only the implemented `"BFGS"`. User-supplied
+  `start` vectors are validated for length and finiteness.
+
 # rpbnb 0.1.0
 
 * Initial release. Phase 1 deliverables:
