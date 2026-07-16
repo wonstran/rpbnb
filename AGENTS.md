@@ -94,7 +94,7 @@ Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `rpbnb_control()`, `copula()`,
 
 3. **`rand_dist_registry`** in `rand_dist.R`: adding a new distribution requires a registry entry with `transform`, `grad_xform`, `scale_label`, gradient, and Hessian closures. Both `fit_rpbnb()` and `simulate_rpbnb()` consume this registry — change it in one place and both paths pick it up.
 
-4. **Standard errors for `rpbnb_fit`**: Uses separate (smaller) Halton draws via `draws_hessian` control param. The Hessian draws use `seed + 1` with a different `halton_burn`. Skew in these draws can produce noisy SEs — bump `draws_hessian` if SEs look unstable.
+4. **Standard errors for `rpbnb_fit`**: The numeric/analytic/OPG Hessian is taken with the SAME optimization draws that produced the estimate (same-draw curvature), so the SEs are the curvature of the objective that was optimized. The `draws_hessian` control param is retained for backward compatibility but is a no-op — do NOT reintroduce a separate `seed + 1` Hessian draw set (that was removed intentionally). Repair of a non-positive-definite information matrix is recorded on `fit$hessian_diag` and warned about, not silent.
 
 ## References
 

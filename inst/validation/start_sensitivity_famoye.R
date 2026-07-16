@@ -18,14 +18,27 @@ suppressMessages({
   } else library(rpbnb)
 })
 
-silent <- rpbnb_control(print_level = 0)
+# SEs are irrelevant to the log-likelihood comparison, and the optimizer output
+# is noise here -- fit quietly without computing standard errors.
+silent <- rpbnb_control(compute_se = FALSE, print_level = 0)
 
 fit_from <- function(f1, f2, data, start) {
   fit <- tryCatch(suppressWarnings(
-    fit_bnb(f1, f2, data = data, dependence = "famoye", start = start)),
+    fit_bnb(f1, f2, data = data, dependence = "famoye", start = start,
+            control = silent)),
     error = function(e) NULL)
-  if (is.null(fit)) return(c(ll = NA_real_, conv = NA))
-  c(ll = as.numeric(logLik(fit)), conv = isTRUE(fit$convergence$converged))
+  if (is.null(fit)) return(c(ll = NA_real_, conv = 0))
+  c(ll = as.numeric(logLik(fit)), conv = as.numeric(isTRUE(fit$convergence$converged)))
+}
+
+# Winner gated on convergence: a converged fit beats a non-converged one; among
+# equally-converged fits the higher log-likelihood wins.
+pick_winner <- function(rz, rg) {
+  cz <- isTRUE(rz["conv"] == 1); cg <- isTRUE(rg["conv"] == 1)
+  if (cz && !cg) return("zero")
+  if (cg && !cz) return("glmnb")
+  if (!is.finite(rz["ll"]) || !is.finite(rg["ll"])) return("?")
+  if (rz["ll"] >= rg["ll"]) "zero" else "glmnb"
 }
 
 # Zero vs glm.nb starts for a p1=p2=2 (intercept + one covariate) model.
@@ -58,9 +71,8 @@ for (sc in scenarios) {
   st  <- starts_for(sim$data, y1 ~ x, y2 ~ x)
   rz  <- fit_from(y1 ~ x, y2 ~ x, sim$data, st$zero)
   rg  <- fit_from(y1 ~ x, y2 ~ x, sim$data, st$glmnb)
-  win <- if (!is.finite(rz["ll"]) || !is.finite(rg["ll"])) "?" else
-         if (rz["ll"] >= rg["ll"]) "zero" else "glmnb"
-  cat(sprintf("%-20s %12.3f %12.3f   %s\n", sc$name, rz["ll"], rg["ll"], win))
+  cat(sprintf("%-20s %12.3f %12.3f   %s\n", sc$name, rz["ll"], rg["ll"],
+              pick_winner(rz, rg)))
 }
 
 # rwm1984 reference (docvis/hospvis ~ outwork + kids).
@@ -70,6 +82,6 @@ if (nzchar(f)) {
   st <- starts_for(d, docvis ~ outwork + kids, hospvis ~ outwork + kids)
   rz <- fit_from(docvis ~ outwork + kids, hospvis ~ outwork + kids, d, st$zero)
   rg <- fit_from(docvis ~ outwork + kids, hospvis ~ outwork + kids, d, st$glmnb)
-  win <- if (rz["ll"] >= rg["ll"]) "zero" else "glmnb"
-  cat(sprintf("%-20s %12.3f %12.3f   %s\n", "rwm1984", rz["ll"], rg["ll"], win))
+  cat(sprintf("%-20s %12.3f %12.3f   %s\n", "rwm1984", rz["ll"], rg["ll"],
+              pick_winner(rz, rg)))
 }
