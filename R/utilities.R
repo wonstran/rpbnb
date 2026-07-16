@@ -26,8 +26,10 @@ signif_stars <- function(p) {
 #' @keywords internal
 #' @noRd
 .marginal_nb_starts <- function(Y1, X1, Y2, X2) {
-  g1 <- tryCatch(MASS::glm.nb(Y1 ~ X1 - 1), error = function(e) NULL)
-  g2 <- tryCatch(MASS::glm.nb(Y2 ~ X2 - 1), error = function(e) NULL)
+  # These are starting-value heuristics only; glm.nb's own convergence/iteration
+  # warnings on the marginal fits are irrelevant here, so suppress them.
+  g1 <- suppressWarnings(tryCatch(MASS::glm.nb(Y1 ~ X1 - 1), error = function(e) NULL))
+  g2 <- suppressWarnings(tryCatch(MASS::glm.nb(Y2 ~ X2 - 1), error = function(e) NULL))
   list(
     b1     = if (!is.null(g1)) unname(stats::coef(g1)) else rep(0, NCOL(X1)),
     b2     = if (!is.null(g2)) unname(stats::coef(g2)) else rep(0, NCOL(X2)),

@@ -130,6 +130,22 @@ test_that("fit_bnb famoye reproduces legacy bnbr_v2-4 estimates on rwm1984", {
   expect_equal(as.numeric(logLik(fit)),      -9642.61529867,    tolerance = 1e-3)
 })
 
+test_that("famoye multi-start keeps the better of zero and glm.nb starts", {
+  skip_on_cran()
+  # High-mean DGP where the zero start converges to a worse optimum than the
+  # marginal glm.nb start (see inst/validation/start_sensitivity_famoye.R).
+  sim <- simulate_bnb(3000, c("(Intercept)" = 1.4, x = 0.2),
+                      c("(Intercept)" = 1.2, x = -0.2),
+                      dispersion = c(m1 = 0.5, m2 = 0.5), lambda = 0.8, seed = 202)
+  d <- sim$data
+  ctl <- rpbnb_control(compute_se = FALSE, print_level = 0)   # logLik only
+  f_default <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye", control = ctl)
+  z <- c(0, 0, 0, 0, log(0.5), log(0.5), 0)          # zero start only
+  f_zero <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye", start = z, control = ctl)
+  # Multi-start must reach a strictly better objective than the zero start alone.
+  expect_gt(as.numeric(logLik(f_default)), as.numeric(logLik(f_zero)) + 1)
+})
+
 test_that("fit_bnb independence equals two univariate NB2 fits", {
   skip_if_not(file.exists(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb")))
   skip_if_not_installed("MASS")

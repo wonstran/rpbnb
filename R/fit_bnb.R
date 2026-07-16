@@ -33,22 +33,30 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
 fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
 
-  # NB: marginal glm.nb starts were tried here (P2b) but converged to a WORSE
-  # optimum than the zero start on the rwm1984 reference data (logLik -9675 vs
-  # -9642). The famoye analytic gradient treats the lambda-bounds as frozen, so
-  # the objective is start-sensitive; zero starts are retained until that
-  # gradient approximation is revisited. User-supplied starts are validated.
   par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
                  "log_m1", "log_m2", "z_lambda")
-  start <- .resolve_start(start, c(rep(0, p1 + p2), log(0.5), log(0.5), 0),
-                          par_names, "start")
+  zero_start <- c(rep(0, p1 + p2), log(0.5), log(0.5), 0)
 
-  # --- capture logLik at every evaluation ---
+  # Multi-start policy. The famoye analytic gradient freezes the lambda-bounds,
+  # so the BFGS objective is start-sensitive and no single start dominates
+  # (inst/validation/start_sensitivity_famoye.R: a zero start wins on rwm1984 and
+  # low/mid-mean data; marginal glm.nb starts win on high-mean data). With no
+  # user start, optimize from BOTH candidates and keep the best converged
+  # objective. A user-supplied start (positional or named) is honored as given.
+  if (is.null(start)) {
+    nb   <- .marginal_nb_starts(Y1, X1, Y2, X2)
+    cand <- list(zero  = zero_start,
+                 glmnb = c(nb$b1, nb$b2, nb$log_m1, nb$log_m2, 0))
+  } else {
+    cand <- list(user = .resolve_start(start, zero_start, par_names, "start"))
+  }
+  cand <- lapply(cand, function(s) { names(s) <- par_names; s })
+
+  # --- capture logLik at every evaluation (reset per candidate) ---
   .ll_eval <- numeric(0)
   ll_fun <- function(p) {
     v <- bnb_loglik_vec(p, Y1, Y2, X1, X2)   # per-obs vector
-    s <- sum(v)
-    .ll_eval <<- c(.ll_eval, s)              # record total logLik
+    .ll_eval <<- c(.ll_eval, sum(v))         # record total logLik
     v
   }
   grad_fun <- function(p) bnb_grad_vec(p, Y1, Y2, X1, X2)
@@ -57,13 +65,24 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
                      reltol = control$reltol,
                      printLevel = control$print_level)
 
-  fit <- maxLik::maxLik(
-    logLik  = ll_fun,
-    grad    = grad_fun,      # analytic gradient (frozen-bounds objective)
-    start   = start,
-    method  = "BFGS",
-    control = ml_control
-  )
+  run_one <- function(s0) {
+    .ll_eval <<- numeric(0)
+    f <- tryCatch(
+      maxLik::maxLik(logLik = ll_fun, grad = grad_fun, start = s0,
+                     method = "BFGS", control = ml_control),
+      error = function(e) NULL)
+    if (is.null(f)) NULL else list(fit = f, trace = .ll_eval)
+  }
+  runs <- Filter(Negate(is.null), lapply(cand, run_one))
+  if (!length(runs)) {
+    stop("famoye optimization failed from all candidate starts.", call. = FALSE)
+  }
+  conv <- vapply(runs, function(r) isTRUE(r$fit$code <= 2L), logical(1))
+  pool <- if (any(conv)) runs[conv] else runs      # prefer converged fits
+  lls  <- vapply(pool, function(r) as.numeric(stats::logLik(r$fit)), numeric(1))
+  best <- pool[[which.max(lls)]]
+  fit  <- best$fit
+  .ll_eval <- best$trace                            # trace of the winning run
   par_hat <- stats::coef(fit)
 
   # Back-transform and lambda at fitted bounds
@@ -251,7 +270,14 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   margins), "famoye" (Famoye/Sarmanov bivariate NB), or a [copula()] object
 #'   (Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
 #'   parameter is estimated).
-#' @param start Optional starting parameter vector.
+#' @param start Optional starting parameter vector. May be positional (length
+#'   equal to the number of parameters) or named; a named vector is reordered to
+#'   the canonical parameter order and a named partial vector is merged into the
+#'   defaults (unknown or duplicate names are rejected). When `start` is `NULL`,
+#'   the famoye path uses a multi-start policy: it optimizes from both an all-zero
+#'   mean-coefficient start and marginal `glm.nb` starts and keeps the better
+#'   converged objective (the frozen-bounds gradient makes the objective
+#'   start-sensitive and neither start dominates).
 #' @param control An [rpbnb_control()] object. The famoye and copula estimators
 #'   both use BFGS, the only optimizer `control$method` accepts.
 #' @return An object of class `bnb_fit`.
