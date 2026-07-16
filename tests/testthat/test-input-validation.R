@@ -26,6 +26,37 @@ test_that("fit_rpbnb rejects a dependence string that is not 'famoye'", {
   )
 })
 
+test_that(".resolve_start handles positional, named, partial, and bad starts", {
+  pn      <- c("b1:(Intercept)", "b1:x", "b2:(Intercept)", "log_m1", "log_m2", "z_lambda")
+  default <- c(0, 0, 0, log(0.5), log(0.5), 0)
+
+  # positional: correct length -> named by canonical order
+  r0 <- rpbnb:::.resolve_start(c(1, 2, 3, 4, 5, 6), default, pn)
+  expect_equal(names(r0), pn)
+  expect_equal(unname(r0), c(1, 2, 3, 4, 5, 6))
+
+  # positional wrong length / non-finite -> error
+  expect_error(rpbnb:::.resolve_start(c(1, 2, 3), default, pn), "length")
+  expect_error(rpbnb:::.resolve_start(c(1, 2, 3, 4, 5, NA), default, pn), "finite")
+
+  # fully named but scrambled -> reordered by NAME, not positionally
+  s <- c(z_lambda = 0.9, `b1:x` = 0.5, `b1:(Intercept)` = 0.2,
+         log_m2 = -0.3, `b2:(Intercept)` = 0.1, log_m1 = -0.2)
+  r <- rpbnb:::.resolve_start(s, default, pn)
+  expect_equal(names(r), pn)
+  expect_equal(unname(r[["b1:x"]]), 0.5)
+  expect_equal(unname(r[["z_lambda"]]), 0.9)
+
+  # named partial -> merged into defaults
+  r2 <- rpbnb:::.resolve_start(c(log_m1 = -0.1), default, pn)
+  expect_equal(unname(r2[["log_m1"]]), -0.1)
+  expect_equal(unname(r2[["b1:x"]]), 0)          # default retained
+
+  # unknown / duplicate names -> error
+  expect_error(rpbnb:::.resolve_start(c(bogus = 1), default, pn), "unknown")
+  expect_error(rpbnb:::.resolve_start(c(log_m1 = 1, log_m1 = 2), default, pn), "duplicate")
+})
+
 test_that("fit_bnb validates a user-supplied start vector", {
   set.seed(4)
   d <- data.frame(x = rnorm(200))
@@ -79,5 +110,22 @@ test_that("simulate_rpbnb_copula validates dispersion, random names, and scales"
                           random_1 = list(nope = list(dist = "normal", sd = 0.5)),
                           copula = cop, seed = 1),
     "not in|random name", ignore.case = TRUE
+  )
+})
+
+test_that("random-coefficient scales must be finite and strictly positive", {
+  b1 <- c("(Intercept)" = 0.2, x1 = 0.3)
+  b2 <- c("(Intercept)" = 0.1, x1 = 0.2)
+  bad <- list(Inf, -1, 0, NaN)
+  for (s in bad) {
+    expect_error(
+      simulate_rpbnb(50, b1, b2, random_1 = list(x1 = list(sd = s)), seed = 1),
+      "scale|positive|finite", ignore.case = TRUE
+    )
+  }
+  # A valid positive scale still works.
+  expect_silent(
+    invisible(simulate_rpbnb(50, b1, b2, random_1 = list(x1 = list(sd = 0.4)),
+                             seed = 1))
   )
 })

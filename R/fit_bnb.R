@@ -38,13 +38,10 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
   # -9642). The famoye analytic gradient treats the lambda-bounds as frozen, so
   # the objective is start-sensitive; zero starts are retained until that
   # gradient approximation is revisited. User-supplied starts are validated.
-  if (is.null(start)) {
-    start <- c(rep(0, p1 + p2), log(0.5), log(0.5), 0)
-  } else {
-    .check_start(start, p1 + p2 + 3L, "start")
-  }
-  names(start) <- c(paste0("b1:", cn1), paste0("b2:", cn2),
-                    "log_m1", "log_m2", "z_lambda")
+  par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
+                 "log_m1", "log_m2", "z_lambda")
+  start <- .resolve_start(start, c(rep(0, p1 + p2), log(0.5), log(0.5), 0),
+                          par_names, "start")
 
   # --- capture logLik at every evaluation ---
   .ll_eval <- numeric(0)
@@ -133,14 +130,11 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
 fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
 
-  if (is.null(start)) {
-    nb <- .marginal_nb_starts(Y1, X1, Y2, X2)
-    start <- c(nb$b1, nb$b2, nb$log_m1, nb$log_m2, 0)   # z_theta = 0 (independence)
-  } else {
-    .check_start(start, p1 + p2 + 3L, "start")
-  }
-  names(start) <- c(paste0("b1:", cn1), paste0("b2:", cn2),
-                    "log_m1", "log_m2", "z_theta")
+  nb <- .marginal_nb_starts(Y1, X1, Y2, X2)             # z_theta = 0 (independence)
+  par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
+                 "log_m1", "log_m2", "z_theta")
+  start <- .resolve_start(start, c(nb$b1, nb$b2, nb$log_m1, nb$log_m2, 0),
+                          par_names, "start")
 
   .ll_eval <- numeric(0)
   ll_fun <- function(p) {

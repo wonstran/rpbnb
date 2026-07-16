@@ -171,16 +171,14 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
   # Zero mean-coefficient starts (see fit_bnb_famoye: marginal glm.nb starts
   # converged worse under the frozen-bounds famoye gradient). User starts are
-  # validated for length and finiteness.
-  if (is.null(start)) {
-    start <- c(rep(0, k1 + k2),
-               if (q1 > 0) rep(log(0.2), q1) else NULL,
-               if (q2 > 0) rep(log(0.2), q2) else NULL,
-               log(0.5), log(0.5), 0)
-  } else {
-    .check_start(start, k1 + k2 + q1 + q2 + 3L, "start")
-  }
-  names(start) <- par_names
+  # resolved (positional or named, reordered) against par_names.
+  start <- .resolve_start(
+    start,
+    c(rep(0, k1 + k2),
+      if (q1 > 0) rep(log(0.2), q1) else NULL,
+      if (q2 > 0) rep(log(0.2), q2) else NULL,
+      log(0.5), log(0.5), 0),
+    par_names, "start")
 
   # Preferred fast path: multithreaded (OpenMP) C++ likelihood. When available
   # it supersedes the process-based cluster entirely -- the draw loop is

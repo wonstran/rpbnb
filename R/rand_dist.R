@@ -119,7 +119,8 @@ parse_rand_spec <- function(spec) {
 #' Validate a parsed random spec against the available coefficient names.
 #'
 #' Shared by both simulators: every random name must appear in the coefficient
-#' vector and every random coefficient must carry a finite scale.
+#' vector and every random coefficient must carry a finite, strictly positive
+#' scalar scale.
 #' @keywords internal
 #' @noRd
 chk_rand_spec <- function(spec, bv, lbl) {
@@ -128,9 +129,15 @@ chk_rand_spec <- function(spec, bv, lbl) {
     stop("random name(s) ", paste(miss, collapse = ", "), " not in ", lbl, ".",
          call. = FALSE)
   }
-  if (length(spec$names) && any(is.na(spec$scale))) {
-    stop("each random coefficient needs a `scale` (or `sd`) in ", lbl, ".",
-         call. = FALSE)
+  if (length(spec$names)) {
+    if (any(is.na(spec$scale))) {
+      stop("each random coefficient needs a `scale` (or `sd`) in ", lbl, ".",
+           call. = FALSE)
+    }
+    if (any(!is.finite(spec$scale)) || any(spec$scale <= 0)) {
+      stop("each random-coefficient `scale` (or `sd`) in ", lbl,
+           " must be finite and strictly positive.", call. = FALSE)
+    }
   }
   invisible(TRUE)
 }

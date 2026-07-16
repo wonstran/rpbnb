@@ -36,18 +36,58 @@ signif_stars <- function(p) {
   )
 }
 
-#' Validate a user-supplied starting-value vector before optimization.
+#' Resolve a user-supplied start against the canonical parameter names.
+#'
+#' Returns a finite, canonically-ordered, named start vector:
+#' * `NULL` -> the fitter's `default`, named by `par_names`.
+#' * unnamed (positional) -> must match `length(par_names)`; named in order.
+#' * named -> reordered by name; unknown or duplicate names are rejected, and a
+#'   named *partial* start is merged into `default` (missing entries keep their
+#'   default). This prevents a fully-named vector in the wrong order from being
+#'   silently interpreted positionally.
 #' @keywords internal
 #' @noRd
-.check_start <- function(start, npar, label = "start") {
-  if (!is.numeric(start) || length(start) != npar) {
-    stop("`", label, "` must be a numeric vector of length ", npar, " (got ",
-         length(start), ").", call. = FALSE)
+.resolve_start <- function(start, default, par_names, label = "start") {
+  if (is.null(start)) {
+    names(default) <- par_names
+    return(default)
+  }
+  if (!is.numeric(start)) {
+    stop("`", label, "` must be a numeric vector.", call. = FALSE)
+  }
+  nm <- names(start)
+  if (is.null(nm) || all(!nzchar(nm))) {                 # positional
+    if (length(start) != length(par_names)) {
+      stop("`", label, "` must have length ", length(par_names), " (got ",
+           length(start), "), or be named.", call. = FALSE)
+    }
+    if (any(!is.finite(start))) {
+      stop("`", label, "` must contain only finite values.", call. = FALSE)
+    }
+    names(start) <- par_names
+    return(start)
+  }
+  if (any(!nzchar(nm))) {
+    stop("`", label, "` mixes named and unnamed elements; name all or none.",
+         call. = FALSE)
+  }
+  if (anyDuplicated(nm)) {
+    stop("`", label, "` has duplicate names: ",
+         paste(unique(nm[duplicated(nm)]), collapse = ", "), ".", call. = FALSE)
+  }
+  unknown <- setdiff(nm, par_names)
+  if (length(unknown)) {
+    stop("`", label, "` has unknown parameter name(s): ",
+         paste(unknown, collapse = ", "), ".\nValid names: ",
+         paste(par_names, collapse = ", "), ".", call. = FALSE)
   }
   if (any(!is.finite(start))) {
     stop("`", label, "` must contain only finite values.", call. = FALSE)
   }
-  invisible(TRUE)
+  out <- default
+  names(out) <- par_names
+  out[nm] <- start                                       # merge (full or partial)
+  out
 }
 
 #' Invert an observed-information matrix, recording curvature diagnostics.
