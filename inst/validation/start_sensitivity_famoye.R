@@ -35,6 +35,7 @@ fit_from <- function(f1, f2, data, start) {
 # equally-converged fits the higher log-likelihood wins.
 pick_winner <- function(rz, rg) {
   cz <- isTRUE(rz["conv"] == 1); cg <- isTRUE(rg["conv"] == 1)
+  if (!cz && !cg) return("neither converged")   # no converged candidate to pick
   if (cz && !cg) return("zero")
   if (cg && !cz) return("glmnb")
   if (!is.finite(rz["ll"]) || !is.finite(rg["ll"])) return("?")

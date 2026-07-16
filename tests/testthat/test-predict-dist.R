@@ -114,24 +114,26 @@ test_that("lognormal RP prediction returns Inf where the population mean is infi
   expect_true(all(is.finite(pr$mu1[!pos])))
 })
 
-test_that("lognormal copula RP prediction returns Inf where infinite (both branches agree)", {
+test_that("lognormal copula RP prediction returns Inf where infinite (both signs, both branches)", {
   skip_on_cran()
-  sim <- simulate_rpbnb_copula(300,
-    beta1 = c("(Intercept)" = 0.1, x1 = 0.2),
-    beta2 = c("(Intercept)" = 0.1, x1 = -0.1),
-    random_1 = list(x1 = list(dist = "lognormal", sign = 1, scale = 0.3)),
-    dispersion = c(m1 = 0.5, m2 = 0.6),
-    copula = copula("normal", par = 0.4), seed = 44)
-  d <- sim$data
-  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = d, dependence = copula("normal"),
-    random_1 = list(x1 = list(dist = "lognormal", sign = 1)), random_2 = NULL,
-    draws = 60, seed = 3, control = rpbnb_control(compute_se = FALSE, print_level = 0))
-  pos <- d$x1 > 0
-  p0 <- suppressWarnings(predict(fit))               # copula recomputes from design
-  p1 <- suppressWarnings(predict(fit, newdata = d))
-  expect_equal(p0$mu1, p1$mu1)
-  expect_true(all(is.infinite(p1$mu1[pos])))
-  expect_true(all(is.finite(p1$mu1[!pos])))
+  for (sgn in c(1, -1)) {
+    sim <- simulate_rpbnb_copula(300,
+      beta1 = c("(Intercept)" = 0.1, x1 = 0.2),
+      beta2 = c("(Intercept)" = 0.1, x1 = -0.1),
+      random_1 = list(x1 = list(dist = "lognormal", sign = sgn, scale = 0.3)),
+      dispersion = c(m1 = 0.5, m2 = 0.6),
+      copula = copula("normal", par = 0.4), seed = 44 + (sgn > 0))
+    d <- sim$data
+    fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = d, dependence = copula("normal"),
+      random_1 = list(x1 = list(dist = "lognormal", sign = sgn)), random_2 = NULL,
+      draws = 60, seed = 3, control = rpbnb_control(compute_se = FALSE, print_level = 0))
+    inf_rows <- (sgn * d$x1) > 0
+    p0 <- suppressWarnings(predict(fit))               # copula recomputes from design
+    p1 <- suppressWarnings(predict(fit, newdata = d))
+    expect_equal(p0$mu1, p1$mu1)
+    expect_true(all(is.infinite(p1$mu1[inf_rows])))
+    expect_true(all(is.finite(p1$mu1[!inf_rows])))
+  }
 })
 
 test_that("predict works for a one-row newdata (copula RP)", {
