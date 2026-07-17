@@ -572,10 +572,38 @@ bnb_elasticities <- function(fit,
   out
 }
 
+# One column of the delta-method jacobian: the Richardson-extrapolated
+# derivative of .rp_estimand() with respect to theta_hat[[k]], holding every
+# other parameter fixed. Mathematically identical to column k of
+# numDeriv::jacobian(f_vector, theta_hat) -- verified bit-for-bit against it
+# (max abs diff 0) -- splitting the jacobian into these independent
+# per-parameter calls is what makes the standard-error step embarrassingly
+# parallel across a cluster.
+#
+# Uses a BARE (unqualified) call to .rp_estimand, NOT rpbnb:::.rp_estimand:
+# on a parallel::makeCluster() worker the rpbnb namespace is not loaded (this
+# project's dev workflow runs off pkgload::load_all(), not an installed
+# package), so a `:::`-qualified call fails on a worker. A bare call resolves
+# via ordinary lexical/global-env lookup, which parallel::clusterExport()
+# (see .rp_make_cluster()) satisfies by placing .rp_estimand and its own
+# transitive callees into each worker's .GlobalEnv.
+.rp_jac_col <- function(k, theta_hat, theta_names, meta, quantity) {
+  fk <- function(tk) {
+    t <- theta_hat; t[[k]] <- tk
+    names(t) <- theta_names
+    .rp_estimand(t, meta, quantity, mark_inf = FALSE)
+  }
+  numDeriv::jacobian(fk, theta_hat[[k]])
+}
+
 # Compute point estimates + delta-method SEs for one equation and assemble the
-# tidy output frame (Name/Estimate/StdErr/z/p/Signif/var_type).
+# tidy output frame (Name/Estimate/StdErr/z/p/Signif/var_type). `cl` is an
+# optional parallel cluster (see .rp_make_cluster()); when non-NULL, the SE
+# jacobian is computed as independent per-parameter columns dispatched across
+# the cluster instead of one sequential numDeriv::jacobian() call -- the two
+# paths are numerically identical (see .rp_jac_col()).
 .rp_diag_one <- function(fit, eq, quantity, type, vars, include_intercept,
-                         digits, print_output, resp_name) {
+                         digits, print_output, resp_name, cl = NULL) {
   meta <- .rp_diag_meta(fit, eq, type, vars, include_intercept)
 
   est <- .rp_estimand(fit$coef, meta, quantity, mark_inf = TRUE)
@@ -596,10 +624,16 @@ bnb_elasticities <- function(fit,
     se <- rep(NA_real_, length(est))
   } else {
     theta_hat <- fit$coef[theta_names]
-    G <- numDeriv::jacobian(
-      function(t) { names(t) <- theta_names
-                    .rp_estimand(t, meta, quantity, mark_inf = FALSE) },
-      theta_hat)
+    G <- if (!is.null(cl)) {
+      do.call(cbind, parallel::parLapply(cl, seq_along(theta_hat), .rp_jac_col,
+                                         theta_hat = theta_hat, theta_names = theta_names,
+                                         meta = meta, quantity = quantity))
+    } else {
+      numDeriv::jacobian(
+        function(t) { names(t) <- theta_names
+                      .rp_estimand(t, meta, quantity, mark_inf = FALSE) },
+        theta_hat)
+    }
     se <- vapply(seq_len(nrow(G)), function(m) {
       g <- G[m, ]
       sqrt(as.numeric(t(g) %*% V %*% g))

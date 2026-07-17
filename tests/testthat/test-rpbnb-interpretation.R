@@ -161,6 +161,23 @@ test_that("type='MEM' runs on both functions and returns finite results", {
   }
 })
 
+test_that(".rp_diag_one: parallel (cl=<cluster>) SEs match sequential (cl=NULL) exactly", {
+  skip_if_not_installed("parallel")
+  f <- make_rp_fixture("normal")
+
+  seq_tab <- rpbnb:::.rp_diag_one(f, 1L, "me", "AME", NULL, FALSE, 4, FALSE, "y1")
+
+  cl <- parallel::makeCluster(2)
+  on.exit(parallel::stopCluster(cl))
+  parallel::clusterExport(cl,
+    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry"),
+    envir = asNamespace("rpbnb"))
+  par_tab <- rpbnb:::.rp_diag_one(f, 1L, "me", "AME", NULL, FALSE, 4, FALSE, "y1", cl = cl)
+
+  expect_equal(par_tab$Estimate, seq_tab$Estimate, tolerance = 0)
+  expect_equal(par_tab$StdErr, seq_tab$StdErr, tolerance = 0)
+})
+
 test_that("interpretation runs end-to-end on a real fit (slow)", {
   skip_slow()
   sim <- simulate_rpbnb(n = 500,
