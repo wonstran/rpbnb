@@ -118,3 +118,20 @@ cat("      independent dataset, where lambda ~ 0, n.s.).\n")
 cat("Note: the raw cor(y1, y2) is modest by construction -- the Famoye e^{-y} tilt\n")
 cat("      concentrates dependence in the low-count region, so the structural\n")
 cat("      lambda is strong even though the Pearson correlation looks small.\n")
+
+# ---- 7. Marginal effects & elasticities (AME) -------------------------------
+# Built on the Monte-Carlo integrated mean E[exp(x'beta)] (the same estimand
+# predict() uses), so x_age (random in eq 1) and x_income (random in eq 2) use
+# the draw-integrated formula while every other covariate reduces to the
+# classic fixed-coefficient result. See ?rpbnb_marginal_effects.
+cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+cat("AVERAGE MARGINAL EFFECTS (AME)\n")
+cat(paste(rep("=", 72), collapse = ""), "\n")
+me <- rpbnb_marginal_effects(fit, which = "both", type = "AME",
+                             n_cores = rpbnb_threads())
+
+cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+cat("ELASTICITIES / SEMI-ELASTICITIES (AME)\n")
+cat(paste(rep("=", 72), collapse = ""), "\n")
+el <- rpbnb_elasticities(fit, which = "both", type = "AME",
+                         n_cores = rpbnb_threads())

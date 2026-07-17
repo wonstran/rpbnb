@@ -124,3 +124,20 @@ cat("\nNote: random coefficients sit on CONTINUOUS regressors -- the copula RP\n
 cat("      model is weakly identified when a random coefficient sits on a 0/1\n")
 cat("      dummy (NB dispersion vs random-coefficient scale). The five dummies\n")
 cat("      here are ordinary fixed effects and recover normally.\n")
+
+# ---- 7. Marginal effects & elasticities (AME) -------------------------------
+# Built on the Monte-Carlo integrated mean E[exp(x'beta)] (the same estimand
+# predict() uses), so x_age (random in eq 1) and x_income (random in eq 2) use
+# the draw-integrated formula while every other covariate reduces to the
+# classic fixed-coefficient result. See ?rpbnb_marginal_effects.
+cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+cat("AVERAGE MARGINAL EFFECTS (AME)\n")
+cat(paste(rep("=", 72), collapse = ""), "\n")
+me <- rpbnb_marginal_effects(fit, which = "both", type = "AME",
+                             n_cores = rpbnb_threads())
+
+cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+cat("ELASTICITIES / SEMI-ELASTICITIES (AME)\n")
+cat(paste(rep("=", 72), collapse = ""), "\n")
+el <- rpbnb_elasticities(fit, which = "both", type = "AME",
+                         n_cores = rpbnb_threads())
