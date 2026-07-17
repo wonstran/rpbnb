@@ -146,6 +146,21 @@ test_that("rpbnb_elasticities: NA vcov yields NA SEs with a warning", {
   expect_true(all(is.na(el$StdErr)))
 })
 
+test_that("type='MEM' runs on both functions and returns finite results", {
+  f <- make_rp_fixture("normal")
+  # MEM evaluates at the mean design row (a 1-row design), exercising the
+  # Xbar shape path distinct from AME. Cover both the random (y1) and fully
+  # fixed (y2) equations, and both marginal effects and elasticities.
+  me <- rpbnb_marginal_effects(f, which = "both", type = "MEM", print_output = FALSE)
+  el <- rpbnb_elasticities(f, which = "both", type = "MEM", print_output = FALSE)
+  for (part in list(me$y1, me$y2, el$y1, el$y2)) {
+    expect_s3_class(part, "data.frame")
+    expect_true(all(is.finite(part$Estimate)))
+    expect_true(all(is.finite(part$StdErr) & part$StdErr > 0))
+    expect_equal(part$z, part$Estimate / part$StdErr, tolerance = 1e-12)
+  }
+})
+
 test_that("interpretation runs end-to-end on a real fit (slow)", {
   skip_slow()
   sim <- simulate_rpbnb(n = 500,
