@@ -152,3 +152,26 @@ test_that("rp lognormal analytic-Inf rows give NA pearson residuals with a warni
   expect_true(all(is.na(pr[inf])))
   expect_warning(residuals(f, type = "pearson", margin = "y1"), "infinite")
 })
+
+test_that("plot.bnb_fit runs to a null device and restores par()", {
+  f  <- make_bnb_resid_fixture()
+  op <- par(no.readonly = TRUE)
+  grDevices::pdf(NULL)
+  on.exit({ grDevices::dev.off() }, add = TRUE)
+  expect_error(plot(f, margin = "both", seed = 1), NA)   # NA = expect no error
+  expect_equal(par("mfrow"), op$mfrow)                   # par restored
+})
+
+test_that("plot.rpbnb_fit runs to a null device without error", {
+  f <- make_rp_resid_fixture("normal")
+  grDevices::pdf(NULL)
+  on.exit({ grDevices::dev.off() }, add = TRUE)
+  expect_error(plot(f, margin = "y1", which = c(1, 2), seed = 1), NA)
+})
+
+test_that("plot 'which' subsets panels (single panel, no par change needed)", {
+  f <- make_bnb_resid_fixture()
+  grDevices::pdf(NULL)
+  on.exit({ grDevices::dev.off() }, add = TRUE)
+  expect_error(plot(f, margin = "y1", which = 2, seed = 1), NA)
+})

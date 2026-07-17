@@ -21,7 +21,8 @@ Imports:
     MASS,
     pbivnorm,
     Rcpp,
-    parallel
+    parallel,
+    graphics
 LinkingTo:
     Rcpp
 Suggests:
