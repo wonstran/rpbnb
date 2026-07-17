@@ -145,3 +145,26 @@ test_that("rpbnb_elasticities: NA vcov yields NA SEs with a warning", {
     "standard error")
   expect_true(all(is.na(el$StdErr)))
 })
+
+test_that("interpretation runs end-to-end on a real fit (slow)", {
+  skip_slow()
+  sim <- simulate_rpbnb(n = 500,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.5)),
+    dispersion = c(m1 = 0.4, m2 = 0.5), seed = 3)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 150, seed = 3)
+
+  me <- rpbnb_marginal_effects(fit, which = "both", type = "AME",
+                               print_output = FALSE)
+  el <- rpbnb_elasticities(fit, which = "both", type = "AME",
+                           print_output = FALSE)
+
+  expect_true(all(is.finite(me$y1$Estimate)) && all(is.finite(me$y2$Estimate)))
+  expect_true(all(is.finite(me$y1$StdErr)  & me$y1$StdErr  > 0))
+  expect_true(all(is.finite(el$y1$Estimate)) && all(is.finite(el$y2$Estimate)))
+  # Signs follow the data-generating betas (positive in eq1, negative in eq2).
+  expect_gt(me$y1$Estimate[me$y1$Name == "x1"], 0)
+  expect_lt(me$y2$Estimate[me$y2$Name == "x1"], 0)
+})
