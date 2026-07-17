@@ -682,9 +682,13 @@ bnb_elasticities <- function(fit,
     return(NULL)
   }
   cl <- parallel::makeCluster(as.integer(n_cores))
+  ok <- FALSE
+  on.exit(if (!ok) parallel::stopCluster(cl))
   parallel::clusterExport(cl,
-    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry"),
+    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry",
+      "RP_PRED_CAP", "tri_icdf"),
     envir = environment())
+  ok <- TRUE
   cl
 }
 

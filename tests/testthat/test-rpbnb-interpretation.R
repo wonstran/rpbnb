@@ -170,7 +170,8 @@ test_that(".rp_diag_one: parallel (cl=<cluster>) SEs match sequential (cl=NULL) 
   cl <- parallel::makeCluster(2)
   on.exit(parallel::stopCluster(cl))
   parallel::clusterExport(cl,
-    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry"),
+    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry",
+      "RP_PRED_CAP", "tri_icdf"),
     envir = asNamespace("rpbnb"))
   par_tab <- rpbnb:::.rp_diag_one(f, 1L, "me", "AME", NULL, FALSE, 4, FALSE, "y1", cl = cl)
 
