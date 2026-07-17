@@ -81,8 +81,9 @@ bnb_residual_checks(fit)                      # normality, dispersion, outliers,
 ```
 
 The QQ and histogram panels always use the RQR; the scale-location and
-residuals-vs-fitted panels can use Pearson or deviance residuals via
-`resid_type=`. For `rpbnb_fit` the residuals are built on the mixture predictive
+residuals-vs-fitted panels can use Pearson or (for `bnb_fit`) deviance residuals
+via `resid_type=` -- `rpbnb_fit` does not support `resid_type = "deviance"`. For
+`rpbnb_fit` the residuals are built on the mixture predictive
 distribution over the random-coefficient draws (consistent with `predict()`).
 
 ## Random parameters
