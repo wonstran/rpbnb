@@ -67,6 +67,24 @@ of the next section).
 bnb_marginal_effects(fit, which = "y1", type = "AME", print_output = FALSE)
 ```
 
+## Residual diagnostics
+
+Because these are count models, ordinary residuals are not normal even under a
+correct fit; use **randomized quantile residuals** (Dunn--Smyth), which are
+approximately N(0,1) when the model is right. `residuals()`, `plot()`, and
+`bnb_residual_checks()` are provided for both `bnb_fit` and `rpbnb_fit`:
+
+```r
+rq <- residuals(fit, type = "quantile")      # randomized quantile residuals
+plot(fit, margin = "both")                   # 4 panels per margin
+bnb_residual_checks(fit)                      # normality, dispersion, outliers, ...
+```
+
+The QQ and histogram panels always use the RQR; the scale-location and
+residuals-vs-fitted panels can use Pearson or deviance residuals via
+`resid_type=`. For `rpbnb_fit` the residuals are built on the mixture predictive
+distribution over the random-coefficient draws (consistent with `predict()`).
+
 ## Random parameters
 
 Let the coefficient on `kids` vary across individuals in the doctor-visits

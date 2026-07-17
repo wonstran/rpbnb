@@ -20,6 +20,15 @@
   via `parallel::parLapply()`; results are numerically identical to the
   sequential path (verified exactly, `tolerance = 0`, in
   `tests/testthat/test-rpbnb-interpretation.R`).
+* Residual diagnostics: `residuals()` methods for `bnb_fit` and `rpbnb_fit`
+  (randomized quantile residuals as the primary count-model residual, plus
+  Pearson/deviance/response; `rpbnb_fit` uses the exact mixture predictive
+  CDF/variance over the stored draws, and does not support deviance residuals);
+  `plot()` methods drawing four base-graphics panels per margin
+  (residuals-vs-fitted, normal QQ of the RQR, RQR histogram, scale-location);
+  and `bnb_residual_checks()` reporting normality (Shapiro-Wilk / KS on the RQR),
+  the NB2 dispersion statistic, the cross-margin residual correlation, an outlier
+  list, and a composite misspecification verdict.
 
 ## Review fixes (2026-07-15 model review)
 
