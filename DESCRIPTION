@@ -20,14 +20,14 @@ Imports:
     randtoolbox,
     MASS,
     pbivnorm,
-    Rcpp
+    Rcpp,
+    parallel
 LinkingTo:
     Rcpp
 Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    parallel,
     pkgload
 Config/testthat/edition: 3
 VignetteBuilder: knitr

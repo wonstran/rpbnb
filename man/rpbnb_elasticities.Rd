@@ -11,7 +11,8 @@ rpbnb_elasticities(
   vars = NULL,
   include_intercept = FALSE,
   digits = 4,
-  print_output = TRUE
+  print_output = TRUE,
+  n_cores = 1L
 )
 }
 \arguments{
@@ -28,6 +29,14 @@ rpbnb_elasticities(
 \item{digits}{Number of decimal places for printed output.}
 
 \item{print_output}{Logical; if \code{FALSE}, suppress printing.}
+
+\item{n_cores}{Number of worker processes for the delta-method standard-error
+jacobian (1 = sequential, the default). When \code{n_cores > 1}, the jacobian's
+independent per-parameter columns are dispatched across a
+\code{parallel::makeCluster()} cluster (one cluster per call, shared across
+every equation \code{which} computes); results are numerically identical to the
+sequential path. Falls back to sequential with a warning if the \code{parallel}
+package is unavailable.}
 }
 \value{
 A data frame (single margin, invisibly) or a named list of data frames

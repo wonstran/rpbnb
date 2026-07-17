@@ -667,6 +667,27 @@ bnb_elasticities <- function(fit,
   tab
 }
 
+# Build (if n_cores > 1) and export-configure a PSOCK cluster for the parallel
+# delta-method jacobian in .rp_diag_one() (see .rp_jac_col()). Returns NULL for
+# n_cores <= 1 (the caller then uses .rp_diag_one()'s unchanged sequential
+# path) or when the `parallel` package is unavailable (with a warning,
+# matching the fallback message used in fit_rpbnb.R). The caller owns the
+# cluster's lifetime and must parallel::stopCluster() it when done (typically
+# via on.exit()), and should reuse the SAME cluster across every equation
+# computed in one call (y1/y2/both/all) rather than building one per equation.
+.rp_make_cluster <- function(n_cores) {
+  if (n_cores <= 1) return(NULL)
+  if (!requireNamespace("parallel", quietly = TRUE)) {
+    warning("Package 'parallel' not available; running sequentially.", call. = FALSE)
+    return(NULL)
+  }
+  cl <- parallel::makeCluster(as.integer(n_cores))
+  parallel::clusterExport(cl,
+    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry"),
+    envir = environment())
+  cl
+}
+
 #' Marginal effects for a random-parameter bivariate NB model
 #'
 #' Average marginal effects (AME) or marginal effects at the mean (MEM) for each
@@ -686,6 +707,13 @@ bnb_elasticities <- function(fit,
 #' @param include_intercept Logical; include the intercept term.
 #' @param digits Number of decimal places for printed output.
 #' @param print_output Logical; if `FALSE`, suppress printing.
+#' @param n_cores Number of worker processes for the delta-method standard-error
+#'   jacobian (1 = sequential, the default). When `n_cores > 1`, the jacobian's
+#'   independent per-parameter columns are dispatched across a
+#'   `parallel::makeCluster()` cluster (one cluster per call, shared across
+#'   every equation `which` computes); results are numerically identical to the
+#'   sequential path. Falls back to sequential with a warning if the `parallel`
+#'   package is unavailable.
 #' @return A data frame (single margin, invisibly) or a named list of data frames
 #'   (`both`/`all`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
 #'   `Signif`, `var_type`.
@@ -706,20 +734,23 @@ rpbnb_marginal_effects <- function(fit,
                                    vars  = NULL,
                                    include_intercept = FALSE,
                                    digits = 4,
-                                   print_output = TRUE) {
+                                   print_output = TRUE,
+                                   n_cores = 1L) {
   stopifnot(inherits(fit, "rpbnb_fit"))
   which <- match.arg(which)
   type  <- match.arg(type)
+  cl <- .rp_make_cluster(n_cores)
+  on.exit(if (!is.null(cl)) parallel::stopCluster(cl), add = TRUE)
   if (which %in% c("both", "all")) {
     return(invisible(list(
       y1 = .rp_diag_one(fit, 1L, "me", type, vars, include_intercept,
-                        digits, print_output, "y1"),
+                        digits, print_output, "y1", cl = cl),
       y2 = .rp_diag_one(fit, 2L, "me", type, vars, include_intercept,
-                        digits, print_output, "y2"))))
+                        digits, print_output, "y2", cl = cl))))
   }
   eq <- if (which == "y1") 1L else 2L
   invisible(.rp_diag_one(fit, eq, "me", type, vars, include_intercept,
-                         digits, print_output, which))
+                         digits, print_output, which, cl = cl))
 }
 
 #' Elasticities and semi-elasticities for a random-parameter bivariate NB model
@@ -738,6 +769,13 @@ rpbnb_marginal_effects <- function(fit,
 #' @param include_intercept Logical; include the intercept term.
 #' @param digits Number of decimal places for printed output.
 #' @param print_output Logical; if `FALSE`, suppress printing.
+#' @param n_cores Number of worker processes for the delta-method standard-error
+#'   jacobian (1 = sequential, the default). When `n_cores > 1`, the jacobian's
+#'   independent per-parameter columns are dispatched across a
+#'   `parallel::makeCluster()` cluster (one cluster per call, shared across
+#'   every equation `which` computes); results are numerically identical to the
+#'   sequential path. Falls back to sequential with a warning if the `parallel`
+#'   package is unavailable.
 #' @return A data frame (single margin, invisibly) or a named list of data frames
 #'   (`both`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
 #'   `Signif`, `var_type`.
@@ -758,18 +796,21 @@ rpbnb_elasticities <- function(fit,
                                vars  = NULL,
                                include_intercept = FALSE,
                                digits = 4,
-                               print_output = TRUE) {
+                               print_output = TRUE,
+                               n_cores = 1L) {
   stopifnot(inherits(fit, "rpbnb_fit"))
   which <- match.arg(which)
   type  <- match.arg(type)
+  cl <- .rp_make_cluster(n_cores)
+  on.exit(if (!is.null(cl)) parallel::stopCluster(cl), add = TRUE)
   if (which == "both") {
     return(invisible(list(
       y1 = .rp_diag_one(fit, 1L, "elas", type, vars, include_intercept,
-                        digits, print_output, "y1"),
+                        digits, print_output, "y1", cl = cl),
       y2 = .rp_diag_one(fit, 2L, "elas", type, vars, include_intercept,
-                        digits, print_output, "y2"))))
+                        digits, print_output, "y2", cl = cl))))
   }
   eq <- if (which == "y1") 1L else 2L
   invisible(.rp_diag_one(fit, eq, "elas", type, vars, include_intercept,
-                         digits, print_output, which))
+                         digits, print_output, which, cl = cl))
 }
