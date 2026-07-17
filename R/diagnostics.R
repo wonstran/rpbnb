@@ -818,3 +818,117 @@ rpbnb_elasticities <- function(fit,
   invisible(.rp_diag_one(fit, eq, "elas", type, vars, include_intercept,
                          digits, print_output, which, cl = cl))
 }
+
+# ============================================================================
+# Residual checks: normality, dispersion, cross-margin independence, outliers,
+# and a composite misspecification verdict, for bnb_fit and rpbnb_fit. Built on
+# the residuals() generic (randomized quantile + Pearson residuals).
+# ============================================================================
+
+# Thresholds for the composite misspecification verdict (concrete, documented).
+.RESID_DISP_BAND   <- c(0.5, 2)    # NB2 dispersion statistic acceptable band
+.RESID_COR_THRESH  <- 0.1          # |cross-margin RQR correlation| flag
+.RESID_TREND_THRESH <- 0.5         # residuals-vs-fitted lowess span (in RQR SDs)
+
+#' Residual checks for a bivariate NB model
+#'
+#' Formal residual diagnostics for a [fit_bnb()] or [fit_rpbnb()] fit: a
+#' normality test on the randomized quantile residuals (Shapiro-Wilk for
+#' `n <= 5000`, else Kolmogorov-Smirnov vs N(0,1)); the NB2 dispersion statistic
+#' (`sum(pearson^2) / (n - k)`) per margin; the cross-margin RQR correlation (a
+#' check that the Famoye/copula dependence captured the association); an outlier
+#' count/index list (`|RQR| > outlier_z`); and a composite misspecification
+#' verdict combining these signals.
+#'
+#' @param fit A `bnb_fit` or `rpbnb_fit` object.
+#' @param seed Optional integer seed for the RQR randomization.
+#' @param outlier_z Absolute-RQR threshold flagging an outlier (default 3).
+#' @param digits Decimal places for printed output.
+#' @param print_output Logical; if `FALSE`, suppress printing.
+#' @return Invisibly, an object of class `bnb_residual_checks`.
+#' @export
+bnb_residual_checks <- function(fit, seed = NULL, outlier_z = 3, digits = 4,
+                                print_output = TRUE) {
+  stopifnot(inherits(fit, "bnb_fit") || inherits(fit, "rpbnb_fit"))
+  rq <- residuals(fit, type = "quantile", margin = "both", seed = seed)
+  pr <- residuals(fit, type = "pearson",  margin = "both")
+  k1 <- ncol(fit$X1); k2 <- ncol(fit$X2)
+
+  norm_test <- function(z) {
+    z <- z[is.finite(z)]
+    if (length(z) >= 3 && length(z) <= 5000) stats::shapiro.test(z)
+    else stats::ks.test(z, "pnorm")
+  }
+  disp_stat <- function(pz, k) {
+    pz <- pz[is.finite(pz)]
+    sum(pz^2) / (length(pz) - k)
+  }
+  trend_span <- function(mu, z) {
+    ok <- is.finite(mu) & is.finite(z)
+    if (sum(ok) < 3) return(0)
+    lw <- stats::lowess(mu[ok], z[ok])
+    diff(range(lw$y))
+  }
+
+  normality  <- list(y1 = norm_test(rq$y1), y2 = norm_test(rq$y2))
+  dispersion <- c(y1 = disp_stat(pr$y1, k1), y2 = disp_stat(pr$y2, k2))
+  ok_pair <- is.finite(rq$y1) & is.finite(rq$y2)
+  independence <- list(
+    pearson  = stats::cor(rq$y1[ok_pair], rq$y2[ok_pair], method = "pearson"),
+    spearman = stats::cor(rq$y1[ok_pair], rq$y2[ok_pair], method = "spearman"))
+  outliers <- list(
+    y1 = which(abs(rq$y1) > outlier_z),
+    y2 = which(abs(rq$y2) > outlier_z),
+    max_pearson = max(abs(c(pr$y1, pr$y2)), na.rm = TRUE))
+  trend <- c(y1 = trend_span(fit$mu1, rq$y1), y2 = trend_span(fit$mu2, rq$y2))
+
+  # composite misspecification verdict
+  signals <- character(0)
+  if (min(normality$y1$p.value, normality$y2$p.value) < 0.05)
+    signals <- c(signals, "RQR non-normality (p < 0.05)")
+  if (any(dispersion < .RESID_DISP_BAND[1] | dispersion > .RESID_DISP_BAND[2]))
+    signals <- c(signals, sprintf("dispersion outside [%.1f, %.1f]",
+                                  .RESID_DISP_BAND[1], .RESID_DISP_BAND[2]))
+  if (abs(independence$pearson) > .RESID_COR_THRESH)
+    signals <- c(signals, sprintf("cross-margin residual correlation |r| > %.2f",
+                                  .RESID_COR_THRESH))
+  if (any(trend > .RESID_TREND_THRESH))
+    signals <- c(signals, "residuals-vs-fitted trend")
+  misspecified <- length(signals) > 0
+
+  out <- structure(list(
+    normality = normality, dispersion = dispersion, independence = independence,
+    outliers = outliers, trend = trend, misspecified = misspecified,
+    messages = signals, outlier_z = outlier_z, n = length(rq$y1),
+    rqr = rq, pearson = pr, digits = digits), class = "bnb_residual_checks")
+
+  if (print_output) print(out, digits = digits)
+  invisible(out)
+}
+
+#' @export
+print.bnb_residual_checks <- function(x, digits = 4, ...) {
+  fmt <- function(v) formatC(v, format = "f", digits = digits)
+  cat("\n--- Residual checks (RQR-based) ---\n")
+  cat(sprintf("n = %d\n", x$n))
+  cat("\nNormality of RQR (per margin):\n")
+  for (nm in c("y1", "y2")) {
+    t <- x$normality[[nm]]
+    cat(sprintf("  %s: %s = %s, p = %s\n", nm, t$method,
+                fmt(unname(t$statistic)), fmt(t$p.value)))
+  }
+  cat("\nDispersion statistic (sum(pearson^2)/(n-k); ~1 good):\n")
+  cat(sprintf("  y1 = %s   y2 = %s\n", fmt(x$dispersion[["y1"]]), fmt(x$dispersion[["y2"]])))
+  cat("\nCross-margin RQR correlation (should be ~0 if dependence captured):\n")
+  cat(sprintf("  Pearson = %s   Spearman = %s\n",
+              fmt(x$independence$pearson), fmt(x$independence$spearman)))
+  cat(sprintf("\nOutliers (|RQR| > %g):  y1: %d   y2: %d   max|Pearson| = %s\n",
+              x$outlier_z, length(x$outliers$y1), length(x$outliers$y2),
+              fmt(x$outliers$max_pearson)))
+  cat("\nMisspecification: ")
+  if (x$misspecified) cat("FLAGGED -- ", paste(x$messages, collapse = "; "), "\n", sep = "")
+  else cat("no signals fired\n")
+  cat("Note: RQR is randomized; a different seed gives a slightly different\n")
+  cat("      realization -- severe verdicts should reproduce across seeds.\n")
+  invisible(x)
+}

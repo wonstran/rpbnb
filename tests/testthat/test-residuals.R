@@ -186,3 +186,43 @@ test_that("plot.rpbnb_fit degrades gracefully when a margin's residuals are all 
   on.exit({ grDevices::dev.off() }, add = TRUE)
   expect_error(suppressWarnings(plot(f, margin = "y1", seed = 1)), NA)
 })
+
+test_that("bnb_residual_checks returns finite statistics and a verdict", {
+  f  <- make_bnb_resid_fixture()
+  ck <- bnb_residual_checks(f, seed = 1, print_output = FALSE)
+  expect_s3_class(ck, "bnb_residual_checks")
+  expect_true(is.finite(ck$dispersion[["y1"]]) && ck$dispersion[["y1"]] > 0)
+  expect_true(is.finite(ck$normality$y1$p.value))
+  expect_true(is.finite(ck$independence$pearson))
+  expect_type(ck$misspecified, "logical")
+})
+
+test_that("bnb_residual_checks flags planted outliers at the right indices", {
+  f <- make_bnb_resid_fixture()
+  # force two extreme observations by inflating the counts
+  f$Y1[c(5, 17)] <- f$Y1[c(5, 17)] + 500L
+  ck <- bnb_residual_checks(f, seed = 1, outlier_z = 3, print_output = FALSE)
+  expect_true(all(c(5, 17) %in% ck$outliers$y1))
+})
+
+test_that("bnb_residual_checks works on an rpbnb_fit", {
+  f  <- make_rp_resid_fixture("normal")
+  ck <- bnb_residual_checks(f, seed = 1, print_output = FALSE)
+  expect_s3_class(ck, "bnb_residual_checks")
+  expect_true(is.finite(ck$dispersion[["y1"]]))
+})
+
+test_that("residual checks detect a well-specified vs misspecified fit (slow)", {
+  skip_slow()
+  set.seed(5)
+  n <- 800
+  d <- data.frame(x1 = rnorm(n), x2 = rnorm(n))
+  d$y1 <- rnbinom(n, size = 2, mu = exp(0.3 + 0.5 * d$x1 + 0.4 * d$x2))
+  d$y2 <- rnbinom(n, size = 2, mu = exp(0.1 - 0.3 * d$x1))
+  good <- fit_bnb(y1 ~ x1 + x2, y2 ~ x1, data = d, dependence = "famoye")
+  bad  <- fit_bnb(y1 ~ x1,      y2 ~ x1, data = d, dependence = "famoye")  # omits x2
+  ck_good <- bnb_residual_checks(good, seed = 1, print_output = FALSE)
+  ck_bad  <- bnb_residual_checks(bad,  seed = 1, print_output = FALSE)
+  expect_false(ck_good$misspecified)
+  expect_true(ck_bad$misspecified)
+})
