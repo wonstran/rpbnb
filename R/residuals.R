@@ -155,7 +155,8 @@ residuals.bnb_fit <- function(object,
 }
 
 # Exact mixture marginal variance per observation (law of total variance over
-# the draws): mean_r(NB2 var at mu_ir) + population var_r(mu_ir).
+# the draws): mean_r(NB2 var at mu_ir) + population var_r(mu_ir). Analytic-Inf
+# rows (lognormal, sign*x>0) -> NA.
 .rp_mixture_var <- function(object, eq) {
   p  <- .rp_margin_parts(object, eq)
   mu <- .rp_margin_mu_draws(p)                        # n x R
@@ -163,7 +164,17 @@ residuals.bnb_fit <- function(object,
   mu_bar    <- rowMeans(mu)
   nbvar_bar <- rowMeans(mu + p$m * mu^2)              # mean of per-draw NB2 vars
   var_mu    <- rowMeans(mu^2) - mu_bar^2              # population var over draws
-  nbvar_bar + var_mu
+  v <- nbvar_bar + var_mu
+  if (p$has_rand) {
+    inf <- .rp_inf_rows(p$X, p$rand_idx, p$dist, p$sgn)
+    if (any(inf)) {
+      v[inf] <- NA_real_
+      warning(sum(inf), " observation(s) have an analytically infinite mixture ",
+              "mean (a lognormal random coefficient with sign * covariate > 0); ",
+              "residuals set to NA for those rows.", call. = FALSE)
+    }
+  }
+  v
 }
 
 #' Residuals for a random-parameter bivariate NB model
