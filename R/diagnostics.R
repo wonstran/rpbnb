@@ -687,3 +687,55 @@ rpbnb_marginal_effects <- function(fit,
   invisible(.rp_diag_one(fit, eq, "me", type, vars, include_intercept,
                          digits, print_output, which))
 }
+
+#' Elasticities and semi-elasticities for a random-parameter bivariate NB model
+#'
+#' Continuous elasticities \eqn{x_{ij}\,(\partial \mu_i/\partial x_{ij})/\mu_i}
+#' and binary semi-elasticities \eqn{\mu_i(x_j=1)/\mu_i(x_j=0) - 1}, built on the
+#' Monte-Carlo integrated population mean \eqn{\mu_i = E_\beta[\exp(x_i'\beta)]}
+#' of an [fit_rpbnb()] fit. Under fixed coefficients these reduce to
+#' \eqn{\beta_j E[x_j]} and \eqn{\exp(\beta_j) - 1}. Standard errors use a numeric
+#' delta method over the equation's mean and log-scale parameters.
+#'
+#' @param fit An `rpbnb_fit` object from [fit_rpbnb()].
+#' @param which Which margin(s): "y1", "y2", or "both".
+#' @param type "AME" (average over the sample) or "MEM" (evaluated at the mean row).
+#' @param vars Optional variable names or indices to restrict output.
+#' @param include_intercept Logical; include the intercept term.
+#' @param digits Number of decimal places for printed output.
+#' @param print_output Logical; if `FALSE`, suppress printing.
+#' @return A data frame (single margin, invisibly) or a named list of data frames
+#'   (`both`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
+#'   `Signif`, `var_type`.
+#' @seealso [bnb_elasticities()] for fixed-coefficient `bnb_fit` models.
+#' @export
+#' @examples
+#' sim <- simulate_rpbnb(n = 400,
+#'   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+#'   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+#'   random_1 = list(x1 = list(sd = 0.5)),
+#'   dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+#' fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+#'                  draws = 100)
+#' rpbnb_elasticities(fit, which = "both", type = "AME")
+rpbnb_elasticities <- function(fit,
+                               which = c("y1", "y2", "both"),
+                               type  = c("AME", "MEM"),
+                               vars  = NULL,
+                               include_intercept = FALSE,
+                               digits = 4,
+                               print_output = TRUE) {
+  stopifnot(inherits(fit, "rpbnb_fit"))
+  which <- match.arg(which)
+  type  <- match.arg(type)
+  if (which == "both") {
+    return(invisible(list(
+      y1 = .rp_diag_one(fit, 1L, "elas", type, vars, include_intercept,
+                        digits, print_output, "y1"),
+      y2 = .rp_diag_one(fit, 2L, "elas", type, vars, include_intercept,
+                        digits, print_output, "y2"))))
+  }
+  eq <- if (which == "y1") 1L else 2L
+  invisible(.rp_diag_one(fit, eq, "elas", type, vars, include_intercept,
+                         digits, print_output, which))
+}

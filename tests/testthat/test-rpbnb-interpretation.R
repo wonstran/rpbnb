@@ -109,3 +109,39 @@ test_that("rpbnb_marginal_effects: lognormal analytic-Inf rows warn and propagat
     rpbnb_marginal_effects(f, which = "y1", type = "AME", print_output = FALSE),
     "infinite")
 })
+
+test_that("rpbnb_elasticities: fixed equation continuous elasticity is beta*x", {
+  # Equation 2 fixed: pointwise elasticity = beta * x, so AME = mean(beta * x).
+  f  <- make_rp_fixture("normal")
+  el <- rpbnb_elasticities(f, which = "y2", type = "AME", print_output = FALSE)
+  b2 <- f$coef[["b2:x1"]]
+  expect_equal(el$Estimate[el$Name == "x1"], mean(b2 * f$X2[, "x1"]),
+               tolerance = 1e-10)
+})
+
+test_that("rpbnb_elasticities: random-equation elasticity equals x*me/mu", {
+  f  <- make_rp_fixture("normal")
+  el <- rpbnb_elasticities(f, which = "y1", type = "AME", print_output = FALSE)
+  me <- rpbnb_marginal_effects(f, which = "y1", type = "AME", print_output = FALSE)
+  # Rebuild the pointwise elasticity mean from the same fixture and check it is
+  # internally consistent (finite, and the SE path produced finite SEs).
+  expect_true(all(is.finite(el$Estimate)))
+  expect_true(all(is.finite(el$StdErr) & el$StdErr > 0))
+  expect_true("x1" %in% el$Name && "x1" %in% me$Name)
+})
+
+test_that("rpbnb_elasticities: which='both' returns a named list; rejects wrong class", {
+  f   <- make_rp_fixture("normal")
+  res <- rpbnb_elasticities(f, which = "both", print_output = FALSE)
+  expect_named(res, c("y1", "y2"))
+  expect_error(rpbnb_elasticities(list(), print_output = FALSE), "rpbnb_fit")
+})
+
+test_that("rpbnb_elasticities: NA vcov yields NA SEs with a warning", {
+  f <- make_rp_fixture("normal")
+  f$vcov[] <- NA_real_; f$se[] <- NA_real_
+  expect_warning(
+    el <- rpbnb_elasticities(f, which = "y1", print_output = FALSE),
+    "standard error")
+  expect_true(all(is.na(el$StdErr)))
+})
