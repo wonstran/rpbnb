@@ -175,3 +175,14 @@ test_that("plot 'which' subsets panels (single panel, no par change needed)", {
   on.exit({ grDevices::dev.off() }, add = TRUE)
   expect_error(plot(f, margin = "y1", which = 2, seed = 1), NA)
 })
+
+test_that("plot.rpbnb_fit degrades gracefully when a margin's residuals are all NA", {
+  f <- make_rp_resid_fixture("lognormal")
+  # force every row into the analytic-Inf branch (strictly positive x, sign +1)
+  f$X1[, "x"] <- seq(0.1, 2, length.out = nrow(f$X1))
+  inf <- rpbnb:::.rp_inf_rows(f$X1, f$rand_idx1, f$rp_meta$dist1, f$rp_meta$sign1)
+  expect_true(all(inf))   # self-check: this fixture really is all-NA for margin y1
+  grDevices::pdf(NULL)
+  on.exit({ grDevices::dev.off() }, add = TRUE)
+  expect_error(suppressWarnings(plot(f, margin = "y1", seed = 1)), NA)
+})

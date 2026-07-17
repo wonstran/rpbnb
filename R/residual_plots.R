@@ -10,28 +10,52 @@
   fin_ru <- is.finite(mu) & is.finite(r_used)
   fin_rq <- is.finite(rqr)
   if (1 %in% which) {
-    graphics::plot(mu[fin_ru], r_used[fin_ru],
-                   xlab = "Fitted mean", ylab = resid_label,
-                   main = paste0(resp_name, ": Residuals vs fitted"))
-    graphics::abline(h = 0, lty = 3)
-    if (sum(fin_ru) >= 3) graphics::lines(stats::lowess(mu[fin_ru], r_used[fin_ru]), col = "red")
+    if (sum(fin_ru) == 0) {
+      graphics::plot.new()
+      graphics::title(main = paste0(resp_name, ": Residuals vs fitted"))
+      graphics::text(0.5, 0.5, "no finite residuals")
+    } else {
+      graphics::plot(mu[fin_ru], r_used[fin_ru],
+                     xlab = "Fitted mean", ylab = resid_label,
+                     main = paste0(resp_name, ": Residuals vs fitted"))
+      graphics::abline(h = 0, lty = 3)
+      if (sum(fin_ru) >= 3) graphics::lines(stats::lowess(mu[fin_ru], r_used[fin_ru]), col = "red")
+    }
   }
   if (2 %in% which) {
-    stats::qqnorm(rqr[fin_rq], main = paste0(resp_name, ": Normal QQ (RQR)"))
-    stats::qqline(rqr[fin_rq])
+    if (sum(fin_rq) == 0) {
+      graphics::plot.new()
+      graphics::title(main = paste0(resp_name, ": Normal QQ (RQR)"))
+      graphics::text(0.5, 0.5, "no finite residuals")
+    } else {
+      stats::qqnorm(rqr[fin_rq], main = paste0(resp_name, ": Normal QQ (RQR)"))
+      stats::qqline(rqr[fin_rq])
+    }
   }
   if (3 %in% which) {
-    graphics::hist(rqr[fin_rq], freq = FALSE, breaks = "FD",
-                   xlab = "Randomized quantile residual",
-                   main = paste0(resp_name, ": Histogram (RQR)"))
-    graphics::curve(stats::dnorm(x), add = TRUE, col = "red")
+    if (sum(fin_rq) == 0) {
+      graphics::plot.new()
+      graphics::title(main = paste0(resp_name, ": Histogram (RQR)"))
+      graphics::text(0.5, 0.5, "no finite residuals")
+    } else {
+      graphics::hist(rqr[fin_rq], freq = FALSE, breaks = "FD",
+                     xlab = "Randomized quantile residual",
+                     main = paste0(resp_name, ": Histogram (RQR)"))
+      graphics::curve(stats::dnorm(x), add = TRUE, col = "red")
+    }
   }
   if (4 %in% which) {
-    sl <- sqrt(abs(r_used))
-    graphics::plot(mu[fin_ru], sl[fin_ru],
-                   xlab = "Fitted mean", ylab = paste0("sqrt|", resid_label, "|"),
-                   main = paste0(resp_name, ": Scale-location"))
-    if (sum(fin_ru) >= 3) graphics::lines(stats::lowess(mu[fin_ru], sl[fin_ru]), col = "red")
+    if (sum(fin_ru) == 0) {
+      graphics::plot.new()
+      graphics::title(main = paste0(resp_name, ": Scale-location"))
+      graphics::text(0.5, 0.5, "no finite residuals")
+    } else {
+      sl <- sqrt(abs(r_used))
+      graphics::plot(mu[fin_ru], sl[fin_ru],
+                     xlab = "Fitted mean", ylab = paste0("sqrt|", resid_label, "|"),
+                     main = paste0(resp_name, ": Scale-location"))
+      if (sum(fin_ru) >= 3) graphics::lines(stats::lowess(mu[fin_ru], sl[fin_ru]), col = "red")
+    }
   }
   invisible(NULL)
 }
