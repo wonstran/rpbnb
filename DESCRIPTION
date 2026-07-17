@@ -1,8 +1,8 @@
 Package: rpbnb
 Type: Package
-Title: Bivariate and Random-Parameter Negative Binomial Regression
+Title: Random-Parameter Bivariate Negative Binomial Regression
 Version: 0.2.0
-Authors@R: person("Project", "Author", email = "wonstran@gmail.com", role = c("aut", "cre"))
+Authors@R: person("Zhenyu", "Wang", email = "wonstran@hotmail.com", role = c("aut", "cre"))
 Description: Maximum-likelihood estimation of bivariate negative binomial
     (NB2) regression models with Famoye/Sarmanov or discrete-copula
     (Frank, Gaussian, or Clayton) dependence, and maximum-simulated-likelihood

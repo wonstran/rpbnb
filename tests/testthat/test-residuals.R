@@ -230,6 +230,21 @@ test_that("rp residuals derive the mean from draws when mu1/mu2 are NULL (copula
   expect_true(is.finite(ck$dispersion[["y1"]]) && ck$dispersion[["y1"]] > 0)
 })
 
+test_that("plot() derives the fitted-mean axis from draws when mu1/mu2 are NULL", {
+  f <- make_rp_resid_fixture("normal")
+  g <- f; g$mu1 <- NULL; g$mu2 <- NULL
+  # the fitted mean the residuals-vs-fitted / scale-location panels plot against
+  # must be the finite draw-integrated mean, matching the stored-mu fit
+  mu_derived <- rpbnb:::.rp_fitted_mean(g, 1L)
+  expect_equal(length(mu_derived), length(f$Y1))
+  expect_true(all(is.finite(mu_derived)))
+  expect_equal(mu_derived, f$mu1, tolerance = 1e-12, ignore_attr = "names")
+  # and the full plot must render without error on a copula-style (NULL-mu) fit
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_error(plot(g, margin = "both", seed = 1), NA)
+})
+
 test_that("residual checks detect a well-specified vs misspecified fit (slow)", {
   skip_slow()
   set.seed(5)

@@ -1,4 +1,4 @@
-#' rpbnb: Bivariate and Random-Parameter Negative Binomial Regression
+#' rpbnb: Random-Parameter Bivariate Negative Binomial Regression
 #'
 #' Maximum-likelihood estimation of bivariate negative binomial models with
 #' Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence

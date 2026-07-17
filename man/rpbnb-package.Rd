@@ -4,7 +4,7 @@
 \name{rpbnb-package}
 \alias{rpbnb}
 \alias{rpbnb-package}
-\title{rpbnb: Bivariate and Random-Parameter Negative Binomial Regression}
+\title{rpbnb: Random-Parameter Bivariate Negative Binomial Regression}
 \description{
 Maximum-likelihood estimation of bivariate negative binomial models with
 Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
@@ -13,11 +13,11 @@ of a bivariate random-parameter negative binomial model under either
 dependence structure (see \code{\link[=fit_rpbnb]{fit_rpbnb()}}).
 }
 \author{
-\strong{Maintainer}: Project Author \email{wonstran@gmail.com}
+\strong{Maintainer}: Zhenyu Wang \email{wonstran@hotmail.com}
 
 Authors:
 \itemize{
-  \item Project Author \email{wonstran@gmail.com}
+  \item Zhenyu Wang \email{wonstran@hotmail.com}
 }
 
 }

@@ -177,6 +177,15 @@ residuals.bnb_fit <- function(object,
   v
 }
 
+# Per-observation fitted mean for one equation. Uses the stored mean when
+# present (Famoye path); for copula fits (mu1/mu2 = NULL) it is the
+# draw-integrated mixture mean, consistent with predict() and the residuals.
+.rp_fitted_mean <- function(object, eq) {
+  mu <- if (eq == 1L) object$mu1 else object$mu2
+  if (is.null(mu)) mu <- rowMeans(.rp_margin_mu_draws(.rp_margin_parts(object, eq)))
+  mu
+}
+
 #' Residuals for a random-parameter bivariate NB model
 #'
 #' Per-margin residuals for an [fit_rpbnb()] model. Each margin is a mixture of
@@ -209,8 +218,7 @@ residuals.rpbnb_fit <- function(object,
 
   one <- function(eq) {
     y  <- if (eq == 1L) object$Y1 else object$Y2
-    mu <- if (eq == 1L) object$mu1 else object$mu2
-    if (is.null(mu)) mu <- rowMeans(.rp_margin_mu_draws(.rp_margin_parts(object, eq)))
+    mu <- .rp_fitted_mean(object, eq)
     switch(type,
       response = y - mu,
       pearson  = (y - mu) / sqrt(.rp_mixture_var(object, eq)),

@@ -135,3 +135,23 @@ cat("ELASTICITIES / SEMI-ELASTICITIES (AME)\n")
 cat(paste(rep("=", 72), collapse = ""), "\n")
 el <- rpbnb_elasticities(fit, which = "both", type = "AME",
                          n_cores = rpbnb_threads())
+
+# ---- 8. Residual diagnostics ------------------------------------------------
+# Randomized quantile residuals (Dunn-Smyth) are the primary count-model
+# residual (~ N(0,1) under a correct fit). plot() draws four panels per margin
+# (residuals-vs-fitted, normal QQ of the RQR, RQR histogram, scale-location);
+# bnb_residual_checks() reports normality, dispersion, the cross-margin residual
+# correlation, outliers, and a composite misspecification verdict. The RQR
+# randomization is seeded so the diagnostics reproduce across runs.
+cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+cat("RESIDUAL DIAGNOSTICS\n")
+cat(paste(rep("=", 72), collapse = ""), "\n")
+
+dir.create("results", showWarnings = FALSE)
+resid_pdf <- file.path("results", "fit_rpbnb_complex_residuals.pdf")
+grDevices::pdf(resid_pdf, width = 9, height = 7)
+plot(fit, margin = "both", seed = 20240712)
+grDevices::dev.off()
+cat("Residual diagnostic plots written to", resid_pdf, "\n\n")
+
+bnb_residual_checks(fit, seed = 20240712)

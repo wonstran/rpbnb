@@ -68,7 +68,7 @@
   op <- graphics::par(mfrow = c(2, 2))
   on.exit(graphics::par(op), add = TRUE)
   for (nm in eqs) {
-    mu  <- if (nm == "y1") x$mu1 else x$mu2
+    mu  <- .rp_fitted_mean(x, if (nm == "y1") 1L else 2L)
     rq  <- residuals(x, type = "quantile", margin = nm, seed = seed)
     ru  <- if (identical(resid_type, "quantile")) rq
            else residuals(x, type = resid_type, margin = nm)
