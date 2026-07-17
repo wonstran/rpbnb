@@ -5,6 +5,14 @@
   distribution (`"normal"`, `"lognormal"`, `"uniform"`, `"triangular"`) or a
   list `list(dist = ..., sign = ...)` for sign-constrained lognormal. The
   previous character-vector interface (all-Normal) is fully preserved.
+* `rpbnb_marginal_effects()` and `rpbnb_elasticities()`: interpretation for
+  random-parameter (`rpbnb_fit`) models, built on the Monte-Carlo integrated
+  population mean `E[exp(x'beta)]` (consistent with `predict.rpbnb_fit()`).
+  Continuous marginal effects use the per-draw realized coefficient
+  (`mean_r coef_rj * exp(lp_r)`); binary effects use the integrated discrete
+  difference. Standard errors use a numeric delta method over each equation's
+  mean and log-scale parameters. Mirrors the existing `bnb_marginal_effects()` /
+  `bnb_elasticities()` for fixed-coefficient models.
 
 ## Review fixes (2026-07-15 model review)
 

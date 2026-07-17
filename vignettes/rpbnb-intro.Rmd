@@ -67,6 +67,25 @@ of the next section).
 bnb_marginal_effects(fit, which = "y1", type = "AME", print_output = FALSE)
 ```
 
+### Interpreting random-parameter fits
+
+For `fit_rpbnb()` models the conditional mean is the population average
+`E[exp(x'beta)]` integrated over the random-coefficient distribution, so
+marginal effects and elasticities are computed on that integrated mean rather
+than on `exp(x'beta)`. Use `rpbnb_marginal_effects()` and `rpbnb_elasticities()`
+(the random-parameter analogues of `bnb_marginal_effects()` /
+`bnb_elasticities()`):
+
+```r
+rpbnb_marginal_effects(fit, which = "both", type = "AME")
+rpbnb_elasticities(fit, which = "both", type = "AME")
+```
+
+For a continuous covariate the marginal effect averages the per-draw realized
+coefficient times `exp(lp)`; for a 0/1 covariate it is the integrated difference
+`E[Y | x = 1] - E[Y | x = 0]`. Standard errors come from a numeric delta method
+over each equation's mean and log-scale parameters.
+
 ## Random parameters
 
 Let the coefficient on `kids` vary across individuals in the doctor-visits
