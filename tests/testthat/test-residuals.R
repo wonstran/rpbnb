@@ -65,3 +65,81 @@ test_that("residuals(seed=) does not disturb the caller's RNG stream", {
   set.seed(99); invisible(residuals(f, type = "quantile", margin = "both", seed = 5)); b <- runif(1)
   expect_equal(a, b)
 })
+
+make_rp_resid_fixture <- function(dist1 = "normal", R = 128L) {
+  set.seed(21)
+  n    <- 60
+  slab <- rpbnb:::rand_dist_registry[[dist1]]$scale_label
+  x    <- seq(-1, 1, length.out = n)
+  X    <- stats::model.matrix(~ x)               # cols: (Intercept), x
+  b1   <- c(0.2, 0.4); b2 <- c(0.1, -0.3)
+  m1   <- 0.4; m2 <- 0.5; sd1 <- 0.5
+  coef <- c(b1, b2, log(sd1), log(m1), log(m2), 0)
+  names(coef) <- c("b1:(Intercept)", "b1:x", "b2:(Intercept)", "b2:x",
+                   paste0(slab, "1:x"), "log_m1", "log_m2", "z_lambda")
+  Z1  <- matrix((seq_len(R) - 0.5) / R, ncol = 1L) # uniform grid for the eq-1 random coef
+  Z2  <- matrix(0, R, 0)
+  xb1 <- as.vector(X %*% b1); xb2 <- as.vector(X %*% b2)
+  dev1 <- rpbnb:::rand_realize(Z1, dist1, 1, b1[2], sd1)$dev
+  mu1_mat <- vapply(seq_len(R),
+                    function(r) pmin(exp(xb1 + X[, 2] * dev1[r, 1]), 1e15),
+                    numeric(n))
+  mu1 <- rowMeans(mu1_mat)
+  mu2 <- exp(xb2)
+  y1  <- stats::rnbinom(n, size = 1 / m1, mu = mu1)
+  y2  <- stats::rnbinom(n, size = 1 / m2, mu = mu2)
+  structure(list(
+    coef = coef, rand_idx1 = 2L, rand_idx2 = integer(0),
+    rp_meta = list(dist1 = dist1, dist2 = character(0),
+                   sign1 = 1, sign2 = numeric(0), Z1 = Z1, Z2 = Z2),
+    X1 = X, X2 = X, Y1 = y1, Y2 = y2, m1 = m1, m2 = m2, mu1 = mu1, mu2 = mu2,
+    formula_1 = y1 ~ x, formula_2 = y2 ~ x), class = "rpbnb_fit")
+}
+
+test_that("rp mixture CDF corners match a brute-force draw average", {
+  f  <- make_rp_resid_fixture("normal")
+  cc <- rpbnb:::.rp_mixture_cdf(f, 1L)
+  # brute force from the same fixture draws
+  X <- f$X1; b1 <- f$coef[c("b1:(Intercept)", "b1:x")]; r1 <- 1 / f$m1
+  Z1 <- f$rp_meta$Z1; sd1 <- exp(f$coef[["log_sd1:x"]])
+  dev1 <- rpbnb:::rand_realize(Z1, "normal", 1, b1[2], sd1)$dev
+  xb1 <- as.vector(X %*% b1)
+  Fhi <- rowMeans(vapply(seq_len(nrow(Z1)),
+    function(r) stats::pnbinom(f$Y1, size = r1, mu = pmin(exp(xb1 + X[, 2] * dev1[r, 1]), 1e15)),
+    numeric(nrow(X))))
+  expect_equal(cc$Fhi, Fhi, tolerance = 1e-12)
+})
+
+test_that("rp fully-fixed equation reduces to plain NB2 RQR", {
+  f  <- make_rp_resid_fixture("normal")
+  # equation 2 is fixed: mixture RQR must equal the NB2 RQR at mu2
+  rq_rp <- residuals(f, type = "quantile", margin = "y2", seed = 3)
+  r2 <- 1 / f$m2
+  Fhi <- stats::pnbinom(f$Y2,     size = r2, mu = f$mu2)
+  Flo <- ifelse(f$Y2 > 0, stats::pnbinom(f$Y2 - 1, size = r2, mu = f$mu2), 0)
+  set.seed(3); rq_ref <- stats::qnorm(Flo + stats::runif(length(f$Y2)) * (Fhi - Flo))
+  expect_equal(rq_rp, rq_ref, tolerance = 1e-12)
+})
+
+test_that("rp Pearson uses the mixture marginal variance (>= NB2-at-mean var)", {
+  f  <- make_rp_resid_fixture("normal")
+  pr <- residuals(f, type = "pearson", margin = "y1")
+  v  <- rpbnb:::.rp_mixture_var(f, 1L)
+  expect_equal(pr, (f$Y1 - f$mu1) / sqrt(v), tolerance = 1e-12)
+  # mixture variance strictly exceeds NB2-at-the-mean where the coef is random
+  expect_true(all(v >= f$mu1 + f$m1 * f$mu1^2 - 1e-9))
+})
+
+test_that("rp deviance residuals error with an explanatory message", {
+  f <- make_rp_resid_fixture("normal")
+  expect_error(residuals(f, type = "deviance", margin = "y1"), "not defined")
+})
+
+test_that("rp lognormal analytic-Inf rows give NA residuals with a warning", {
+  f <- make_rp_resid_fixture("lognormal")   # eq-1 random coef lognormal, sign +1
+  inf <- rpbnb:::.rp_inf_rows(f$X1, f$rand_idx1, f$rp_meta$dist1, f$rp_meta$sign1)
+  skip_if(!any(inf), "fixture produced no analytic-Inf rows")
+  rq <- suppressWarnings(residuals(f, type = "quantile", margin = "y1", seed = 1))
+  expect_true(all(is.na(rq[inf])))
+  expect_warning(residuals(f, type = "quantile", margin = "y1", seed = 1), "infinite")
+})
