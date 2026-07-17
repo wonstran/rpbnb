@@ -13,6 +13,13 @@
   difference. Standard errors use a numeric delta method over each equation's
   mean and log-scale parameters. Mirrors the existing `bnb_marginal_effects()` /
   `bnb_elasticities()` for fixed-coefficient models.
+* `rpbnb_marginal_effects()` and `rpbnb_elasticities()` gain an `n_cores`
+  parameter (default `1`, sequential) that parallelizes the delta-method
+  standard-error computation across a `parallel` cluster for `n_cores > 1`.
+  The jacobian is decomposed into independent per-parameter columns dispatched
+  via `parallel::parLapply()`; results are numerically identical to the
+  sequential path (verified exactly, `tolerance = 0`, in
+  `tests/testthat/test-rpbnb-interpretation.R`).
 
 ## Review fixes (2026-07-15 model review)
 
