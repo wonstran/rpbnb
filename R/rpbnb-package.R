@@ -23,6 +23,7 @@
 #' @importFrom stats AIC
 #' @importFrom stats BIC
 #' @importFrom stats predict
+#' @importFrom stats residuals
 #' @importFrom stats vcov
 #' @importFrom stats dnbinom
 #' @importFrom stats pnbinom

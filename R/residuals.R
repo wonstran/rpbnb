@@ -210,6 +210,7 @@ residuals.rpbnb_fit <- function(object,
   one <- function(eq) {
     y  <- if (eq == 1L) object$Y1 else object$Y2
     mu <- if (eq == 1L) object$mu1 else object$mu2
+    if (is.null(mu)) mu <- rowMeans(.rp_margin_mu_draws(.rp_margin_parts(object, eq)))
     switch(type,
       response = y - mu,
       pearson  = (y - mu) / sqrt(.rp_mixture_var(object, eq)),

@@ -212,6 +212,24 @@ test_that("bnb_residual_checks works on an rpbnb_fit", {
   expect_true(is.finite(ck$dispersion[["y1"]]))
 })
 
+test_that("rp residuals derive the mean from draws when mu1/mu2 are NULL (copula-fit path)", {
+  f  <- make_rp_resid_fixture("normal")
+  g  <- f; g$mu1 <- NULL; g$mu2 <- NULL
+  for (ty in c("response", "pearson")) {
+    r_stored  <- residuals(f, type = ty, margin = "y1")
+    r_derived <- residuals(g, type = ty, margin = "y1")
+    expect_equal(length(r_derived), length(f$Y1))   # not numeric(0)
+    expect_true(all(is.finite(r_derived)))
+    # ignore_attr = "names": the fixture's stored mu1 incidentally inherits
+    # rownames-as-names via vapply/simplify2array; the production draw-mean
+    # path deliberately strips names (as.vector()). Values must still match.
+    expect_equal(r_derived, r_stored, tolerance = 1e-12, ignore_attr = "names")
+  }
+  # bnb_residual_checks must not collapse to a spurious verdict on the NULL-mean fit
+  ck <- bnb_residual_checks(g, seed = 1, print_output = FALSE)
+  expect_true(is.finite(ck$dispersion[["y1"]]) && ck$dispersion[["y1"]] > 0)
+})
+
 test_that("residual checks detect a well-specified vs misspecified fit (slow)", {
   skip_slow()
   set.seed(5)
