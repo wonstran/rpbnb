@@ -1,3 +1,14 @@
+# rpbnb 0.2.2
+
+* `fit_rpbnb()`: fixed a crash (`attempt to set an attribute on NULL`) when a
+  random coefficient sits on a large-scale covariate. Such a covariate can drive
+  some simulation draws to a near-zero fitted mean, where the negative-binomial
+  log-pmf term `y * log1p(-p)` collapsed to `-Inf` (for `y > 0`) or `0 * -Inf =
+  NaN` (for `y == 0`), poisoning the simulated likelihood so the optimizer never
+  started. The term is now computed cancellation-free in both the R and C++
+  likelihood paths. `fit_rpbnb()` also now fails with an actionable message
+  instead of the opaque attribute error if the optimizer returns no estimate.
+
 # rpbnb 0.2.0 (development)
 
 * `fit_rpbnb()` and `simulate_rpbnb()`: per-coefficient random distributions.
