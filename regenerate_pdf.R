@@ -18,12 +18,16 @@ cat("Title: ", pkg_title, "\n\n")
 
 tryCatch(
   {
-    # Use R CMD Rd2pdf to generate manual from .Rd files
-    # This automatically includes DESCRIPTION metadata (Package, Version, Title,
-    # Authors@R, License, Depends, Imports, Suggests, Description) on the title page
+    # Point Rd2pdf at the package ROOT (not just man/): when a DESCRIPTION file
+    # is present, Rd2pdf automatically prepends the standard CRAN-style title
+    # page (Package, date, Type, Title, Version, Author, Maintainer,
+    # Description, License, Depends/Imports/Suggests) rendered from DESCRIPTION,
+    # ahead of the per-function reference pages -- the same layout CRAN uses for
+    # every package PDF manual (e.g. https://cran.r-project.org/web/packages/maxLik/maxLik.pdf).
+    if (file.exists("rpbnb.pdf")) file.remove("rpbnb.pdf")
     system(
       sprintf(
-        '"%s/bin/R.exe" CMD Rd2pdf --output=rpbnb.pdf man/',
+        '"%s/bin/R.exe" CMD Rd2pdf --output=rpbnb.pdf .',
         "C:/Program Files/R/R-4.5.1"
       )
     )
