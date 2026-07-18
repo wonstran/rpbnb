@@ -10,6 +10,24 @@ test_that("nb_logpmf_y_mu_r matches stats::dnbinom", {
   )
 })
 
+test_that("nb_logpmf_y_mu_r stays finite when mu underflows to ~0", {
+  # A random slope on a large-magnitude covariate (e.g. age 25-64) can drive
+  # some simulation draws to mu ~ 1e-17, where p = r/(r+mu) rounds to exactly 1.
+  # The y * log1p(-p) term is then 0 * -Inf = NaN for y == 0, which poisoned the
+  # whole simulated likelihood. It must instead equal the (finite) NB log pmf.
+  r  <- 1 / 0.5
+  mu <- c(1e-20, 1e-17, 1e-8)
+  for (y in c(0, 1, 3)) {
+    got <- rpbnb:::nb_logpmf_y_mu_r(rep(y, length(mu)), mu, r)
+    exp <- stats::dnbinom(rep(y, length(mu)), size = r, mu = mu, log = TRUE)
+    # These are log-probabilities, so absolute agreement is what matters: a
+    # log-pmf of 0 vs -1e-20 for P(Y = 0) is identical for any downstream use,
+    # though it blows up a relative-tolerance comparison.
+    expect_true(all(is.finite(got)), info = paste("y =", y))
+    expect_true(max(abs(got - exp)) < 1e-8, info = paste("y =", y))
+  }
+})
+
 test_that("c_val equals E[exp(-Y)] on a truncated NB2 grid", {
   mu <- 1.5; m <- 0.8; r <- 1 / m
   y  <- 0:2000

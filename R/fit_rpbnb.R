@@ -226,7 +226,21 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
   fit <- maxLik::maxLik(logLik = ll_fun, start = start,
                         method = method, control = ml_control)
-  par_hat <- stats::coef(fit); names(par_hat) <- par_names
+  par_hat <- stats::coef(fit)
+  # maxLik returns a NULL estimate when the objective is non-finite at the start
+  # (code 100, "Initial value out of range"): a random slope on a large-scale
+  # covariate can make the simulated likelihood overflow/underflow before the
+  # optimizer takes a step. Fail with an actionable message instead of the
+  # opaque "attempt to set an attribute on NULL" from naming a NULL vector.
+  if (is.null(par_hat)) {
+    stop("RP-BNB optimization failed before it could start (maxLik code ",
+         fit$code, ": ", fit$message, ").\n",
+         "The simulated log-likelihood was non-finite at the starting values. ",
+         "This usually means a random coefficient sits on a large-scale ",
+         "covariate; try centering/scaling it or supplying `start`.",
+         call. = FALSE)
+  }
+  names(par_hat) <- par_names
 
   # --- Frozen lambda-bounds at the optimum (over the optimization draws) ---
   rebuild_bounds <- function(p) {

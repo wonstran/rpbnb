@@ -15,7 +15,14 @@ c_val <- function(mu, m) (1 + d_const() * m * mu)^(-1 / m)
 #' @noRd
 nb_logpmf_y_mu_r <- function(y, mu, r) {
   p <- r / (r + mu)
-  lgamma(y + r) - lgamma(r) - lgamma(y + 1) + r * log(p) + y * log1p(-p)
+  # y * log(1 - p) with 1 - p = mu / (r + mu). Forming it via log1p(-p) suffers
+  # catastrophic cancellation once a draw drives mu ~ 0: p rounds to exactly 1,
+  # so 1 - p collapses to 0 and log1p(-p) is -Inf -- giving -Inf for y > 0 (the
+  # true value is large but finite) and 0 * -Inf = NaN for y == 0, either of
+  # which poisons the simulated likelihood. Use the cancellation-free form and
+  # drop the analytically-zero y == 0 term.
+  y_term <- ifelse(y == 0, 0, y * (log(mu) - log(r + mu)))
+  lgamma(y + r) - lgamma(r) - lgamma(y + 1) + r * log(p) + y_term
 }
 
 #' Conservative global lambda-bounds from per-obs c1, c2

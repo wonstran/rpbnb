@@ -59,8 +59,15 @@ static inline double c_val_cpp(double mu, double m, double d) {
 
 static inline double nb_logpmf_cpp(double y, double mu, double r) {
   double p = r / (r + mu);
+  // y * log(1 - p) with 1 - p = mu / (r + mu). Forming it via log1p(-p) suffers
+  // catastrophic cancellation once a draw drives mu ~ 0: p rounds to exactly 1,
+  // so 1 - p collapses to 0 and log1p(-p) is -Inf -- giving -Inf for y > 0 (the
+  // true value is large but finite) and 0 * -Inf = NaN for y == 0, either of
+  // which poisons the simulated likelihood. Use the cancellation-free form and
+  // drop the analytically-zero y == 0 term.
+  double y_term = (y == 0.0) ? 0.0 : y * (std::log(mu) - std::log(r + mu));
   return std::lgamma(y + r) - std::lgamma(r) - std::lgamma(y + 1.0)
-         + r * std::log(p) + y * std::log1p(-p);
+         + r * std::log(p) + y_term;
 }
 
 // ---------------------------------------------------------------------------
