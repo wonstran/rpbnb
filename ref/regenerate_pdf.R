@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
-# Regenerate man/rpbnb_<version>.pdf from package documentation with full
-# metadata from DESCRIPTION. Lives in man/ alongside the .Rd sources it is
-# built from; run from anywhere (it locates the package root itself).
+# Regenerate ref/rpbnb_<version>.pdf from package documentation with full
+# metadata from DESCRIPTION. Run from anywhere (it locates the package root
+# itself); ref/ is a plain output directory, not an R-reserved one.
 
 pkg_root <- "C:/Users/litabook/repos/rpbnb"
 setwd(pkg_root)
@@ -12,7 +12,8 @@ pkg_name <- as.character(desc[1, "Package"])
 pkg_version <- as.character(desc[1, "Version"])
 pkg_title <- as.character(desc[1, "Title"])
 pkg_license <- as.character(desc[1, "License"])
-pdf_out <- sprintf("man/%s_%s.pdf", pkg_name, pkg_version)
+dir.create("ref", showWarnings = FALSE)
+pdf_out <- sprintf("ref/%s_%s.pdf", pkg_name, pkg_version)
 
 cat("Regenerating", pdf_out, "from package documentation...\n\n")
 cat("Package: ", pkg_name, "\n")

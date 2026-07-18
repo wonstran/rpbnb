@@ -22,5 +22,4 @@
 ^fit_results.*$
 ^rpbnb-manual.*$
 ^rpbnb_parameters_visual\.html$
-^man/regenerate_pdf\.R$
-^man/rpbnb_.*\.pdf$
+^ref$
