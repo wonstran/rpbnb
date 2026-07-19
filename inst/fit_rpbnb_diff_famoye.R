@@ -66,43 +66,20 @@ print(summary(fit))
 # parameters whose null sits on the boundary of the parameter space (sd = 0, or
 # m = 0 = Poisson), where the Wald ratio does not test that null. The correct
 # test is a likelihood-ratio test against a properly nested restricted fit, with
-# the 50:50 chi-square boundary correction (Self & Liang 1987). Each restricted
-# refit reuses the SAME draws / seed / control as the full model, so the two
-# simulated log-likelihoods are compared on common random numbers.
-#   * SD tests:         drop the random slope (random_1 / random_2).
-#   * Dispersion tests: fit that margin at its Poisson limit (poisson_1 /
-#                       poisson_2 pins m = 0), testing for overdispersion.
+# the 50:50 chi-square boundary correction (Self & Liang 1987).
+#
+# rpbnb_boundary_tests() runs all of them and merges the results: it refits each
+# nested restricted model (dropping one random SD at a time -- keeping any other
+# random coefficients in the equation -- or pinning a margin at its Poisson
+# limit), reusing the full model's draws / seed so the simulated log-likelihoods
+# compare on common random numbers. SEs are skipped for the refits (the LR test
+# needs only logLik + df).
 sep(); cat("BOUNDARY-PARAMETER SIGNIFICANCE (boundary-corrected LR tests)\n"); sep()
 
-# SEs are not needed for the restricted fits (lr_test uses logLik + df only), so
-# skip them to save time.
-lr_ctrl <- rpbnb_control(print_level = 0, n_cores = rpbnb_threads(),
-                         compute_se = FALSE)
-
-# Random-coefficient SDs: drop the random slope.
-rest_no_sd1 <- fit_rpbnb(f1, f2, data = data, random_2 = "educ",
-                         dependence = "famoye", draws = 500, seed = 20240712,
-                         control = lr_ctrl)                  # drops sd1:hhninc
-rest_no_sd2 <- fit_rpbnb(f1, f2, data = data, random_1 = "hhninc",
-                         dependence = "famoye", draws = 500, seed = 20240712,
-                         control = lr_ctrl)                  # drops sd2:educ
-
-# NB2 dispersions: fit the margin at its Poisson limit (m = 0).
-rest_pois1 <- fit_rpbnb(f1, f2, data = data, random_1 = "hhninc", random_2 = "educ",
-                        dependence = "famoye", draws = 500, seed = 20240712,
-                        control = lr_ctrl, poisson_1 = TRUE) # pins m1 = 0
-rest_pois2 <- fit_rpbnb(f1, f2, data = data, random_1 = "hhninc", random_2 = "educ",
-                        dependence = "famoye", draws = 500, seed = 20240712,
-                        control = lr_ctrl, poisson_2 = TRUE) # pins m2 = 0
-
-cat("\nH0: sd1:hhninc = 0  (no random slope on hhninc, equation 1)\n")
-print(lr_test(rest_no_sd1, fit, boundary = TRUE))
-cat("\nH0: sd2:educ = 0  (no random slope on educ, equation 2)\n")
-print(lr_test(rest_no_sd2, fit, boundary = TRUE))
-cat("\nH0: m1 = 0  (equation 1 is Poisson, no overdispersion)\n")
-print(lr_test(rest_pois1, fit, boundary = TRUE))
-cat("\nH0: m2 = 0  (equation 2 is Poisson, no overdispersion)\n")
-print(lr_test(rest_pois2, fit, boundary = TRUE))
+bt <- rpbnb_boundary_tests(fit, data,
+        control = rpbnb_control(print_level = 0, n_cores = rpbnb_threads(),
+                                compute_se = FALSE))
+print(bt)
 
 # ---- 4. Fitted means (predict) ----------------------------------------------
 sep(); cat("FITTED MEANS (predict) -- first 6 observations\n"); sep()
