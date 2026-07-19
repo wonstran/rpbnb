@@ -45,7 +45,7 @@ t_fit <- system.time(
     random_1   = "hhninc",   # random slope on hhninc (eq 1), continuous, in f1
     random_2   = "educ",     # random slope on educ   (eq 2), continuous, in f2
     dependence = "famoye",
-    draws      = 200,
+    draws      = 500,
     seed       = 20240712,
     control    = rpbnb_control(
       print_level = 1,
@@ -59,6 +59,31 @@ cat(sprintf("\nEstimation finished in %.1f s\n", t_fit))
 # ---- 3. Model summary -------------------------------------------------------
 sep(); cat("MODEL SUMMARY\n"); sep()
 print(summary(fit))
+
+# ---- 3b. Significance of the random-coefficient SDs (LR tests) --------------
+# The natural-scale table shows no Wald z/p for the random-coefficient SDs
+# (sd1:hhninc, sd2:educ) and the NB2 dispersions (m1, m2): those are positive
+# parameters whose null (sd = 0) sits on the boundary of the parameter space,
+# where the Wald ratio does not test that null. The correct test is a
+# likelihood-ratio test against a fit that drops the random slope, with the
+# 50:50 chi-square boundary correction (Self & Liang 1987). Each restricted
+# refit reuses the SAME draws / seed / control as the full model, so the two
+# simulated log-likelihoods are compared on common random numbers.
+sep(); cat("RANDOM-COEFFICIENT SIGNIFICANCE (boundary-corrected LR tests)\n"); sep()
+
+lr_ctrl <- rpbnb_control(print_level = 0, n_cores = rpbnb_threads(),
+                         se_method = "opg")
+rest_no_sd1 <- fit_rpbnb(f1, f2, data = data, random_2 = "educ",
+                         dependence = "famoye", draws = 500, seed = 20240712,
+                         control = lr_ctrl)                # drops sd1:hhninc
+rest_no_sd2 <- fit_rpbnb(f1, f2, data = data, random_1 = "hhninc",
+                         dependence = "famoye", draws = 500, seed = 20240712,
+                         control = lr_ctrl)                # drops sd2:educ
+
+cat("\nH0: sd1:hhninc = 0  (no random slope on hhninc, equation 1)\n")
+print(lr_test(rest_no_sd1, fit, boundary = TRUE))
+cat("\nH0: sd2:educ = 0  (no random slope on educ, equation 2)\n")
+print(lr_test(rest_no_sd2, fit, boundary = TRUE))
 
 # ---- 4. Fitted means (predict) ----------------------------------------------
 sep(); cat("FITTED MEANS (predict) -- first 6 observations\n"); sep()
