@@ -1,3 +1,29 @@
+# NB2 dispersion value used to approximate the Poisson limit (m -> 0) when a
+# margin is fit with poisson_1/poisson_2 = TRUE. The NB2 log-pmf converges to the
+# Poisson log-pmf as m -> 0 (max per-obs error ~4e-5 at this value) and 1e-6
+# keeps r = 1/m = 1e6 well away from the lgamma cancellation that appears at
+# r ~ 1e8, so this is an accurate, well-conditioned stand-in for m = 0. It is a
+# numerical limit, not an exact Poisson reparameterization.
+POISSON_M <- 1e-6
+
+# Standard errors when some parameters are held fixed (pinned dispersions).
+# `info` is the full observed-information (or the OPG/analytic surrogate) over
+# all parameters; `free` is a logical vector marking the estimated coordinates.
+# Inverts only the free-by-free block (fixed parameters carry no curvature in the
+# conditional model and would make the full inverse inconsistent with the reduced
+# df), then scatters se/vcov back to full size with NA for the fixed parameters.
+.free_index_vcov <- function(info, par_names, free, label = "model") {
+  if (all(free)) return(.observed_info_vcov(info, par_names, label = label))
+  sub <- .observed_info_vcov(info[free, free, drop = FALSE], par_names[free],
+                             label = label)
+  p  <- length(par_names)
+  vc <- matrix(NA_real_, p, p, dimnames = list(par_names, par_names))
+  vc[free, free] <- sub$vcov
+  se <- rep(NA_real_, p); names(se) <- par_names
+  se[free] <- sub$se
+  list(vcov = vc, se = se, diag = sub$diag)
+}
+
 #' Numerically stable per-row log-sum-exp
 #' @keywords internal
 #' @noRd

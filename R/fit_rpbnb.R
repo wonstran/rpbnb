@@ -60,6 +60,14 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #'   coefficients on 0/1 dummy regressors are weakly identified under the
 #'   copula path (NB dispersion trades off against the random-coefficient
 #'   scale); prefer random coefficients on continuous regressors.
+#' @param poisson_1,poisson_2 Fit the corresponding margin at its Poisson limit
+#'   (NB2 dispersion `m = 0`): the margin's `log_m` is pinned at a tiny constant
+#'   and held fixed, so it is not a free parameter and the fit is a properly
+#'   nested restriction of the NB model. Pair with [lr_test()] (`boundary =
+#'   TRUE`) to test a margin for overdispersion (`H0: m = 0`). This is a
+#'   numerical m->0 limit, accurate to well under one log-likelihood unit, not
+#'   an exact Poisson reparameterization. Not supported with a [copula()]
+#'   dependence.
 #' @return An object of class `rpbnb_fit`.
 #' @export
 #' @examples
@@ -91,10 +99,15 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                       draws = 400, draw_type = "halton",
                       seed = 1234, start = NULL,
                       control = rpbnb_control(),
-                      dependence = "famoye") {
+                      dependence = "famoye",
+                      poisson_1 = FALSE, poisson_2 = FALSE) {
   stopifnot(is.data.frame(data))
 
   if (inherits(dependence, "rpbnb_copula")) {
+    if (isTRUE(poisson_1) || isTRUE(poisson_2)) {
+      stop("poisson_1 / poisson_2 (Poisson-limit margins) are not supported ",
+           "with a copula() dependence.", call. = FALSE)
+    }
     return(.fit_rpbnb_copula(formula_1, formula_2, data, random_1, random_2,
                              draws, draw_type, seed, start, control,
                              family = dependence$family))
@@ -180,6 +193,13 @@ fit_rpbnb <- function(formula_1, formula_2, data,
       log(0.5), log(0.5), 0),
     par_names, "start")
 
+  # Poisson-limit margins: pin log_m at log(POISSON_M) and hold it fixed during
+  # optimization (maxLik `fixed=`), so it is not an estimated parameter and the
+  # fit nests inside the NB model for an overdispersion LR test.
+  fixed_names <- c(if (isTRUE(poisson_1)) "log_m1", if (isTRUE(poisson_2)) "log_m2")
+  free <- !(par_names %in% fixed_names)
+  if (length(fixed_names)) start[fixed_names] <- log(POISSON_M)
+
   # Preferred fast path: multithreaded (OpenMP) C++ likelihood. When available
   # it supersedes the process-based cluster entirely -- the draw loop is
   # parallelised across threads inside C++ with shared memory (no per-call
@@ -225,7 +245,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
 
   fit <- maxLik::maxLik(logLik = ll_fun, start = start,
-                        method = method, control = ml_control)
+                        method = method, control = ml_control,
+                        fixed = if (length(fixed_names)) fixed_names else NULL)
   par_hat <- stats::coef(fit)
   # maxLik returns a NULL estimate when the objective is non-finite at the start
   # (code 100, "Initial value out of range"): a random slope on a large-scale
@@ -271,7 +292,11 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
 
   # --- Standard errors ---
-  npar <- length(par_hat)
+  # npar (df) counts only free parameters; a pinned Poisson dispersion is fixed.
+  # The vcov/se objects stay full-length (NA for the pinned coordinate) so they
+  # align with the full coefficient vector downstream.
+  npar       <- length(par_hat) - length(fixed_names)
+  npar_total <- length(par_hat)
   use_opg      <- isTRUE(compute_se) && use_cpp && identical(se_method, "opg")
   use_analytic <- isTRUE(compute_se) && identical(se_method, "analytic")
   if (use_opg) {
@@ -282,7 +307,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     S <- bnbr_rp_scores_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                             dist1, dist2, sign1, sign2, n_threads = cpp_threads)
-    inv <- opg_vcov(S, par_names)
+    inv <- .free_index_vcov(crossprod(S), par_names, free, label = "OPG (BHHH)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (use_analytic) {
     # Closed-form observed-information Hessian (Famoye 2010 per-draw second
@@ -294,7 +319,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                          dist1, dist2, sign1, sign2,
                          lamLo = lamLo_h, lamHi = lamHi_h)
     info <- -H
-    inv <- .observed_info_vcov(info, par_names, label = "RP-BNB (analytic Hessian)")
+    inv <- .free_index_vcov(info, par_names, free, label = "RP-BNB (analytic Hessian)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (isTRUE(compute_se)) {
     # Same-draw curvature: differentiate the frozen-bounds objective on the SAME
@@ -338,13 +363,13 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                                                 eps = max(1e-4, 5 * control$hess_eps)))
       info <- -H; info <- (info + t(info)) / 2
     }
-    inv <- .observed_info_vcov(info, par_names, label = "RP-BNB (numeric Hessian)")
+    inv <- .free_index_vcov(info, par_names, free, label = "RP-BNB (numeric Hessian)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else {
     # Keep vcov() type-consistent with bnb_fit (an NA-filled matrix, not NULL)
     # when SEs are skipped, so downstream code can rely on a matrix shape.
-    vc <- matrix(NA_real_, npar, npar, dimnames = list(par_names, par_names))
-    se <- rep(NA_real_, npar); names(se) <- par_names
+    vc <- matrix(NA_real_, npar_total, npar_total, dimnames = list(par_names, par_names))
+    se <- rep(NA_real_, npar_total); names(se) <- par_names
     hdiag <- NULL
   }
 

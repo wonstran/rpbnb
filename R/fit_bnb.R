@@ -30,12 +30,18 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
 #' list with fields consumed by [fit_bnb()].
 #' @keywords internal
 #' @noRd
-fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
+fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
+                           poisson_1 = FALSE, poisson_2 = FALSE) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
 
   par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
                  "log_m1", "log_m2", "z_lambda")
   zero_start <- c(rep(0, p1 + p2), log(0.5), log(0.5), 0)
+
+  # Poisson-limit margins: pin log_m at log(POISSON_M) and hold it fixed during
+  # optimization (maxLik `fixed=`), so it is not an estimated parameter.
+  fixed_names <- c(if (isTRUE(poisson_1)) "log_m1", if (isTRUE(poisson_2)) "log_m2")
+  free <- !(par_names %in% fixed_names)
 
   # Multi-start policy. The famoye analytic gradient freezes the lambda-bounds,
   # so the BFGS objective is start-sensitive and no single start dominates
@@ -51,6 +57,10 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
     cand <- list(user = .resolve_start(start, zero_start, par_names, "start"))
   }
   cand <- lapply(cand, function(s) { names(s) <- par_names; s })
+  # Pin the Poisson-limit dispersions in every start so maxLik holds them there.
+  if (length(fixed_names)) {
+    cand <- lapply(cand, function(s) { s[fixed_names] <- log(POISSON_M); s })
+  }
 
   # --- capture logLik at every evaluation (reset per candidate) ---
   .ll_eval <- numeric(0)
@@ -69,7 +79,8 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
     .ll_eval <<- numeric(0)
     f <- tryCatch(
       maxLik::maxLik(logLik = ll_fun, grad = grad_fun, start = s0,
-                     method = "BFGS", control = ml_control),
+                     method = "BFGS", control = ml_control,
+                     fixed = if (length(fixed_names)) fixed_names else NULL),
       error = function(e) NULL)
     if (is.null(f)) NULL else list(fit = f, trace = .ll_eval)
   }
@@ -123,7 +134,7 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
                                                 eps = max(1e-4, 5 * control$hess_eps)))
       info <- -H; info <- (info + t(info)) / 2
     }
-    inv <- .observed_info_vcov(info, names(par_hat), label = "famoye BNB")
+    inv <- .free_index_vcov(info, names(par_hat), free, label = "famoye BNB")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else {
     vc <- matrix(NA_real_, length(par_hat), length(par_hat))
@@ -137,7 +148,7 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control) {
                       message = fit$message, iterations = fit$iterations)
 
   list(coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
-       npar = length(par_hat),
+       npar = length(par_hat) - length(fixed_names),   # pinned dispersions not free
        lambda = lambda_hat, bounds = c(bnds_hat[1], bnds_hat[2]),
        mu1 = mu1_hat, mu2 = mu2_hat,
        ll_trace = .ll_eval, convergence = convergence, hessian_diag = hdiag)
@@ -213,50 +224,65 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
        hessian_diag = hdiag)
 }
 
-#' Internal estimator: independence = two univariate NB2 margins via MASS::glm.nb
+# Fit one independence margin: NB2 (MASS::glm.nb) or, when Poisson, an exact
+# Poisson GLM. Returns the fit, its beta vcov, log_m (log(POISSON_M) pinned for
+# Poisson), var(log_m) (NA for Poisson -- fixed, not estimated), and whether the
+# dispersion is a free parameter. `which` labels errors ("Margin 1"/"Margin 2").
+.fit_independence_margin <- function(formula, data, poisson, which) {
+  if (isTRUE(poisson)) {
+    g <- tryCatch(stats::glm(formula, family = stats::poisson, data = data),
+                  error = function(e) stop(which, " (", deparse(formula),
+                    ") Poisson glm failed: ", conditionMessage(e), call. = FALSE))
+    list(g = g, vbeta = stats::vcov(g), log_m = log(POISSON_M),
+         var_log_m = NA_real_, m_free = FALSE)
+  } else {
+    g <- tryCatch(MASS::glm.nb(formula, data = data),
+                  error = function(e) stop(which, " (", deparse(formula),
+                    ") glm.nb failed: ", conditionMessage(e), call. = FALSE))
+    list(g = g, vbeta = stats::vcov(g), log_m = log(1 / g$theta),
+         var_log_m = (g$SE.theta / g$theta)^2, m_free = TRUE)   # delta-method
+  }
+}
+
+#' Internal estimator: independence = two univariate margins (NB2 or Poisson)
 #' @keywords internal
 #' @noRd
 fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
-                                 X1, X2, Y1, Y2) {
-  g1 <- tryCatch(MASS::glm.nb(formula_1, data = data),
-                 error = function(e) stop("Margin 1 (", deparse(formula_1),
-                   ") glm.nb failed: ", conditionMessage(e), call. = FALSE))
-  g2 <- tryCatch(MASS::glm.nb(formula_2, data = data),
-                 error = function(e) stop("Margin 2 (", deparse(formula_2),
-                   ") glm.nb failed: ", conditionMessage(e), call. = FALSE))
-
+                                 X1, X2, Y1, Y2,
+                                 poisson_1 = FALSE, poisson_2 = FALSE) {
+  f1 <- .fit_independence_margin(formula_1, data, poisson_1, "Margin 1")
+  f2 <- .fit_independence_margin(formula_2, data, poisson_2, "Margin 2")
+  g1 <- f1$g; g2 <- f2$g
   p1 <- length(stats::coef(g1)); p2 <- length(stats::coef(g2))
 
-  log_m1 <- log(1 / g1$theta)
-  log_m2 <- log(1 / g2$theta)
-
   # Independence has no dependence parameter: the coefficient vector holds only
-  # the two betas and the two dispersions (no fabricated z_lambda), so
-  # length(coef) == npar. lambda = 0 is recorded separately on the fit object.
-  par <- c(stats::coef(g1), stats::coef(g2), log_m1, log_m2)
+  # the two betas and the two dispersions (no fabricated z_lambda). A Poisson
+  # margin pins log_m at the Poisson limit and does not count it as free.
+  par <- c(stats::coef(g1), stats::coef(g2), f1$log_m, f2$log_m)
   names(par) <- c(paste0("b1:", cn1), paste0("b2:", cn2),
                   "log_m1", "log_m2")
 
-  npar_total <- length(par)            # p1 + p2 + 2, all free
-  vc <- matrix(0, npar_total, npar_total,
-               dimnames = list(names(par), names(par)))
-  vc[1:p1, 1:p1] <- stats::vcov(g1)
-  vc[p1 + (1:p2), p1 + (1:p2)] <- stats::vcov(g2)
-  # log_m = log(1/theta); delta-method var(log_m) = (SE.theta / theta)^2
-  vc[p1 + p2 + 1, p1 + p2 + 1] <- (g1$SE.theta / g1$theta)^2
-  vc[p1 + p2 + 2, p1 + p2 + 2] <- (g2$SE.theta / g2$theta)^2
+  ntot <- length(par)
+  vc <- matrix(0, ntot, ntot, dimnames = list(names(par), names(par)))
+  vc[1:p1, 1:p1] <- f1$vbeta
+  vc[p1 + (1:p2), p1 + (1:p2)] <- f2$vbeta
+  # log_m = log(1/theta); delta-method var(log_m) = (SE.theta / theta)^2. A
+  # pinned Poisson dispersion gets NA (fixed, not estimated).
+  vc[p1 + p2 + 1, p1 + p2 + 1] <- f1$var_log_m
+  vc[p1 + p2 + 2, p1 + p2 + 2] <- f2$var_log_m
 
-  se <- sqrt(pmax(diag(vc), 0))
-  names(se) <- names(par)
+  se <- sqrt(pmax(diag(vc), 0)); names(se) <- names(par)
+  n_free_m <- f1$m_free + f2$m_free
 
   ll <- as.numeric(stats::logLik(g1)) + as.numeric(stats::logLik(g2))
 
   convergence <- list(converged = isTRUE(g1$converged) && isTRUE(g2$converged),
-                      code = NA_integer_, message = "glm.nb",
+                      code = NA_integer_,
+                      message = if (n_free_m == 2L) "glm.nb" else "glm.nb/poisson",
                       iterations = NA_integer_)
 
   list(coef = par, vcov = vc, se = se, logLik = ll,
-       npar = npar_total,               # all parameters free (no lambda)
+       npar = p1 + p2 + n_free_m,        # betas + free dispersions (no lambda)
        lambda = 0, bounds = c(NA_real_, NA_real_),
        mu1 = unname(stats::fitted(g1)), mu2 = unname(stats::fitted(g2)),
        ll_trace = numeric(0), convergence = convergence)
@@ -280,6 +306,14 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   start-sensitive and neither start dominates).
 #' @param control An [rpbnb_control()] object. The famoye and copula estimators
 #'   both use BFGS, the only optimizer `control$method` accepts.
+#' @param poisson_1,poisson_2 Fit the corresponding margin at its Poisson limit
+#'   (NB2 dispersion `m = 0`) instead of estimating the dispersion. The margin's
+#'   `log_m` is held fixed, so it is not a free parameter and the fit is a
+#'   properly nested restriction of the NB model -- pair it with [lr_test()]
+#'   (`boundary = TRUE`) to test for overdispersion. In the famoye path this is
+#'   a numerical m->0 limit (`m` pinned at a tiny constant); in the independence
+#'   path it is an exact Poisson GLM margin. Not supported with a [copula()]
+#'   dependence.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples
@@ -288,13 +322,19 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'                dependence = "famoye")
 #' summary(fit)
 #'
+#' # Overdispersion test for margin 1 (H0: m1 = 0, Poisson)
+#' fit_p1 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+#'                   dependence = "famoye", poisson_1 = TRUE)
+#' lr_test(fit_p1, fit, boundary = TRUE)
+#'
 #' # Gaussian copula dependence instead of Famoye/Sarmanov
 #' fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #'                    dependence = copula("normal"))
 #' fit_cop$cop_tau  # estimated Kendall's tau
 fit_bnb <- function(formula_1, formula_2, data,
                     dependence = c("independence", "famoye"),
-                    start = NULL, control = rpbnb_control()) {
+                    start = NULL, control = rpbnb_control(),
+                    poisson_1 = FALSE, poisson_2 = FALSE) {
 
   prep <- .prepare_bnb_data(formula_1, formula_2, data)
   Y1 <- prep$Y1; Y2 <- prep$Y2
@@ -302,6 +342,10 @@ fit_bnb <- function(formula_1, formula_2, data,
   cn1 <- prep$cn1; cn2 <- prep$cn2
 
   if (inherits(dependence, "rpbnb_copula")) {
+    if (isTRUE(poisson_1) || isTRUE(poisson_2)) {
+      stop("poisson_1 / poisson_2 (Poisson-limit margins) are not supported ",
+           "with a copula() dependence.", call. = FALSE)
+    }
     res <- fit_bnb_copula(Y1, Y2, X1, X2, cn1, cn2,
                           family = dependence$family, start = start, control = control)
     return(new_bnb_fit(
@@ -320,9 +364,11 @@ fit_bnb <- function(formula_1, formula_2, data,
   dependence <- match.arg(dependence)
 
   res <- if (dependence == "famoye") {
-    fit_bnb_famoye(Y1, Y2, X1, X2, cn1, cn2, start, control)
+    fit_bnb_famoye(Y1, Y2, X1, X2, cn1, cn2, start, control,
+                   poisson_1 = poisson_1, poisson_2 = poisson_2)
   } else {
-    fit_bnb_independence(formula_1, formula_2, prep$data, cn1, cn2, X1, X2, Y1, Y2)
+    fit_bnb_independence(formula_1, formula_2, prep$data, cn1, cn2, X1, X2, Y1, Y2,
+                         poisson_1 = poisson_1, poisson_2 = poisson_2)
   }
 
   new_bnb_fit(coef = res$coef, vcov = res$vcov, se = res$se,

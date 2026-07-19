@@ -10,7 +10,9 @@ fit_bnb(
   data,
   dependence = c("independence", "famoye"),
   start = NULL,
-  control = rpbnb_control()
+  control = rpbnb_control(),
+  poisson_1 = FALSE,
+  poisson_2 = FALSE
 )
 }
 \arguments{
@@ -34,6 +36,15 @@ start-sensitive and neither start dominates).}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
 both use BFGS, the only optimizer \code{control$method} accepts.}
+
+\item{poisson_1, poisson_2}{Fit the corresponding margin at its Poisson limit
+(NB2 dispersion \code{m = 0}) instead of estimating the dispersion. The margin's
+\code{log_m} is held fixed, so it is not a free parameter and the fit is a
+properly nested restriction of the NB model -- pair it with \code{\link[=lr_test]{lr_test()}}
+(\code{boundary = TRUE}) to test for overdispersion. In the famoye path this is
+a numerical m->0 limit (\code{m} pinned at a tiny constant); in the independence
+path it is an exact Poisson GLM margin. Not supported with a \code{\link[=copula]{copula()}}
+dependence.}
 }
 \value{
 An object of class \code{bnb_fit}.
@@ -46,6 +57,11 @@ d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
 fit <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
                dependence = "famoye")
 summary(fit)
+
+# Overdispersion test for margin 1 (H0: m1 = 0, Poisson)
+fit_p1 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                  dependence = "famoye", poisson_1 = TRUE)
+lr_test(fit_p1, fit, boundary = TRUE)
 
 # Gaussian copula dependence instead of Famoye/Sarmanov
 fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,

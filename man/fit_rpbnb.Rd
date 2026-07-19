@@ -15,7 +15,9 @@ fit_rpbnb(
   seed = 1234,
   start = NULL,
   control = rpbnb_control(),
-  dependence = "famoye"
+  dependence = "famoye",
+  poisson_1 = FALSE,
+  poisson_2 = FALSE
 )
 }
 \arguments{
@@ -49,6 +51,14 @@ noticeably longer than the Famoye path at comparable \code{draws}/\code{n}. Rand
 coefficients on 0/1 dummy regressors are weakly identified under the
 copula path (NB dispersion trades off against the random-coefficient
 scale); prefer random coefficients on continuous regressors.}
+
+\item{poisson_1, poisson_2}{Fit the corresponding margin at its Poisson limit
+(NB2 dispersion \code{m = 0}): the margin's \code{log_m} is pinned at a tiny constant
+and held fixed, so it is not a free parameter and the fit is a properly
+nested restriction of the NB model. Pair with \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}) to test a margin for overdispersion (\code{H0: m = 0}). This is a
+numerical m->0 limit, accurate to well under one log-likelihood unit, not
+an exact Poisson reparameterization. Not supported with a \code{\link[=copula]{copula()}}
+dependence.}
 }
 \value{
 An object of class \code{rpbnb_fit}.
