@@ -197,6 +197,19 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   out
 }
 
+# Footnote for a natural-scale table: when any row reports no z/p (positive
+# scale/dispersion parameters, where the Wald ratio does not test the boundary
+# null a = 0), point users to lr_test() for a valid test rather than leaving the
+# blank z/p unexplained. `tab` is a natural-scale data frame with a `z` column.
+.print_natural_scale_footnote <- function(tab) {
+  if (is.null(tab) || !"z" %in% names(tab)) return(invisible(NULL))
+  if (any(is.na(tab$z))) {
+    cat("Note: no Wald z/p for positive scale/dispersion parameters (SDs, m);\n",
+        "      their null is a boundary. Use lr_test() to test these.\n", sep = "")
+  }
+  invisible(NULL)
+}
+
 .print_natural_scale <- function(object, digits = 4) {
   nat <- .natural_scale_table(object)
   if (is.null(nat$random) && is.null(nat$dispersion)) return(invisible(NULL))
@@ -215,6 +228,7 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     .print_coef_matrix(nat$dispersion, digits)
     cat("Signif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
   }
+  .print_natural_scale_footnote(.natural_scale_flat(object))
 
   invisible(nat)
 }
@@ -296,6 +310,7 @@ print.summary.bnb_fit <- function(x, digits = 4, ...) {
   if (!is.null(x$natural)) {
     cat("\nNatural-scale dispersion / dependence (delta-method SE):\n")
     .print_coef_matrix(x$natural, digits)
+    .print_natural_scale_footnote(x$natural)
   }
   cat(sprintf("\nn = %d   k = %d   logLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               x$nobs, x$npar, x$logLik, x$AIC, x$BIC))
@@ -495,6 +510,7 @@ print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
   if (!is.null(x$natural)) {
     cat("\nNatural-scale dispersion / dependence (delta-method SE):\n")
     .print_coef_matrix(x$natural, digits)
+    .print_natural_scale_footnote(x$natural)
   }
   cat(sprintf("\nn = %d   k = %d   logLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               x$nobs, x$npar, x$logLik, x$AIC, x$BIC))
