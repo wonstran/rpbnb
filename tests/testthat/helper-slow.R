@@ -9,6 +9,16 @@ skip_slow <- function() {
   testthat::skip_if(!run, "slow end-to-end test (set RPBNB_RUN_SLOW=1 to run)")
 }
 
+# Muffle ONLY the interim Poisson-limit mean-range diagnostic (a tail draw can
+# trip it on RP Poisson refits). Genuine warnings -- non-convergence, a negative
+# LR statistic -- still surface, so tests that use this do not hide the paths a
+# broad suppressWarnings() would.
+suppress_poisson_warning <- function(expr) {
+  withCallingHandlers(expr, warning = function(w) {
+    if (grepl("POISSON_M", conditionMessage(w))) invokeRestart("muffleWarning")
+  })
+}
+
 # Build a synthetic rpbnb_fit with stored draws, for testing predict() semantics
 # without any optimization. Equation 1 carries one random coefficient on `x1`;
 # equation 2 is fixed. `dist1`/`sign1` select the random-coefficient family.

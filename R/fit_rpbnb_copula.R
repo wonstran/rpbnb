@@ -119,7 +119,9 @@
   m2_hat <- unname(exp(par_hat[idx_end + 2]))
 
   ll_hat <- as.numeric(stats::logLik(fit))
-  convergence <- list(converged = fit$code <= 2L, code = fit$code,
+  # maxLik BFGS (optim-based) returns code 0 on success; code 1 is
+  # "iteration limit exceeded" -- NOT convergence. Only 0 counts as converged.
+  convergence <- list(converged = isTRUE(fit$code == 0L), code = fit$code,
                       message = fit$message, iterations = fit$iterations)
 
   new_rpbnb_fit(

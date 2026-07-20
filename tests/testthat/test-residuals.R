@@ -153,6 +153,16 @@ test_that("rp lognormal analytic-Inf rows give NA pearson residuals with a warni
   expect_warning(residuals(f, type = "pearson", margin = "y1"), "infinite")
 })
 
+test_that("rp lognormal analytic-Inf rows give NA response residuals with a warning", {
+  f <- make_rp_resid_fixture("lognormal")   # eq-1 random coef lognormal, sign +1
+  inf <- rpbnb:::.rp_inf_rows(f$X1, f$rand_idx1, f$rp_meta$dist1, f$rp_meta$sign1)
+  skip_if(!any(inf), "fixture produced no analytic-Inf rows")
+  rr <- suppressWarnings(residuals(f, type = "response", margin = "y1"))
+  expect_true(all(is.na(rr[inf])))            # infinite-mean rows -> NA
+  expect_true(all(is.finite(rr[!inf])))       # finite-mean rows unaffected
+  expect_warning(residuals(f, type = "response", margin = "y1"), "infinite")
+})
+
 test_that("plot.bnb_fit runs to a null device and restores par()", {
   f  <- make_bnb_resid_fixture()
   op <- par(no.readonly = TRUE)

@@ -77,7 +77,7 @@ print(summary(fit))
 sep(); cat("BOUNDARY-PARAMETER SIGNIFICANCE (boundary-corrected LR tests)\n"); sep()
 
 bt <- rpbnb_boundary_tests(fit, data,
-        control = rpbnb_control(print_level = 0, n_cores = rpbnb_threads(),
+        control = rpbnb_control(print_level = 1, n_cores = rpbnb_threads(),
                                 compute_se = FALSE))
 print(bt)
 

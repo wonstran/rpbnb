@@ -39,10 +39,22 @@
 #' correction of [lr_test()] (`boundary = TRUE`).
 #'
 #' Each test refits a properly nested restricted model. With **multiple random
-#' coefficients in an equation, each SD is tested individually** -- the restricted
-#' fit drops only that coefficient and keeps the others (a 1-df restriction).
-#' Every restricted fit reuses the full model's `draws`, `draw_type`, and `seed`,
-#' so the two simulated log-likelihoods are compared on common random numbers.
+#' coefficients in an equation, each SD is tested individually** (a 1-df
+#' restriction). The restricted fit keeps the full random specification but sets
+#' the tested coefficient's draw column to the distribution median (`u = 0.5`),
+#' which zeroes that coefficient's per-draw *deviation* exactly for every
+#' supported distribution (`u = 0.5` maps to base 0 for normal/lognormal/
+#' triangular, and to the centered value `2 * 0.5 - 1 = 0` for uniform). The
+#' coefficient therefore collapses to its SD-zero null -- the ordinary fixed
+#' coefficient `b` for normal/uniform/triangular, and `sign * exp(b)` for
+#' lognormal -- on every draw, independent of the covariate scale. Its (now
+#' inert) log-scale is pinned only to drop it from the free-parameter count. Every
+#' other draw column is the full model's exact stored draw, so the two simulated
+#' log-likelihoods are compared on common random numbers, and each restricted fit
+#' is **warm-started from the full fit's coefficients** so the start-sensitive
+#' simulated objective does not settle at an inferior optimum. A restricted fit
+#' that fails to converge yields `NA` inference (with a warning) rather than a
+#' p-value, and a non-converged full `fit` is rejected.
 #'
 #' @param fit A famoye `rpbnb_fit` (the full model). Copula fits are not
 #'   supported (Poisson-limit margins are unavailable there).
@@ -83,6 +95,15 @@ rpbnb_boundary_tests <- function(fit, data,
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
   which <- match.arg(which, c("sd", "dispersion"), several.ok = TRUE)
 
+  # Convergence is a hard precondition: an LR test compares two maximized
+  # log-likelihoods, so a non-converged full fit invalidates every comparison.
+  if (!isTRUE(fit$convergence$converged)) {
+    stop("`fit` (the full model) did not converge (maxLik code ",
+         fit$convergence$code, ": ", fit$convergence$message,
+         "). Refit it to convergence before running boundary tests.",
+         call. = FALSE)
+  }
+
   # Full random specs, reconstructed from the fit.
   names1 <- colnames(fit$X1)[fit$rand_idx1]
   names2 <- colnames(fit$X2)[fit$rand_idx2]
@@ -91,14 +112,56 @@ rpbnb_boundary_tests <- function(fit, data,
   full1  <- .build_rand_spec(names1, dist1, sign1)
   full2  <- .build_rand_spec(names2, dist2, sign2)
 
-  refit <- function(spec1, spec2, poisson_1 = FALSE, poisson_2 = FALSE) {
+  # Every restricted fit keeps the full spec, reuses the full model's stored
+  # optimization draws (common random numbers), and warm-starts from the full
+  # fit's coefficients so the start-sensitive Famoye objective does not settle at
+  # an inferior local optimum (which could inflate or clamp the LR statistic).
+  full_draws <- list(Z1 = fit$rp_meta$Z1, Z2 = fit$rp_meta$Z2)
+  refit <- function(poisson_1 = FALSE, poisson_2 = FALSE, fixed = NULL,
+                    opt_draws = full_draws) {
     fit_rpbnb(fit$formula_1, fit$formula_2, data = data,
-              random_1 = spec1, random_2 = spec2,
+              random_1 = full1, random_2 = full2,
               draws = fit$draws, draw_type = fit$draw_type, seed = fit$seed,
-              control = control, dependence = "famoye",
-              poisson_1 = poisson_1, poisson_2 = poisson_2)
+              start = fit$coef, control = control, dependence = "famoye",
+              poisson_1 = poisson_1, poisson_2 = poisson_2,
+              .fixed = fixed, .opt_draws = opt_draws)
   }
+  # Optimization-parameterization name of a random coefficient's log-scale, e.g.
+  # .scale_par("normal", 1, "x1") = "log_sd1:x1" (matches fit_rpbnb par_names).
+  .scale_par <- function(dist, eq, name) {
+    paste0(rand_dist_registry[[dist]]$scale_label, eq, ":", name)
+  }
+  # Exact scale-zero null for one random column: copy the full draw matrices and
+  # set the tested column to the distribution median (u = 0.5). This gives a zero
+  # deviation on every draw for every supported distribution -- normal/lognormal/
+  # triangular map u = 0.5 to base 0, and uniform to the centered value
+  # (2 * 0.5 - 1 = 0) -- so the coefficient collapses to its SD-zero null (the
+  # fixed b for normal/uniform/triangular; sign * exp(b) for lognormal),
+  # independent of the covariate values, while all other columns keep the full
+  # model's exact draws.
+  zeroed <- function(eq, k) {
+    z <- full_draws
+    if (eq == 1L) z$Z1[, k] <- 0.5 else z$Z2[, k] <- 0.5
+    z
+  }
+  # Pin the tested log-scale (its value is inert once the column is zeroed) so it
+  # is held fixed and excluded from npar, giving the 1-df restriction.
+  pin_scale <- function(dist, eq, name) {
+    nm <- .scale_par(dist, eq, name)
+    stats::setNames(fit$coef[[nm]], nm)
+  }
+  # A restricted refit that did not converge cannot supply a valid maximized
+  # log-likelihood; report NA inference (with a warning) rather than a
+  # misleading p-value from an unfinished optimization.
   test_row <- function(param, rest) {
+    if (!isTRUE(rest$convergence$converged)) {
+      warning("Restricted fit for '", param, "' did not converge (maxLik code ",
+              rest$convergence$code, ": ", rest$convergence$message,
+              "); reporting NA for this parameter.", call. = FALSE)
+      return(data.frame(Parameter = param, LR = NA_real_, df = NA_integer_,
+                        p.value = NA_real_, Signif = NA_character_,
+                        stringsAsFactors = FALSE))
+    }
     lr <- lr_test(rest, fit, boundary = TRUE)
     data.frame(Parameter = param, LR = lr$statistic, df = lr$df,
                p.value = lr$p.value, Signif = signif_stars(lr$p.value),
@@ -108,25 +171,27 @@ rpbnb_boundary_tests <- function(fit, data,
   rows <- list()
 
   if ("sd" %in% which) {
-    # Equation 1: drop each random coefficient in turn, keep the rest.
+    # Equation 1: zero each coefficient's draw column in turn (exact SD-zero null).
     for (k in seq_along(names1)) {
-      spec1 <- .build_rand_spec(names1[-k], dist1[-k], sign1[-k])
       rows[[length(rows) + 1L]] <-
-        test_row(.sd_label(dist1[k], 1, names1[k]), refit(spec1, full2))
+        test_row(.sd_label(dist1[k], 1, names1[k]),
+                 refit(fixed = pin_scale(dist1[k], 1, names1[k]),
+                       opt_draws = zeroed(1L, k)))
     }
     # Equation 2.
     for (k in seq_along(names2)) {
-      spec2 <- .build_rand_spec(names2[-k], dist2[-k], sign2[-k])
       rows[[length(rows) + 1L]] <-
-        test_row(.sd_label(dist2[k], 2, names2[k]), refit(full1, spec2))
+        test_row(.sd_label(dist2[k], 2, names2[k]),
+                 refit(fixed = pin_scale(dist2[k], 2, names2[k]),
+                       opt_draws = zeroed(2L, k)))
     }
   }
 
   if ("dispersion" %in% which) {
     rows[[length(rows) + 1L]] <-
-      test_row("m1", refit(full1, full2, poisson_1 = TRUE))
+      test_row("m1", refit(poisson_1 = TRUE))
     rows[[length(rows) + 1L]] <-
-      test_row("m2", refit(full1, full2, poisson_2 = TRUE))
+      test_row("m2", refit(poisson_2 = TRUE))
   }
 
   out <- do.call(rbind, rows)

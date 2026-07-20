@@ -86,8 +86,12 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
   # dependence as a bare family string (e.g. "normal") in fit$dependence, which
   # fit_bnb() would reject; rebuild the copula() object from fit$cop_family.
   null_dep <- if (!is.null(fit$cop_family)) copula(fit$cop_family) else fit$dependence
+  # Preserve any Poisson-limit margin restriction so the null is the same-family
+  # (Poisson-restricted) intercept-only model, not an unrestricted NB null. Older
+  # fits predating the stored flags default to FALSE via isTRUE().
   fit_null <- tryCatch(
-    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = null_dep),
+    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = null_dep,
+            poisson_1 = isTRUE(fit$poisson_1), poisson_2 = isTRUE(fit$poisson_2)),
     error = function(e) {
       warning("Null model could not be fitted (", conditionMessage(e),
               "); pseudo-R^2 set to NA.", call. = FALSE)

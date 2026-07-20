@@ -41,10 +41,22 @@ correction of \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}).
 }
 \details{
 Each test refits a properly nested restricted model. With \strong{multiple random
-coefficients in an equation, each SD is tested individually} -- the restricted
-fit drops only that coefficient and keeps the others (a 1-df restriction).
-Every restricted fit reuses the full model's \code{draws}, \code{draw_type}, and \code{seed},
-so the two simulated log-likelihoods are compared on common random numbers.
+coefficients in an equation, each SD is tested individually} (a 1-df
+restriction). The restricted fit keeps the full random specification but sets
+the tested coefficient's draw column to the distribution median (\code{u = 0.5}),
+which zeroes that coefficient's per-draw \emph{deviation} exactly for every
+supported distribution (\code{u = 0.5} maps to base 0 for normal/lognormal/
+triangular, and to the centered value \code{2 * 0.5 - 1 = 0} for uniform). The
+coefficient therefore collapses to its SD-zero null -- the ordinary fixed
+coefficient \code{b} for normal/uniform/triangular, and \code{sign * exp(b)} for
+lognormal -- on every draw, independent of the covariate scale. Its (now
+inert) log-scale is pinned only to drop it from the free-parameter count. Every
+other draw column is the full model's exact stored draw, so the two simulated
+log-likelihoods are compared on common random numbers, and each restricted fit
+is \strong{warm-started from the full fit's coefficients} so the start-sensitive
+simulated objective does not settle at an inferior optimum. A restricted fit
+that fails to converge yields \code{NA} inference (with a warning) rather than a
+p-value, and a non-converged full \code{fit} is rejected.
 }
 \examples{
 \donttest{

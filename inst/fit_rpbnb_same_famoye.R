@@ -45,7 +45,7 @@ t_fit <- system.time(
     random_1   = "age",      # random slope on age    (eq 1), continuous
     random_2   = "hhninc",   # random slope on hhninc (eq 2), continuous
     dependence = "famoye",
-    draws      = 200,
+    draws      = 500,
     seed       = 20240712,
     control    = rpbnb_control(
       print_level = 1,

@@ -50,7 +50,7 @@ t_fit <- system.time(
     random_1   = "hhninc",   # random slope on hhninc (eq 1), continuous, in f1
     random_2   = "educ",     # random slope on educ   (eq 2), continuous, in f2
     dependence = copula("normal"),   # Gaussian copula; try "frank" or "clayton"
-    draws      = 200,
+    draws      = 500,
     seed       = 20240712,
     control    = rpbnb_control(
       print_level = 1,
