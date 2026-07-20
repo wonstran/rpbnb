@@ -69,7 +69,18 @@ print(summary(fit))
 sep(); cat("FITTED MEANS (predict) -- first 6 observations\n"); sep()
 print(head(predict(fit)))
 
-# ---- 5. Marginal effects & elasticities (AME) -------------------------------
+# ---- 5. Likelihood-ratio tests: SD and dispersion ----------------------------
+# Test boundary parameters that cannot be estimated under the null:
+#   * SD (random coefficient standard deviation): H0 = no random effect (sd = 0)
+#   * Dispersion (m): H0 = Poisson margin (m = 0)
+# Under H0, the LR test statistic is chi-squared on a *boundary* (df = 0.5,
+# reflecting that the parameter can only move in one direction: sd,m >= 0).
+# rpbnb_boundary_tests() runs these tests for all SDs and dispersions.
+sep(); cat("BOUNDARY PARAMETER TESTS (SD, Dispersion)\n"); sep()
+bt <- rpbnb_boundary_tests(fit, seed = 20240712)
+print(bt)
+
+# ---- 6. Marginal effects & elasticities (AME) -------------------------------
 # Built on the Monte-Carlo integrated mean E[exp(x'beta)] (the estimand predict()
 # uses); the random-coefficient covariate uses the draw-integrated formula while
 # the fixed covariates reduce to the classic result. See ?rpbnb_marginal_effects.
@@ -80,17 +91,6 @@ me <- rpbnb_marginal_effects(fit, which = "both", type = "AME",
 sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME)\n"); sep()
 el <- rpbnb_elasticities(fit, which = "both", type = "AME",
                          n_cores = rpbnb_threads())
-
-# ---- 6. Likelihood-ratio tests: SD and dispersion ----------------------------
-# Test boundary parameters that cannot be estimated under the null:
-#   * SD (random coefficient standard deviation): H0 = no random effect (sd = 0)
-#   * Dispersion (m): H0 = Poisson margin (m = 0)
-# Under H0, the LR test statistic is chi-squared on a *boundary* (df = 0.5,
-# reflecting that the parameter can only move in one direction: sd,m >= 0).
-# rpbnb_boundary_tests() runs these tests for all SDs and dispersions.
-sep(); cat("BOUNDARY PARAMETER TESTS (SD, Dispersion)\n"); sep()
-bt <- rpbnb_boundary_tests(fit, seed = 20240712)
-print(bt)
 
 # ---- 7. Residual diagnostics ------------------------------------------------
 # Randomized quantile residuals (Dunn-Smyth) are the primary count-model
