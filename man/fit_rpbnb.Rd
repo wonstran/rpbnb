@@ -17,7 +17,9 @@ fit_rpbnb(
   control = rpbnb_control(),
   dependence = "famoye",
   poisson_1 = FALSE,
-  poisson_2 = FALSE
+  poisson_2 = FALSE,
+  .fixed = NULL,
+  .opt_draws = NULL
 )
 }
 \arguments{
@@ -52,13 +54,24 @@ coefficients on 0/1 dummy regressors are weakly identified under the
 copula path (NB dispersion trades off against the random-coefficient
 scale); prefer random coefficients on continuous regressors.}
 
-\item{poisson_1, poisson_2}{Fit the corresponding margin at its Poisson limit
-(NB2 dispersion \code{m = 0}): the margin's \code{log_m} is pinned at a tiny constant
-and held fixed, so it is not a free parameter and the fit is a properly
-nested restriction of the NB model. Pair with \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}) to test a margin for overdispersion (\code{H0: m = 0}). This is a
-numerical m->0 limit, accurate to well under one log-likelihood unit, not
-an exact Poisson reparameterization. Not supported with a \code{\link[=copula]{copula()}}
-dependence.}
+\item{poisson_1, poisson_2}{Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion \code{m = 0}): the margin's \code{log_m} is held fixed, so it is
+not a free parameter and the fit is a properly nested restriction of the NB
+model. Pair with \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}) to test a margin for
+overdispersion (\code{H0: m = 0}). The simulated likelihood uses the exact \code{m = 0}
+branch -- the per-draw margin log-pmf is \code{dpois} and its Famoye dependence
+constant is \code{exp(-d*mu)} -- so it is accurate at any fitted mean, not a
+fixed-dispersion approximation. Not supported with a \code{\link[=copula]{copula()}} dependence.}
+
+\item{.fixed}{Internal. A named numeric vector of parameters (in the
+optimization/log-scale parameterization) to pin at the supplied values and
+hold fixed during estimation. Used by \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} to construct
+scale-zero (SD boundary) restricted fits; not intended for direct use.}
+
+\item{.opt_draws}{Internal. A list \code{list(Z1, Z2)} of uniform Halton draw
+matrices to use verbatim instead of generating them, so a restricted refit
+reuses a full fit's draws (common random numbers). Used by
+\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}; not intended for direct use.}
 }
 \value{
 An object of class \code{rpbnb_fit}.

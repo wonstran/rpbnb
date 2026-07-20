@@ -6,14 +6,28 @@
 d_const <- function() 1 - exp(-1)
 
 #' E(exp(-Y)) under NB2(mu, m); c(mu, m) = (1 + d*m*mu)^(-1/m)
+#'
+#' At m = 0 the NB2 margin collapses to Poisson(mu), whose E(exp(-Y)) is the
+#' exact limit exp(-d*mu) (the generic (1 + d*m*mu)^(-1/m) form is a 0/0 that
+#' evaluates to a wrong 1 at m = 0). `m = 0` therefore selects the true Poisson
+#' branch, used by the poisson_1/poisson_2 restricted margins.
 #' @keywords internal
 #' @noRd
-c_val <- function(mu, m) (1 + d_const() * m * mu)^(-1 / m)
+c_val <- function(mu, m) {
+  if (m == 0) return(exp(-d_const() * mu))
+  (1 + d_const() * m * mu)^(-1 / m)
+}
 
 #' NB2 log pmf with mean mu and size r = 1/m
+#'
+#' `r = Inf` (m = 0) selects the exact Poisson log-pmf dpois(y, mu, log). The
+#' finite-r NB2 form converges to it as r -> Inf but never equals it (the error
+#' is governed by m*mu = mu/r), so a Poisson-restricted margin must take this
+#' branch rather than a large-but-finite r.
 #' @keywords internal
 #' @noRd
 nb_logpmf_y_mu_r <- function(y, mu, r) {
+  if (any(is.infinite(r))) return(stats::dpois(y, mu, log = TRUE))
   p <- r / (r + mu)
   # y * log(1 - p) with 1 - p = mu / (r + mu). Forming it via log1p(-p) suffers
   # catastrophic cancellation once a draw drives mu ~ 0: p rounds to exactly 1,

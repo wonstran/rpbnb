@@ -42,6 +42,15 @@
   sign(y - mu) * sqrt(d)
 }
 
+# Poisson signed deviance residual: the m = 0 limit of .nb2_deviance_resid, where
+# the NB2 (y+r)log((y+r)/(mu+r)) term -> (y - mu). Used for a Poisson-restricted
+# margin (r = Inf would make the NB2 form a NaN).
+.pois_deviance_resid <- function(y, mu) {
+  term_y <- ifelse(y == 0, 0, y * log(y / mu))
+  d      <- pmax(2 * (term_y - (y - mu)), 0)
+  sign(y - mu) * sqrt(d)
+}
+
 #' Residuals for a bivariate NB model
 #'
 #' Per-margin residuals for a fixed-coefficient [fit_bnb()] model. Each margin is
@@ -66,26 +75,37 @@ residuals.bnb_fit <- function(object,
                               seed   = NULL, ...) {
   type   <- match.arg(type)
   margin <- match.arg(margin)
-  m1 <- exp(object$coef[["log_m1"]]); m2 <- exp(object$coef[["log_m2"]])
+  # A Poisson-restricted margin (m = 0) uses the exact Poisson variance (mu) and
+  # CDF (ppois), not NB2 at r = 1/POISSON_M. Older fits without the stored flag
+  # default to the NB2 path via isTRUE().
+  pois1 <- isTRUE(object$poisson_1); pois2 <- isTRUE(object$poisson_2)
+  m1 <- if (pois1) 0 else exp(object$coef[["log_m1"]])
+  m2 <- if (pois2) 0 else exp(object$coef[["log_m2"]])
 
-  one <- function(y, mu, m) {
+  one <- function(y, mu, m, pois) {
     switch(type,
       response = y - mu,
+      # Pearson variance mu + m*mu^2 reduces to the Poisson variance mu at m = 0.
       pearson  = .nb2_pearson_resid(y, mu, m),
-      deviance = .nb2_deviance_resid(y, mu, m),
+      deviance = if (pois) .pois_deviance_resid(y, mu) else .nb2_deviance_resid(y, mu, m),
       quantile = {
-        r   <- 1 / m
-        Fhi <- stats::pnbinom(y, size = r, mu = mu)
-        Flo <- ifelse(y > 0, stats::pnbinom(y - 1, size = r, mu = mu), 0)
+        if (pois) {
+          Fhi <- stats::ppois(y, mu)
+          Flo <- ifelse(y > 0, stats::ppois(y - 1, mu), 0)
+        } else {
+          r   <- 1 / m
+          Fhi <- stats::pnbinom(y, size = r, mu = mu)
+          Flo <- ifelse(y > 0, stats::pnbinom(y - 1, size = r, mu = mu), 0)
+        }
         .rqr(Flo, Fhi)
       })
   }
 
   build <- function() {
-    if (margin == "y1") return(one(object$Y1, object$mu1, m1))
-    if (margin == "y2") return(one(object$Y2, object$mu2, m2))
-    data.frame(y1 = one(object$Y1, object$mu1, m1),
-               y2 = one(object$Y2, object$mu2, m2))
+    if (margin == "y1") return(one(object$Y1, object$mu1, m1, pois1))
+    if (margin == "y2") return(one(object$Y2, object$mu2, m2, pois2))
+    data.frame(y1 = one(object$Y1, object$mu1, m1, pois1),
+               y2 = one(object$Y2, object$mu2, m2, pois2))
   }
   if (type == "quantile") .with_seed(seed, build) else build()
 }
@@ -96,7 +116,10 @@ residuals.bnb_fit <- function(object,
 .rp_margin_parts <- function(object, eq) {
   X    <- if (eq == 1L) object$X1 else object$X2
   y    <- if (eq == 1L) object$Y1 else object$Y2
-  m    <- if (eq == 1L) object$m1 else object$m2
+  # A Poisson-restricted margin uses the exact m = 0 limit: variance mu (not
+  # mu + m*mu^2) and CDF ppois (r = Inf). Older fits without the flag keep NB2.
+  pois <- if (eq == 1L) isTRUE(object$poisson_1) else isTRUE(object$poisson_2)
+  m    <- if (pois) 0 else if (eq == 1L) object$m1 else object$m2
   bpfx <- paste0("b", eq)
   b    <- object$coef[grep(paste0("^", bpfx, ":"), names(object$coef))]
   names(b) <- sub(paste0("^", bpfx, ":"), "", names(b))
@@ -104,7 +127,8 @@ residuals.bnb_fit <- function(object,
   rand_idx <- if (eq == 1L) object$rand_idx1 else object$rand_idx2
   meta     <- object$rp_meta
   has_rand <- !is.null(meta) && length(rand_idx) > 0
-  parts <- list(X = X, y = y, m = m, r = 1 / m, b = b, rand_idx = rand_idx,
+  parts <- list(X = X, y = y, m = m, r = if (pois) Inf else 1 / m, pois = pois,
+                b = b, rand_idx = rand_idx,
                 xb = as.vector(X %*% b), has_rand = has_rand,
                 dist = NULL, sgn = NULL, Z = NULL, scales = NULL)
   if (!has_rand) return(parts)
@@ -137,11 +161,14 @@ residuals.bnb_fit <- function(object,
   p   <- .rp_margin_parts(object, eq)
   mu  <- .rp_margin_mu_draws(p)                       # n x R
   Rn  <- ncol(mu)
-  Fhi <- rowMeans(vapply(seq_len(Rn),
-    function(r) stats::pnbinom(p$y, size = p$r, mu = mu[, r]), numeric(nrow(mu))))
-  Flo <- rowMeans(vapply(seq_len(Rn),
-    function(r) ifelse(p$y > 0, stats::pnbinom(p$y - 1, size = p$r, mu = mu[, r]), 0),
-    numeric(nrow(mu))))
+  # A Poisson-restricted margin averages ppois over the draws (pnbinom with
+  # size = 1/m = Inf would crash); the NB2 margin uses pnbinom(size = 1/m).
+  cdf_hi <- if (p$pois) function(r) stats::ppois(p$y, mu[, r])
+            else        function(r) stats::pnbinom(p$y, size = p$r, mu = mu[, r])
+  cdf_lo <- if (p$pois) function(r) ifelse(p$y > 0, stats::ppois(p$y - 1, mu[, r]), 0)
+            else        function(r) ifelse(p$y > 0, stats::pnbinom(p$y - 1, size = p$r, mu = mu[, r]), 0)
+  Fhi <- rowMeans(vapply(seq_len(Rn), cdf_hi, numeric(nrow(mu))))
+  Flo <- rowMeans(vapply(seq_len(Rn), cdf_lo, numeric(nrow(mu))))
   if (p$has_rand) {
     inf <- .rp_inf_rows(p$X, p$rand_idx, p$dist, p$sgn)
     if (any(inf)) {
@@ -220,7 +247,25 @@ residuals.rpbnb_fit <- function(object,
     y  <- if (eq == 1L) object$Y1 else object$Y2
     mu <- .rp_fitted_mean(object, eq)
     switch(type,
-      response = y - mu,
+      response = {
+        # Match predict()/Pearson/quantile: a lognormal random coefficient with
+        # sign * covariate > 0 makes the population mean analytically infinite, so
+        # y - mu is undefined on those rows even though the cached mu1/mu2 is a
+        # finite draw-capped average. Return NA there with the same warning.
+        r <- y - mu
+        p <- .rp_margin_parts(object, eq)
+        if (p$has_rand) {
+          inf <- .rp_inf_rows(p$X, p$rand_idx, p$dist, p$sgn)
+          if (any(inf)) {
+            r[inf] <- NA_real_
+            warning(sum(inf), " observation(s) have an analytically infinite ",
+                    "mixture mean (a lognormal random coefficient with sign * ",
+                    "covariate > 0); residuals set to NA for those rows.",
+                    call. = FALSE)
+          }
+        }
+        r
+      },
       pearson  = (y - mu) / sqrt(.rp_mixture_var(object, eq)),
       quantile = {
         cc <- .rp_mixture_cdf(object, eq)

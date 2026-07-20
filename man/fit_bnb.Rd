@@ -37,14 +37,16 @@ start-sensitive and neither start dominates).}
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
 both use BFGS, the only optimizer \code{control$method} accepts.}
 
-\item{poisson_1, poisson_2}{Fit the corresponding margin at its Poisson limit
-(NB2 dispersion \code{m = 0}) instead of estimating the dispersion. The margin's
-\code{log_m} is held fixed, so it is not a free parameter and the fit is a
-properly nested restriction of the NB model -- pair it with \code{\link[=lr_test]{lr_test()}}
-(\code{boundary = TRUE}) to test for overdispersion. In the famoye path this is
-a numerical m->0 limit (\code{m} pinned at a tiny constant); in the independence
-path it is an exact Poisson GLM margin. Not supported with a \code{\link[=copula]{copula()}}
-dependence.}
+\item{poisson_1, poisson_2}{Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion \code{m = 0}) instead of estimating the dispersion. The
+margin's \code{log_m} is held fixed, so it is not a free parameter and the fit is
+a properly nested restriction of the NB model -- pair it with \code{\link[=lr_test]{lr_test()}}
+(\code{boundary = TRUE}) to test for overdispersion. This is the exact \code{m = 0}
+restriction at any fitted mean: the margin's log-pmf is \code{dpois} and its
+Famoye dependence constant is \code{exp(-d*mu)} (the \code{m -> 0} limit), not an NB2
+at a tiny pinned dispersion. The famoye and independence paths are both
+exact (the independence path fits a Poisson GLM margin). Not supported with
+a \code{\link[=copula]{copula()}} dependence.}
 }
 \value{
 An object of class \code{bnb_fit}.

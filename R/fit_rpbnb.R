@@ -11,7 +11,8 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           rand_idx1, rand_idx2, formula_1, formula_2,
                           draws, draw_type, seed, ll_trace, convergence,
                           cop_family = NULL, call, hessian_diag = NULL,
-                          rp_meta = NULL) {
+                          rp_meta = NULL,
+                          poisson_1 = FALSE, poisson_2 = FALSE) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
@@ -27,7 +28,10 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          # Random-coefficient distributions, signs, and the optimization draws:
          # everything predict() needs to reproduce the integrated (population)
          # mean E[exp(x'beta)] for any supported distribution on new data.
-         rp_meta = rp_meta),
+         rp_meta = rp_meta,
+         # Poisson-limit (m = 0) restriction flags per margin, so residuals /
+         # diagnostics use the exact Poisson CDF/variance for a restricted margin.
+         poisson_1 = poisson_1, poisson_2 = poisson_2),
     class = "rpbnb_fit"
   )
 }
@@ -60,14 +64,22 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #'   coefficients on 0/1 dummy regressors are weakly identified under the
 #'   copula path (NB dispersion trades off against the random-coefficient
 #'   scale); prefer random coefficients on continuous regressors.
-#' @param poisson_1,poisson_2 Fit the corresponding margin at its Poisson limit
-#'   (NB2 dispersion `m = 0`): the margin's `log_m` is pinned at a tiny constant
-#'   and held fixed, so it is not a free parameter and the fit is a properly
-#'   nested restriction of the NB model. Pair with [lr_test()] (`boundary =
-#'   TRUE`) to test a margin for overdispersion (`H0: m = 0`). This is a
-#'   numerical m->0 limit, accurate to well under one log-likelihood unit, not
-#'   an exact Poisson reparameterization. Not supported with a [copula()]
-#'   dependence.
+#' @param poisson_1,poisson_2 Fit the corresponding margin at its exact Poisson
+#'   limit (NB2 dispersion `m = 0`): the margin's `log_m` is held fixed, so it is
+#'   not a free parameter and the fit is a properly nested restriction of the NB
+#'   model. Pair with [lr_test()] (`boundary = TRUE`) to test a margin for
+#'   overdispersion (`H0: m = 0`). The simulated likelihood uses the exact `m = 0`
+#'   branch -- the per-draw margin log-pmf is `dpois` and its Famoye dependence
+#'   constant is `exp(-d*mu)` -- so it is accurate at any fitted mean, not a
+#'   fixed-dispersion approximation. Not supported with a [copula()] dependence.
+#' @param .fixed Internal. A named numeric vector of parameters (in the
+#'   optimization/log-scale parameterization) to pin at the supplied values and
+#'   hold fixed during estimation. Used by [rpbnb_boundary_tests()] to construct
+#'   scale-zero (SD boundary) restricted fits; not intended for direct use.
+#' @param .opt_draws Internal. A list `list(Z1, Z2)` of uniform Halton draw
+#'   matrices to use verbatim instead of generating them, so a restricted refit
+#'   reuses a full fit's draws (common random numbers). Used by
+#'   [rpbnb_boundary_tests()]; not intended for direct use.
 #' @return An object of class `rpbnb_fit`.
 #' @export
 #' @examples
@@ -100,8 +112,11 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                       seed = 1234, start = NULL,
                       control = rpbnb_control(),
                       dependence = "famoye",
-                      poisson_1 = FALSE, poisson_2 = FALSE) {
+                      poisson_1 = FALSE, poisson_2 = FALSE,
+                      .fixed = NULL, .opt_draws = NULL) {
   stopifnot(is.data.frame(data))
+  .chk_poisson_flag(poisson_1, "poisson_1")
+  .chk_poisson_flag(poisson_2, "poisson_2")
 
   if (inherits(dependence, "rpbnb_copula")) {
     if (isTRUE(poisson_1) || isTRUE(poisson_2)) {
@@ -161,14 +176,28 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # randomized-QMC draw set; the same draws are reused across all optimizer
   # evaluations for a smooth simulated likelihood. The likelihood applies each
   # column's u_to_base transform (via rand_realize), so we pass raw uniforms here.
-  set.seed(seed)
-  if ((q1 + q2) > 0) {
-    Z_opt  <- halton_uniform(n_draws, q1 + q2, burn = halton_burn)
-    Z1_opt <- if (q1 > 0) Z_opt[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
-    Z2_opt <- if (q2 > 0) Z_opt[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
+  if (!is.null(.opt_draws)) {
+    # Internal common-random-number path (rpbnb_boundary_tests): reuse a full
+    # fit's stored uniform draw matrices verbatim, so a restricted refit is
+    # compared to the full fit on identical draws. Validate the shapes against
+    # the parsed spec so a caller cannot silently misalign columns.
+    Z1_opt <- .opt_draws$Z1; Z2_opt <- .opt_draws$Z2
+    if (!is.matrix(Z1_opt) || !is.matrix(Z2_opt) ||
+        nrow(Z1_opt) != n_draws || nrow(Z2_opt) != n_draws ||
+        ncol(Z1_opt) != q1 || ncol(Z2_opt) != q2) {
+      stop("`.opt_draws` must supply Z1 (", n_draws, "x", q1, ") and Z2 (",
+           n_draws, "x", q2, ") uniform draw matrices.", call. = FALSE)
+    }
   } else {
-    Z1_opt <- matrix(0, nrow = n_draws, ncol = 0)
-    Z2_opt <- matrix(0, nrow = n_draws, ncol = 0)
+    set.seed(seed)
+    if ((q1 + q2) > 0) {
+      Z_opt  <- halton_uniform(n_draws, q1 + q2, burn = halton_burn)
+      Z1_opt <- if (q1 > 0) Z_opt[, 1:q1, drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
+      Z2_opt <- if (q2 > 0) Z_opt[, (q1+1):(q1+q2), drop = FALSE] else matrix(0, nrow = n_draws, ncol = 0)
+    } else {
+      Z1_opt <- matrix(0, nrow = n_draws, ncol = 0)
+      Z2_opt <- matrix(0, nrow = n_draws, ncol = 0)
+    }
   }
 
   scale_lab <- function(dist, cols) {
@@ -197,8 +226,27 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # optimization (maxLik `fixed=`), so it is not an estimated parameter and the
   # fit nests inside the NB model for an overdispersion LR test.
   fixed_names <- c(if (isTRUE(poisson_1)) "log_m1", if (isTRUE(poisson_2)) "log_m2")
-  free <- !(par_names %in% fixed_names)
   if (length(fixed_names)) start[fixed_names] <- log(POISSON_M)
+
+  # Internal boundary-test path: pin additional parameters (e.g. a random-slope
+  # log-scale for an SD boundary LR test, whose draw column rpbnb_boundary_tests()
+  # zeroes so the scale is inert) at supplied values and hold them fixed, so the
+  # restricted fit nests inside the full model on a named-parameter restriction.
+  # `.fixed` is a named numeric vector in the optimization (log-scale)
+  # parameterization.
+  if (!is.null(.fixed)) {
+    if (is.null(names(.fixed)) || any(!nzchar(names(.fixed)))) {
+      stop("`.fixed` must be a fully named numeric vector.", call. = FALSE)
+    }
+    unknown <- setdiff(names(.fixed), par_names)
+    if (length(unknown)) {
+      stop("`.fixed` names not in the model: ",
+           paste(unknown, collapse = ", "), ".", call. = FALSE)
+    }
+    start[names(.fixed)] <- .fixed
+    fixed_names <- union(fixed_names, names(.fixed))
+  }
+  free <- !(par_names %in% fixed_names)
 
   # Preferred fast path: multithreaded (OpenMP) C++ likelihood. When available
   # it supersedes the process-based cluster entirely -- the draw loop is
@@ -231,15 +279,20 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
   # LL trace (one total logLik per function evaluation)
   ll_trace <- numeric(0)
+  # A poisson_* margin uses the exact m = 0 (Poisson) branch; the pinned log_m is
+  # only a display placeholder, so the fit nests inside the NB model for the
+  # overdispersion LR test while the likelihood/CDF stay exactly Poisson.
   ll_fun <- function(p) {
     v <- if (use_cpp)
       bnbr_rp_ll_and_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                              dist1, dist2, sign1, sign2, n_threads = cpp_threads)
+                              dist1, dist2, sign1, sign2, n_threads = cpp_threads,
+                              pois1 = poisson_1, pois2 = poisson_2)
     else
       bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                          dist1, dist2, sign1, sign2, cl = cl)
+                          dist1, dist2, sign1, sign2, cl = cl,
+                          pois1 = poisson_1, pois2 = poisson_2)
     ll_trace <<- c(ll_trace, as.numeric(v))
     v
   }
@@ -267,7 +320,10 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   rebuild_bounds <- function(p) {
     beta1 <- p[1:k1]; beta2 <- p[(k1+1):(k1+k2)]
     idx_end <- k1 + k2 + q1 + q2
-    m1 <- exp(p[idx_end+1]); m2 <- exp(p[idx_end+2])
+    # A Poisson-restricted margin uses m = 0 (c = exp(-d*mu)) so the frozen bounds
+    # match the objective's exact Poisson margin.
+    m1 <- if (isTRUE(poisson_1)) 0 else exp(p[idx_end+1])
+    m2 <- if (isTRUE(poisson_2)) 0 else exp(p[idx_end+2])
     sd1 <- if (q1 > 0) exp(p[(k1+k2+1):(k1+k2+q1)]) else numeric(0)
     sd2 <- if (q2 > 0) exp(p[(k1+k2+q1+1):(k1+k2+q1+q2)]) else numeric(0)
     xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
@@ -306,7 +362,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     # finite-difference digamma singularities.
     S <- bnbr_rp_scores_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                            dist1, dist2, sign1, sign2, n_threads = cpp_threads)
+                            dist1, dist2, sign1, sign2, n_threads = cpp_threads,
+                            pois1 = poisson_1, pois2 = poisson_2)
     inv <- .free_index_vcov(crossprod(S), par_names, free, label = "OPG (BHHH)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (use_analytic) {
@@ -317,7 +374,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     H <- bnbr_rp_hessian(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                          dist1, dist2, sign1, sign2,
-                         lamLo = lamLo_h, lamHi = lamHi_h)
+                         lamLo = lamLo_h, lamHi = lamHi_h,
+                         pois1 = poisson_1, pois2 = poisson_2)
     info <- -H
     inv <- .free_index_vcov(info, par_names, free, label = "RP-BNB (analytic Hessian)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
@@ -345,13 +403,15 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                                               rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                                               lamLo_h, lamHi_h,
                                               dist1, dist2, sign1, sign2,
-                                              n_threads = cpp_threads)
+                                              n_threads = cpp_threads,
+                                              pois1 = poisson_1, pois2 = poisson_2)
     else
       function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
                                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                                           lamLo_h, lamHi_h,
                                           dist1, dist2, sign1, sign2,
-                                          cl = cl_h)
+                                          cl = cl_h,
+                                          pois1 = poisson_1, pois2 = poisson_2)
     H <- numDeriv::hessian(ll_fb, par_hat,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2
@@ -406,7 +466,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
 
   ll_hat <- as.numeric(stats::logLik(fit))
-  convergence <- list(converged = fit$code <= 2L, code = fit$code,
+  # maxLik BFGS (optim-based) returns code 0 on success; code 1 is
+  # "iteration limit exceeded" -- NOT convergence. Only 0 counts as converged.
+  convergence <- list(converged = isTRUE(fit$code == 0L), code = fit$code,
                       message = fit$message, iterations = fit$iterations)
 
   new_rpbnb_fit(
@@ -421,5 +483,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     ll_trace = ll_trace, convergence = convergence, call = match.call(),
     hessian_diag = hdiag,
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
-                   Z1 = Z1_opt, Z2 = Z2_opt))
+                   Z1 = Z1_opt, Z2 = Z2_opt, halton_burn = halton_burn),
+    poisson_1 = poisson_1, poisson_2 = poisson_2)
 }

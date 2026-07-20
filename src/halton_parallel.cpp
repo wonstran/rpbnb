@@ -54,10 +54,19 @@ bool rpbnb_openmp_enabled() {
 static inline double d_const_cpp() { return 1.0 - std::exp(-1.0); }
 
 static inline double c_val_cpp(double mu, double m, double d) {
+  // m == 0 is the exact Poisson limit: E(exp(-Y)) = exp(-d*mu). The generic
+  // (1 + d*m*mu)^(-1/m) is a 0/0 there (std::pow(1, -Inf) would return a wrong 1).
+  if (m == 0.0) return std::exp(-d * mu);
   return std::pow(1.0 + d * m * mu, -1.0 / m);
 }
 
 static inline double nb_logpmf_cpp(double y, double mu, double r) {
+  // r == Inf (m == 0) is the exact Poisson log-pmf dpois(y, mu, log). Guard the
+  // analytically-zero y == 0 term (0 * log(mu) -> NaN as mu -> 0).
+  if (std::isinf(r)) {
+    double y_term = (y == 0.0) ? 0.0 : y * std::log(mu);
+    return -mu + y_term - std::lgamma(y + 1.0);
+  }
   double p = r / (r + mu);
   // y * log(1 - p) with 1 - p = mu / (r + mu). Forming it via log1p(-p) suffers
   // catastrophic cancellation once a draw drives mu ~ 0: p rounds to exactly 1,
@@ -107,6 +116,10 @@ List rpbnb_ll_grad_cpp(
   const int R  = (q1 + q2 > 0) ? dev1.nrow() : 1;
 
   const double d  = d_const_cpp();
+  // m == 0 selects the exact Poisson (m = 0) margin: c_val_cpp/nb_logpmf_cpp take
+  // their exact limits and the log_m gradient/score is 0 (a fixed parameter).
+  const bool pois1 = (m1 == 0.0);
+  const bool pois2 = (m2 == 0.0);
   const double r1 = 1.0 / m1;
   const double r2 = 1.0 / m2;
   const double log_m1_v = std::log(m1);
@@ -330,8 +343,9 @@ List rpbnb_ll_grad_cpp(
                        + r2v * r2v * (py2[i] + r2v) / (mu2i + r2v)
                        - r2v * r2v * pS2[i]
                        - (lam * k1v * inv_dep) * dc2_dm2;
-        lm1 += wir * (m1 * term_m1);
-        lm2 += wir * (m2 * term_m2);
+        // A Poisson margin's log_m is fixed: score 0 (the NB2 term is a 0/0).
+        if (!pois1) lm1 += wir * (m1 * term_m1);
+        if (!pois2) lm2 += wir * (m2 * term_m2);
 
         // ---- dependence gradient ------------------------------------------
         lz += wir * ((k1v * k2v) * inv_dep * dlam_dz);
@@ -438,8 +452,8 @@ List rpbnb_ll_grad_cpp(
                        + r2v * r2v * (py2[i] + r2v) / (mu2i + r2v)
                        - r2v * r2v * pS2[i]
                        - (lam * k1v * inv_dep) * dc2_dm2;
-        psc[i + static_cast<size_t>(off_lm1) * n]     += wir * (m1 * term_m1);
-        psc[i + static_cast<size_t>(off_lm1 + 1) * n] += wir * (m2 * term_m2);
+        if (!pois1) psc[i + static_cast<size_t>(off_lm1) * n]     += wir * (m1 * term_m1);
+        if (!pois2) psc[i + static_cast<size_t>(off_lm1 + 1) * n] += wir * (m2 * term_m2);
         psc[i + static_cast<size_t>(off_lm1 + 2) * n] += wir * ((k1v * k2v) * inv_dep * dlam_dz);
       }
     }

@@ -15,9 +15,16 @@
 # objective (bnbr_loglik_fixed_bounds) for consistency.
 
 #' Per-observation log-likelihood (vector) for the Famoye BNB model
+#'
+#' `pois1`/`pois2` restrict the corresponding margin to its exact Poisson limit
+#' (m = 0): the NB2 dispersion is forced to exactly 0 (r = Inf), so the margin's
+#' log-pmf is dpois and its dependence constant c is exp(-d*mu). This is the
+#' exact m = 0 restriction, not the fixed-POISSON_M numerical stand-in, so it is
+#' accurate at any fitted mean. The pinned log_m in `par` is then only a display
+#' placeholder -- the math ignores its value.
 #' @keywords internal
 #' @noRd
-bnb_loglik_vec <- function(par, y1, y2, X1, X2) {
+bnb_loglik_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -25,8 +32,8 @@ bnb_loglik_vec <- function(par, y1, y2, X1, X2) {
   log_m2 <- par[p1 + p2 + 2]
   zlam   <- par[p1 + p2 + 3]
 
-  m1 <- exp(log_m1); m2 <- exp(log_m2)
-  r1 <- 1/m1;        r2 <- 1/m2
+  m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
+  r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
   mu1 <- .bound_mu(X1, beta1)
   mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
@@ -46,9 +53,15 @@ bnb_loglik_vec <- function(par, y1, y2, X1, X2) {
 }
 
 #' Analytic score (per observation) for the Famoye BNB model
+#'
+#' `pois1`/`pois2` select the exact Poisson (m = 0) margin: the beta/dependence
+#' score pieces reduce to their exact Poisson limits (w = y - mu, dc/dbeta =
+#' -d*c*mu*x with c = exp(-d*mu)), and the log_m score column -- a fixed,
+#' unestimated parameter for a Poisson margin -- is set to 0 (its NB2 value is a
+#' 0/0 at m = 0 and is dropped from the free-parameter information anyway).
 #' @keywords internal
 #' @noRd
-bnb_score_mat <- function(par, y1, y2, X1, X2) {
+bnb_score_mat <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
   p1 <- ncol(X1); p2 <- ncol(X2)
 
   beta1  <- par[seq_len(p1)]
@@ -57,8 +70,8 @@ bnb_score_mat <- function(par, y1, y2, X1, X2) {
   log_m2 <- par[p1 + p2 + 2]
   zlam   <- par[p1 + p2 + 3]
 
-  m1 <- exp(log_m1); m2 <- exp(log_m2)
-  r1 <- 1/m1;        r2 <- 1/m2
+  m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
+  r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
   mu1 <- .bound_mu(X1, beta1)
   mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
@@ -83,19 +96,26 @@ bnb_score_mat <- function(par, y1, y2, X1, X2) {
   score_beta1_mat <- sweep(X1, 1, w1, `*`) - sweep(dc1_dbetas, 1, pen1, `*`)
   score_beta2_mat <- sweep(X2, 1, w2, `*`) - sweep(dc2_dbetas, 1, pen2, `*`)
 
-  # m blocks (A2-A3) + chain to log m
-  S1 <- digamma(r1 + y1) - digamma(r1)
-  S2 <- digamma(r2 + y2) - digamma(r2)
-  dc1_dm1 <- dct_dm(mu1, m1, c1)
-  dc2_dm2 <- dct_dm(mu2, m2, c2)
-
-  s_m1 <-  (m1^(-2)) * ( -S1 + log(m1) + log(mu1 + r1) - 1 + (y1 + r1)/(mu1 + r1) ) -
-    (lam * k2 * inv_dep) * dc1_dm1
-  s_m2 <-  (m2^(-2)) * ( -S2 + log(m2) + log(mu2 + r2) - 1 + (y2 + r2)/(mu2 + r2) ) -
-    (lam * k1 * inv_dep) * dc2_dm2
-
-  score_logm1 <- m1 * s_m1
-  score_logm2 <- m2 * s_m2
+  # m blocks (A2-A3) + chain to log m. A Poisson margin's log_m is fixed (not
+  # estimated), so its score column is 0 -- the NB2 formula is a 0/0 at m = 0.
+  if (pois1) {
+    score_logm1 <- numeric(length(y1))
+  } else {
+    S1 <- digamma(r1 + y1) - digamma(r1)
+    dc1_dm1 <- dct_dm(mu1, m1, c1)
+    s_m1 <-  (m1^(-2)) * ( -S1 + log(m1) + log(mu1 + r1) - 1 + (y1 + r1)/(mu1 + r1) ) -
+      (lam * k2 * inv_dep) * dc1_dm1
+    score_logm1 <- m1 * s_m1
+  }
+  if (pois2) {
+    score_logm2 <- numeric(length(y2))
+  } else {
+    S2 <- digamma(r2 + y2) - digamma(r2)
+    dc2_dm2 <- dct_dm(mu2, m2, c2)
+    s_m2 <-  (m2^(-2)) * ( -S2 + log(m2) + log(mu2 + r2) - 1 + (y2 + r2)/(mu2 + r2) ) -
+      (lam * k1 * inv_dep) * dc2_dm2
+    score_logm2 <- m2 * s_m2
+  }
 
   # lambda part (A1) + chain rule z -> lambda
   dL_dlambda <- (k1 * k2) * inv_dep
@@ -107,14 +127,15 @@ bnb_score_mat <- function(par, y1, y2, X1, X2) {
 #' Summed analytic gradient for BFGS
 #' @keywords internal
 #' @noRd
-bnb_grad_vec <- function(par, y1, y2, X1, X2) {
-  colSums(bnb_score_mat(par, y1, y2, X1, X2))
+bnb_grad_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
+  colSums(bnb_score_mat(par, y1, y2, X1, X2, pois1 = pois1, pois2 = pois2))
 }
 
 #' Fixed-bounds summed logLik for numeric Hessian (freeze lambda-bounds at optimum)
 #' @keywords internal
 #' @noRd
-bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi, tiny = 1e-10) {
+bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi,
+                                     tiny = 1e-10, pois1 = FALSE, pois2 = FALSE) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -122,8 +143,8 @@ bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi, tiny = 1
   log_m2 <- par[p1 + p2 + 2]
   zlam   <- par[p1 + p2 + 3]
 
-  m1 <- exp(log_m1); m2 <- exp(log_m2)
-  r1 <- 1/m1;        r2 <- 1/m2
+  m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
+  r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
   mu1 <- .bound_mu(X1, beta1)
   mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
@@ -165,7 +186,8 @@ bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi, tiny = 1
 #' analytic gradient -- so this is a drop-in replacement for numDeriv::hessian.
 #' @keywords internal
 #' @noRd
-bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi) {
+bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi,
+                                     pois1 = FALSE, pois2 = FALSE) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -173,8 +195,8 @@ bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi) {
   log_m2 <- par[p1 + p2 + 2]
   zlam   <- par[p1 + p2 + 3]
 
-  m1 <- exp(log_m1); m2 <- exp(log_m2)
-  r1 <- 1 / m1;      r2 <- 1 / m2
+  m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
+  r1 <- if (pois1) Inf else 1 / m1;    r2 <- if (pois2) Inf else 1 / m2
   mu1 <- .bound_mu(X1, beta1); mu2 <- .bound_mu(X2, beta2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
@@ -285,6 +307,14 @@ bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi) {
 
   # z - z : (dlam/dz)^2 * H_ll + d2lam/dz2 * g_lam
   H[iz, iz] <- dlam_dz^2 * Hll + d2lam_dz2 * g_lam
+
+  # A Poisson margin's log_m is fixed: its NB2 curvature (the digamma/dispersion
+  # series and dct_dm terms) is a 0/0 at m = 0 and enters only its own row/column,
+  # which .free_index_vcov() drops from the free-parameter information. Zero that
+  # row/column so no 0*Inf placeholder leaks into the returned Hessian; the beta
+  # and lambda blocks above already used the exact m = 0 limits.
+  if (pois1) { H[im1, ] <- 0; H[, im1] <- 0 }
+  if (pois2) { H[im2, ] <- 0; H[, im2] <- 0 }
 
   H
 }

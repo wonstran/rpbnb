@@ -1,10 +1,23 @@
-# NB2 dispersion value used to approximate the Poisson limit (m -> 0) when a
-# margin is fit with poisson_1/poisson_2 = TRUE. The NB2 log-pmf converges to the
-# Poisson log-pmf as m -> 0 (max per-obs error ~4e-5 at this value) and 1e-6
-# keeps r = 1/m = 1e6 well away from the lgamma cancellation that appears at
-# r ~ 1e8, so this is an accurate, well-conditioned stand-in for m = 0. It is a
-# numerical limit, not an exact Poisson reparameterization.
+# Display placeholder for the pinned log_m of a Poisson-restricted (m = 0) margin.
+# The likelihood, CDF, gradient, Hessian, residuals, and diagnostics all take the
+# EXACT m = 0 (Poisson) branch for such a margin -- selected by the poisson_1 /
+# poisson_2 flags, NOT by this value -- so POISSON_M no longer enters any
+# numerical result. It only fills the fixed log_m slot in the parameter vector
+# (so `m1 (dispersion)` prints as ~0 and the coefficient/vcov shapes are
+# unchanged); log(1e-6) reads as "essentially 0" without the -Inf that log(0)
+# would put in a printed coefficient table.
 POISSON_M <- 1e-6
+
+# Validate a poisson_1 / poisson_2 flag: must be a non-missing logical scalar.
+# `1`, NA, logical(0), or c(TRUE, FALSE) would otherwise be silently coerced to
+# FALSE by isTRUE() and quietly select the unrestricted NB path.
+.chk_poisson_flag <- function(x, arg) {
+  if (!(is.logical(x) && length(x) == 1L && !is.na(x))) {
+    stop("`", arg, "` must be a single non-missing logical (TRUE or FALSE).",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
 
 # Standard errors when some parameters are held fixed (pinned dispersions).
 # `info` is the full observed-information (or the OPG/analytic surrogate) over

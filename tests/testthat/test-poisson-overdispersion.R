@@ -86,8 +86,12 @@ test_that("end-to-end: fit_rpbnb Poisson-limit fit nests for an overdispersion L
   ctrl <- rpbnb_control(print_level = 0)
   full <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
                     draws = 200, seed = 1, control = ctrl)
-  p1   <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
-                    draws = 200, seed = 1, control = ctrl, poisson_1 = TRUE)
+  # A tail draw can push one conditional mean past the Poisson-limit guard's mean
+  # tolerance; that diagnostic is exercised separately. Muffle only it, so a
+  # genuine convergence warning would still surface.
+  p1   <- suppress_poisson_warning(
+    fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+              draws = 200, seed = 1, control = ctrl, poisson_1 = TRUE))
 
   expect_equal(p1$npar, full$npar - 1L)
   expect_lt(exp(p1$coef[["log_m1"]]), 1e-5)          # m1 pinned at the limit
@@ -98,17 +102,43 @@ test_that("end-to-end: fit_rpbnb Poisson-limit fit nests for an overdispersion L
   expect_lt(res$p.value, 0.01)                       # m1 = 0.4 in the DGP
 })
 
-test_that("POISSON_M limit is stable: restricted logLik agrees across 1e-6 and 1e-8", {
-  skip_slow()
-  d  <- make_od_data(n = 800)
-  p6 <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "famoye", poisson_1 = TRUE)
-  # At the fitted restricted estimate, the total logLik as a function of the
-  # pinned m1 should be flat near the Poisson limit: values at 1e-6 and 1e-8
-  # must agree to well under one logLik unit (the LR-statistic tolerance).
-  X <- model.matrix(~ x, d)
-  ll_at <- function(mval) {
-    st <- p6$coef; st[["log_m1"]] <- log(mval)
-    sum(rpbnb:::bnb_loglik_vec(st, d$y1, d$y2, X, X))
+test_that("invalid poisson flags are rejected, not silently ignored (P2)", {
+  d <- make_od_data(n = 60)
+  bad_vals <- list(one = 1, na = NA, empty = logical(0),
+                   two = c(TRUE, FALSE), chr = "yes")
+  for (bad in bad_vals) {
+    expect_error(fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "independence",
+                         poisson_1 = bad), "logical")
+    expect_error(fit_rpbnb(y1 ~ x, y2 ~ x, data = d, poisson_2 = bad), "logical")
   }
-  expect_lt(abs(ll_at(1e-6) - ll_at(1e-8)), 1)
 })
+
+test_that("bnb_gof() preserves a Poisson-restricted margin in the null (P2)", {
+  d  <- make_od_data()
+  # independence path -> exact Poisson margin 1, NB margin 2
+  p1 <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "independence",
+                poisson_1 = TRUE)
+  g  <- bnb_gof(p1, print_output = FALSE)
+  expect_true(isTRUE(g$null_fit$poisson_1))            # null keeps the restriction
+  expect_false(isTRUE(g$null_fit$poisson_2))
+  expect_lt(exp(g$null_fit$coef[["log_m1"]]), 1e-5)    # null margin 1 still Poisson
+  # intercept-only Poisson/NB null: 1 + 1 betas + 1 free dispersion = 3 (not 4)
+  expect_equal(g$null_fit$npar, 3L)
+})
+
+test_that("bnb_gof() null is unrestricted NB when the fit is unrestricted", {
+  d   <- make_od_data()
+  fit <- fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = "independence")
+  g   <- bnb_gof(fit, print_output = FALSE)
+  expect_false(isTRUE(g$null_fit$poisson_1))
+  expect_false(isTRUE(g$null_fit$poisson_2))
+  expect_equal(g$null_fit$npar, 4L)                    # 2 betas + 2 dispersions
+})
+
+# The exact m = 0 (true Poisson) likelihood/CDF branch replaced the old fixed
+# POISSON_M = 1e-6 approximation, so the tests that documented that approximation
+# and its .warn_poisson_limit range guard (dpois divergence at large mu, the
+# warning firing above a mean tolerance, and pinned-m logLik stability) are gone.
+# Exact-branch coverage lives in test-poisson-exact.R: c_val/nb_logpmf at m = 0,
+# the famoye and RP objectives/gradients/Hessians, the fit-level "no POISSON_M
+# warning + exact logLik" regressions, and the residual/CDF/variance branches.

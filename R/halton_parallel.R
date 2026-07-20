@@ -31,7 +31,8 @@ rpbnb_cpp_available <- function() {
 # needs plus the parameter block sizes.
 .rp_prepare <- function(par, y1, y2, X1, X2, XR1, XR2,
                         rand_idx1, rand_idx2, Z1, Z2,
-                        dist1, dist2, sign1, sign2) {
+                        dist1, dist2, sign1, sign2,
+                        pois1 = FALSE, pois2 = FALSE) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -40,7 +41,12 @@ rpbnb_cpp_available <- function() {
   log_sd1 <- if (q1 > 0) par[(k1 + k2 + 1):(k1 + k2 + q1)] else numeric(0)
   log_sd2 <- if (q2 > 0) par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)] else numeric(0)
   idx_end <- k1 + k2 + q1 + q2
-  m1 <- exp(par[idx_end + 1]); m2 <- exp(par[idx_end + 2]); zlam <- par[idx_end + 3]
+  # m == 0 is the in-band Poisson flag for the C++ core (c_val -> exp(-d*mu),
+  # nb_logpmf -> dpois, log_m gradient/score forced to 0). The pinned log_m in
+  # `par` is ignored for a Poisson margin.
+  m1 <- if (pois1) 0 else exp(par[idx_end + 1])
+  m2 <- if (pois2) 0 else exp(par[idx_end + 2])
+  zlam <- par[idx_end + 3]
   sd1 <- if (q1 > 0) exp(log_sd1) else numeric(0)
   sd2 <- if (q2 > 0) exp(log_sd2) else numeric(0)
 
@@ -50,9 +56,11 @@ rpbnb_cpp_available <- function() {
   xr1 <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else matrix(0, nrow(X1), 0)
   xr2 <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else matrix(0, nrow(X2), 0)
 
+  # S1/S2 feed only the (guarded) log_m gradient; a Poisson margin's r = Inf would
+  # make digamma(Inf) a 0/0, so pass 0 there -- the C++ core skips its log_m term.
   r1v <- 1 / m1; r2v <- 1 / m2
-  S1 <- digamma(r1v + y1) - digamma(r1v)
-  S2 <- digamma(r2v + y2) - digamma(r2v)
+  S1 <- if (pois1) numeric(length(y1)) else digamma(r1v + y1) - digamma(r1v)
+  S2 <- if (pois2) numeric(length(y2)) else digamma(r2v + y2) - digamma(r2v)
 
   list(
     y1 = y1, y2 = y2, X1 = X1, X2 = X2, XR1 = xr1, XR2 = xr2,
@@ -71,9 +79,11 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                     rand_idx1, rand_idx2, Z1, Z2,
                                     dist1 = NULL, dist2 = NULL,
                                     sign1 = NULL, sign2 = NULL,
-                                    n_threads = 0L) {
+                                    n_threads = 0L,
+                                    pois1 = FALSE, pois2 = FALSE) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
-                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2)
+                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
+                   pois1 = pois1, pois2 = pois2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
@@ -98,9 +108,11 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                rand_idx1, rand_idx2, Z1, Z2,
                                dist1 = NULL, dist2 = NULL,
                                sign1 = NULL, sign2 = NULL,
-                               n_threads = 0L) {
+                               n_threads = 0L,
+                               pois1 = FALSE, pois2 = FALSE) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
-                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2)
+                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
+                   pois1 = pois1, pois2 = pois2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
@@ -131,9 +143,11 @@ bnbr_rp_ll_fixed_bounds_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                         lamLo, lamHi,
                                         dist1 = NULL, dist2 = NULL,
                                         sign1 = NULL, sign2 = NULL,
-                                        n_threads = 0L) {
+                                        n_threads = 0L,
+                                        pois1 = FALSE, pois2 = FALSE) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
-                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2)
+                   rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
+                   pois1 = pois1, pois2 = pois2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,

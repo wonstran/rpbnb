@@ -17,7 +17,8 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
                                                  rand_idx1, rand_idx2, Z1, Z2,
                                                  dist1 = NULL, dist2 = NULL,
                                                  sign1 = NULL, sign2 = NULL,
-                                                 cl = NULL) {
+                                                 cl = NULL,
+                                                 pois1 = FALSE, pois2 = FALSE) {
   n   <- length(y1)
   k1  <- ncol(X1); k2 <- ncol(X2)
   q1  <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -32,8 +33,11 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   idx_end <- k1 + k2 + q1 + q2
   log_m1 <- par[idx_end + 1]; log_m2 <- par[idx_end + 2]; zlam <- par[idx_end + 3]
 
-  m1 <- exp(log_m1); r1 <- 1/m1
-  m2 <- exp(log_m2); r2 <- 1/m2
+  # A poisson_* margin takes the exact m = 0 (Poisson) limit: r = Inf routes the
+  # NB2 log-pmf/c to dpois/exp(-d*mu), and every m-scaled term (w, dc/dbeta, ...)
+  # collapses to its Poisson value. The pinned log_m in `par` is ignored.
+  m1 <- if (pois1) 0 else exp(log_m1); r1 <- if (pois1) Inf else 1/m1
+  m2 <- if (pois2) 0 else exp(log_m2); r2 <- if (pois2) Inf else 1/m2
   sd1 <- if (q1 > 0) exp(log_sd1) else numeric(0)
   sd2 <- if (q2 > 0) exp(log_sd2) else numeric(0)
 
@@ -116,10 +120,12 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   g_logm1 <- 0; g_logm2 <- 0; g_z <- 0
 
   dconst <- d_const()
-  r1v <- 1 / m1; r2v <- 1 / m2
+  r1v <- r1; r2v <- r2
   log_m1_v <- log(m1); log_m2_v <- log(m2)
-  S1 <- digamma(r1v + y1) - digamma(r1v)
-  S2 <- digamma(r2v + y2) - digamma(r2v)
+  # S1/S2 feed only the log_m gradient; a Poisson margin's log_m is fixed, so
+  # skip the digamma(Inf) 0/0 (the accumulation is guarded below).
+  S1 <- if (pois1) numeric(0) else digamma(r1v + y1) - digamma(r1v)
+  S2 <- if (pois2) numeric(0) else digamma(r2v + y2) - digamma(r2v)
 
   for (r in 1:R) {
     mu1_r <- pass1[[r]]$mu1; mu2_r <- pass1[[r]]$mu2
@@ -150,13 +156,20 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     g_beta1 <- g_beta1 + colSums(sweep(score_b1, 1, w_ir, `*`))
     g_beta2 <- g_beta2 + colSums(sweep(score_b2, 1, w_ir, `*`))
 
-    dc1_dm1 <- dct_dm(mu1_r, m1, c1_r); dc2_dm2 <- dct_dm(mu2_r, m2, c2_r)
-    term_m1 <- r1v^2 * log_m1_v + r1v^2 * (log(mu1_r + r1v) - 1) +
-      r1v^2 * (y1 + r1v)/(mu1_r + r1v) - r1v^2 * S1 - (lam * k2v * inv_dep) * dc1_dm1
-    term_m2 <- r2v^2 * log_m2_v + r2v^2 * (log(mu2_r + r2v) - 1) +
-      r2v^2 * (y2 + r2v)/(mu2_r + r2v) - r2v^2 * S2 - (lam * k1v * inv_dep) * dc2_dm2
-    g_logm1 <- g_logm1 + sum(w_ir * (m1 * term_m1))
-    g_logm2 <- g_logm2 + sum(w_ir * (m2 * term_m2))
+    # log_m gradient: a Poisson margin's log_m is fixed (score 0); the NB2 term
+    # is a 0/0 at m = 0, so skip it entirely for that margin.
+    if (!pois1) {
+      dc1_dm1 <- dct_dm(mu1_r, m1, c1_r)
+      term_m1 <- r1v^2 * log_m1_v + r1v^2 * (log(mu1_r + r1v) - 1) +
+        r1v^2 * (y1 + r1v)/(mu1_r + r1v) - r1v^2 * S1 - (lam * k2v * inv_dep) * dc1_dm1
+      g_logm1 <- g_logm1 + sum(w_ir * (m1 * term_m1))
+    }
+    if (!pois2) {
+      dc2_dm2 <- dct_dm(mu2_r, m2, c2_r)
+      term_m2 <- r2v^2 * log_m2_v + r2v^2 * (log(mu2_r + r2v) - 1) +
+        r2v^2 * (y2 + r2v)/(mu2_r + r2v) - r2v^2 * S2 - (lam * k1v * inv_dep) * dc2_dm2
+      g_logm2 <- g_logm2 + sum(w_ir * (m2 * term_m2))
+    }
 
     g_z <- g_z + sum(w_ir * ((k1v * k2v) * inv_dep * dlam_dz))
 
@@ -194,7 +207,8 @@ bnbr_rp_ll_fixed_bounds <- function(par, y1, y2, X1, X2, XR1, XR2,
                                     lamLo, lamHi,
                                     dist1 = NULL, dist2 = NULL,
                                     sign1 = NULL, sign2 = NULL,
-                                    cl = NULL) {
+                                    cl = NULL,
+                                    pois1 = FALSE, pois2 = FALSE) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -208,7 +222,8 @@ bnbr_rp_ll_fixed_bounds <- function(par, y1, y2, X1, X2, XR1, XR2,
   idx_end <- k1+k2+q1+q2
   log_m1 <- par[idx_end+1]; log_m2 <- par[idx_end+2]; zlam <- par[idx_end+3]
 
-  m1 <- exp(log_m1); m2 <- exp(log_m2); r1 <- 1/m1; r2 <- 1/m2
+  m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
+  r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
   sd1 <- if (q1>0) exp(log_sd1) else numeric(0)
   sd2 <- if (q2>0) exp(log_sd2) else numeric(0)
 

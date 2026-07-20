@@ -8,7 +8,8 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
                         lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                         formula_1, formula_2, ll_trace, convergence, call,
                         cop_family = NULL, cop_par = NULL, cop_tau = NULL,
-                        hessian_diag = NULL) {
+                        hessian_diag = NULL,
+                        poisson_1 = FALSE, poisson_2 = FALSE) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, dependence = dependence,
@@ -19,7 +20,10 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
          AIC = -2 * logLik + 2 * npar, BIC = -2 * logLik + log(nobs) * npar,
          call = call,
          cop_family = cop_family, cop_par = cop_par, cop_tau = cop_tau,
-         hessian_diag = hessian_diag),
+         hessian_diag = hessian_diag,
+         # Poisson-limit restriction flags per margin, so bnb_gof() can rebuild a
+         # same-family (Poisson-restricted) null instead of an unrestricted NB one.
+         poisson_1 = poisson_1, poisson_2 = poisson_2),
     class = "bnb_fit"
   )
 }
@@ -63,13 +67,15 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   }
 
   # --- capture logLik at every evaluation (reset per candidate) ---
+  # A poisson_* margin uses the exact m = 0 (Poisson) branch; the pinned log_m in
+  # the parameter vector is only a display placeholder, ignored by the math.
   .ll_eval <- numeric(0)
   ll_fun <- function(p) {
-    v <- bnb_loglik_vec(p, Y1, Y2, X1, X2)   # per-obs vector
+    v <- bnb_loglik_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1, pois2 = poisson_2)
     .ll_eval <<- c(.ll_eval, sum(v))         # record total logLik
     v
   }
-  grad_fun <- function(p) bnb_grad_vec(p, Y1, Y2, X1, X2)
+  grad_fun <- function(p) bnb_grad_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1, pois2 = poisson_2)
 
   ml_control <- list(iterlim = control$iterlim,
                      reltol = control$reltol,
@@ -88,8 +94,8 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   if (!length(runs)) {
     stop("famoye optimization failed from all candidate starts.", call. = FALSE)
   }
-  conv <- vapply(runs, function(r) isTRUE(r$fit$code <= 2L), logical(1))
-  pool <- if (any(conv)) runs[conv] else runs      # prefer converged fits
+  conv <- vapply(runs, function(r) isTRUE(r$fit$code == 0L), logical(1))
+  pool <- if (any(conv)) runs[conv] else runs      # prefer converged fits (code 0)
   lls  <- vapply(pool, function(r) as.numeric(stats::logLik(r$fit)), numeric(1))
   best <- pool[[which.max(lls)]]
   fit  <- best$fit
@@ -105,6 +111,11 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
 
   mu1_hat <- as.vector(exp(X1 %*% beta1_hat))
   mu2_hat <- as.vector(exp(X2 %*% beta2_hat))
+  # A Poisson-restricted margin uses the exact m = 0 limit everywhere, so its
+  # dependence constant is c = exp(-d*mu) (m -> 0). Force m = 0 here too, so the
+  # frozen lambda-bounds used for the SEs match the objective's Poisson margin.
+  if (isTRUE(poisson_1)) m1_hat <- 0
+  if (isTRUE(poisson_2)) m2_hat <- 0
   c1_hat  <- c_val(mu1_hat, m1_hat)
   c2_hat  <- c_val(mu2_hat, m2_hat)
   bnds_hat <- lambda_bounds_vec(c1_hat, c2_hat)
@@ -118,10 +129,12 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   # analytic and numeric paths differentiate the same frozen-bounds objective.
   if (isTRUE(control$compute_se)) {
     lamLo_h <- bnds_hat[1]; lamHi_h <- bnds_hat[2]
-    ll_fb <- function(p) bnbr_loglik_fixed_bounds(p, Y1, Y2, X1, X2, lamLo_h, lamHi_h)
+    ll_fb <- function(p) bnbr_loglik_fixed_bounds(p, Y1, Y2, X1, X2, lamLo_h, lamHi_h,
+                                                  pois1 = poisson_1, pois2 = poisson_2)
 
     H <- if (identical(control$hessian, "analytic")) {
-      bnb_hessian_fixed_bounds(par_hat, Y1, Y2, X1, X2, lamLo_h, lamHi_h)
+      bnb_hessian_fixed_bounds(par_hat, Y1, Y2, X1, X2, lamLo_h, lamHi_h,
+                               pois1 = poisson_1, pois2 = poisson_2)
     } else {
       numDeriv::hessian(ll_fb, par_hat,
                         method.args = list(r = control$hess_r, eps = control$hess_eps))
@@ -144,7 +157,9 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   dimnames(vc) <- list(names(par_hat), names(par_hat))
   names(se) <- names(par_hat)
 
-  convergence <- list(converged = fit$code <= 2L, code = fit$code,
+  # maxLik BFGS (optim-based) returns code 0 on success; code 1 is
+  # "iteration limit exceeded" -- NOT convergence. Only 0 counts as converged.
+  convergence <- list(converged = isTRUE(fit$code == 0L), code = fit$code,
                       message = fit$message, iterations = fit$iterations)
 
   list(coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
@@ -213,7 +228,9 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
   dimnames(vc) <- list(names(par_hat), names(par_hat))
   names(se) <- names(par_hat)
 
-  convergence <- list(converged = fit$code <= 2L, code = fit$code,
+  # maxLik BFGS (optim-based) returns code 0 on success; code 1 is
+  # "iteration limit exceeded" -- NOT convergence. Only 0 counts as converged.
+  convergence <- list(converged = isTRUE(fit$code == 0L), code = fit$code,
                       message = fit$message, iterations = fit$iterations)
 
   list(coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
@@ -306,14 +323,16 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   start-sensitive and neither start dominates).
 #' @param control An [rpbnb_control()] object. The famoye and copula estimators
 #'   both use BFGS, the only optimizer `control$method` accepts.
-#' @param poisson_1,poisson_2 Fit the corresponding margin at its Poisson limit
-#'   (NB2 dispersion `m = 0`) instead of estimating the dispersion. The margin's
-#'   `log_m` is held fixed, so it is not a free parameter and the fit is a
-#'   properly nested restriction of the NB model -- pair it with [lr_test()]
-#'   (`boundary = TRUE`) to test for overdispersion. In the famoye path this is
-#'   a numerical m->0 limit (`m` pinned at a tiny constant); in the independence
-#'   path it is an exact Poisson GLM margin. Not supported with a [copula()]
-#'   dependence.
+#' @param poisson_1,poisson_2 Fit the corresponding margin at its exact Poisson
+#'   limit (NB2 dispersion `m = 0`) instead of estimating the dispersion. The
+#'   margin's `log_m` is held fixed, so it is not a free parameter and the fit is
+#'   a properly nested restriction of the NB model -- pair it with [lr_test()]
+#'   (`boundary = TRUE`) to test for overdispersion. This is the exact `m = 0`
+#'   restriction at any fitted mean: the margin's log-pmf is `dpois` and its
+#'   Famoye dependence constant is `exp(-d*mu)` (the `m -> 0` limit), not an NB2
+#'   at a tiny pinned dispersion. The famoye and independence paths are both
+#'   exact (the independence path fits a Poisson GLM margin). Not supported with
+#'   a [copula()] dependence.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples
@@ -335,6 +354,9 @@ fit_bnb <- function(formula_1, formula_2, data,
                     dependence = c("independence", "famoye"),
                     start = NULL, control = rpbnb_control(),
                     poisson_1 = FALSE, poisson_2 = FALSE) {
+
+  .chk_poisson_flag(poisson_1, "poisson_1")
+  .chk_poisson_flag(poisson_2, "poisson_2")
 
   prep <- .prepare_bnb_data(formula_1, formula_2, data)
   Y1 <- prep$Y1; Y2 <- prep$Y2
@@ -377,5 +399,6 @@ fit_bnb <- function(formula_1, formula_2, data,
               mu1 = res$mu1, mu2 = res$mu2, X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
               formula_1 = formula_1, formula_2 = formula_2,
               ll_trace = res$ll_trace, convergence = res$convergence,
-              call = match.call(), hessian_diag = res$hessian_diag)
+              call = match.call(), hessian_diag = res$hessian_diag,
+              poisson_1 = poisson_1, poisson_2 = poisson_2)
 }

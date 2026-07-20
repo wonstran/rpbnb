@@ -13,7 +13,8 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
                             rand_idx1, rand_idx2, Z1, Z2,
                             dist1 = NULL, dist2 = NULL,
                             sign1 = NULL, sign2 = NULL,
-                            lamLo = NULL, lamHi = NULL) {
+                            lamLo = NULL, lamHi = NULL,
+                            pois1 = FALSE, pois2 = FALSE) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -26,8 +27,13 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
   sd1 <- if (q1 > 0) exp(par[lg1]) else numeric(0)
   sd2 <- if (q2 > 0) exp(par[lg2]) else numeric(0)
   idx_end <- k1 + k2 + q1 + q2
-  m1 <- exp(par[idx_end + 1]); m2 <- exp(par[idx_end + 2]); zlam <- par[idx_end + 3]
-  r1 <- 1 / m1; r2 <- 1 / m2
+  # A Poisson margin uses the exact m = 0 limit: the beta/log_sd/lambda blocks
+  # reduce to their Poisson values at m = 0, and its log_m row/column (a fixed
+  # parameter, a 0/0 in the NB2 dispersion curvature) is zeroed at the end.
+  m1 <- if (pois1) 0 else exp(par[idx_end + 1])
+  m2 <- if (pois2) 0 else exp(par[idx_end + 2])
+  zlam <- par[idx_end + 3]
+  r1 <- if (pois1) Inf else 1 / m1; r2 <- if (pois2) Inf else 1 / m2
   d <- d_const()
 
   if (is.null(dist1) && q1 > 0) dist1 <- rep("normal", q1)
@@ -239,5 +245,11 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
 
   H_ss <- crossprod(S)
   H <- H_H + H_gg - H_ss
+  # Zero each Poisson margin's log_m row/column: its NB2 dispersion curvature is a
+  # 0/0 at m = 0 and enters only that row/column, which .free_index_vcov() drops
+  # from the free-parameter information. (The beta/log_sd/lambda blocks already
+  # used the exact m = 0 limits.)
+  if (pois1) { H[im1, ] <- 0; H[, im1] <- 0 }
+  if (pois2) { H[im2, ] <- 0; H[, im2] <- 0 }
   (H + t(H)) / 2
 }
