@@ -81,7 +81,18 @@ sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME)\n"); sep()
 el <- rpbnb_elasticities(fit, which = "both", type = "AME",
                          n_cores = rpbnb_threads())
 
-# ---- 6. Residual diagnostics ------------------------------------------------
+# ---- 6. Likelihood-ratio tests: SD and dispersion ----------------------------
+# Test boundary parameters that cannot be estimated under the null:
+#   * SD (random coefficient standard deviation): H0 = no random effect (sd = 0)
+#   * Dispersion (m): H0 = Poisson margin (m = 0)
+# Under H0, the LR test statistic is chi-squared on a *boundary* (df = 0.5,
+# reflecting that the parameter can only move in one direction: sd,m >= 0).
+# rpbnb_boundary_tests() runs these tests for all SDs and dispersions.
+sep(); cat("BOUNDARY PARAMETER TESTS (SD, Dispersion)\n"); sep()
+bt <- rpbnb_boundary_tests(fit, seed = 20240712)
+print(bt)
+
+# ---- 7. Residual diagnostics ------------------------------------------------
 # Randomized quantile residuals (Dunn-Smyth) are the primary count-model
 # residual (~ N(0,1) under a correct fit). plot() writes four panels per margin
 # (residuals-vs-fitted, normal QQ of the RQR, RQR histogram, scale-location);
