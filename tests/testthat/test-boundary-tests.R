@@ -24,11 +24,8 @@ test_that("scale labels match the natural-scale table prefixes", {
   expect_equal(rpbnb:::.sd_label("lognormal", 1, "educ"),   "s1:educ")
 })
 
-test_that("errors on non-rpbnb_fit and on copula fits", {
+test_that("errors on non-rpbnb_fit", {
   expect_error(rpbnb_boundary_tests(list(), data.frame(x = 1)), "rpbnb_fit")
-
-  fake_cop <- structure(list(cop_family = "frank"), class = "rpbnb_fit")
-  expect_error(rpbnb_boundary_tests(fake_cop, data.frame(x = 1)), "copula")
 })
 
 test_that("rpbnb_boundary_tests rejects a non-converged full fit", {

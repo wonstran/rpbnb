@@ -56,8 +56,9 @@
 #' that fails to converge yields `NA` inference (with a warning) rather than a
 #' p-value, and a non-converged full `fit` is rejected.
 #'
-#' @param fit A famoye `rpbnb_fit` (the full model). Copula fits are not
-#'   supported (Poisson-limit margins are unavailable there).
+#' @param fit A converged `rpbnb_fit` (the full model), from a Famoye or a
+#'   [copula()] dependence. Both paths use the exact `m = 0` branch for the
+#'   dispersion tests.
 #' @param data The data frame the model was fit on. Required -- the fit object
 #'   does not store it, and every restricted model is refit on the same data.
 #' @param control An [rpbnb_control()] for the restricted refits. Defaults to
@@ -87,11 +88,6 @@ rpbnb_boundary_tests <- function(fit, data,
   if (!inherits(fit, "rpbnb_fit")) {
     stop("`fit` must be an rpbnb_fit (from fit_rpbnb()).", call. = FALSE)
   }
-  if (!is.null(fit$cop_family)) {
-    stop("rpbnb_boundary_tests() supports famoye fits only; copula fits are ",
-         "not supported (Poisson-limit margins are unavailable there).",
-         call. = FALSE)
-  }
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
   which <- match.arg(which, c("sd", "dispersion"), several.ok = TRUE)
 
@@ -117,12 +113,13 @@ rpbnb_boundary_tests <- function(fit, data,
   # fit's coefficients so the start-sensitive Famoye objective does not settle at
   # an inferior local optimum (which could inflate or clamp the LR statistic).
   full_draws <- list(Z1 = fit$rp_meta$Z1, Z2 = fit$rp_meta$Z2)
+  full_dep <- if (!is.null(fit$cop_family)) copula(fit$cop_family) else "famoye"
   refit <- function(poisson_1 = FALSE, poisson_2 = FALSE, fixed = NULL,
                     opt_draws = full_draws) {
     fit_rpbnb(fit$formula_1, fit$formula_2, data = data,
               random_1 = full1, random_2 = full2,
               draws = fit$draws, draw_type = fit$draw_type, seed = fit$seed,
-              start = fit$coef, control = control, dependence = "famoye",
+              start = fit$coef, control = control, dependence = full_dep,
               poisson_1 = poisson_1, poisson_2 = poisson_2,
               .fixed = fixed, .opt_draws = opt_draws)
   }

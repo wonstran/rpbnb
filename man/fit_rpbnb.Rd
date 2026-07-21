@@ -61,7 +61,8 @@ model. Pair with \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}) to t
 overdispersion (\code{H0: m = 0}). The simulated likelihood uses the exact \code{m = 0}
 branch -- the per-draw margin log-pmf is \code{dpois} and its Famoye dependence
 constant is \code{exp(-d*mu)} -- so it is accurate at any fitted mean, not a
-fixed-dispersion approximation. Not supported with a \code{\link[=copula]{copula()}} dependence.}
+fixed-dispersion approximation. Supported with both Famoye/Sarmanov and
+\code{\link[=copula]{copula()}} dependence (the copula path uses the same exact m = 0 branch).}
 
 \item{.fixed}{Internal. A named numeric vector of parameters (in the
 optimization/log-scale parameterization) to pin at the supplied values and

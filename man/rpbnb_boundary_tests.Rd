@@ -12,8 +12,9 @@ rpbnb_boundary_tests(
 )
 }
 \arguments{
-\item{fit}{A famoye \code{rpbnb_fit} (the full model). Copula fits are not
-supported (Poisson-limit margins are unavailable there).}
+\item{fit}{A converged \code{rpbnb_fit} (the full model), from a Famoye or a
+\code{\link[=copula]{copula()}} dependence. Both paths use the exact \code{m = 0} branch for the
+dispersion tests.}
 
 \item{data}{The data frame the model was fit on. Required -- the fit object
 does not store it, and every restricted model is refit on the same data.}

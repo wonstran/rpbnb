@@ -161,3 +161,20 @@ test_that("fit_rpbnb copula path accepts poisson_1 via the public API", {
   expect_true(isTRUE(fit$poisson_1))
   expect_false(is.null(fit$cop_family))
 })
+
+test_that("rpbnb_boundary_tests supports a copula fit (sd + dispersion)", {
+  skip_slow()
+  set.seed(51)
+  n <- 400
+  d <- data.frame(x = rnorm(n))
+  d$y1 <- rpois(n, exp(0.3 + 0.4 * d$x))
+  d$y2 <- rnbinom(n, size = 1.5, mu = exp(0.1 - 0.2 * d$x))
+  fit <- fit_rpbnb(y1 ~ x, y2 ~ x, data = d, random_1 = "x",
+                   dependence = copula("frank"), draws = 100, seed = 1,
+                   control = rpbnb_control(print_level = 0, se_method = "opg"))
+  bt <- rpbnb_boundary_tests(fit, d)
+  expect_s3_class(bt, "rpbnb_boundary_tests")
+  expect_true("sd1:x" %in% bt$Parameter)      # SD test row present
+  expect_true(all(c("m1", "m2") %in% bt$Parameter))  # dispersion rows present
+  expect_true(all(is.finite(bt$p.value)))
+})
