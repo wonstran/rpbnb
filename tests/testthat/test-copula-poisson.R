@@ -148,3 +148,16 @@ test_that(".fit_rpbnb_copula validates .opt_draws shape", {
       control = ctrl, family = "frank", .opt_draws = bad),
     "opt_draws")
 })
+
+test_that("fit_rpbnb copula path accepts poisson_1 via the public API", {
+  set.seed(41)
+  n <- 200
+  d <- data.frame(x = rnorm(n))
+  d$y1 <- rpois(n, exp(0.3 + 0.2 * d$x))
+  d$y2 <- rnbinom(n, size = 2, mu = exp(0.1 - 0.1 * d$x))
+  fit <- fit_rpbnb(y1 ~ x, y2 ~ x, data = d, dependence = copula("frank"),
+                   draws = 50, seed = 1, poisson_1 = TRUE,
+                   control = rpbnb_control(print_level = 0, compute_se = FALSE))
+  expect_true(isTRUE(fit$poisson_1))
+  expect_false(is.null(fit$cop_family))
+})

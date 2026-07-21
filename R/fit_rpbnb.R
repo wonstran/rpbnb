@@ -71,7 +71,8 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #'   overdispersion (`H0: m = 0`). The simulated likelihood uses the exact `m = 0`
 #'   branch -- the per-draw margin log-pmf is `dpois` and its Famoye dependence
 #'   constant is `exp(-d*mu)` -- so it is accurate at any fitted mean, not a
-#'   fixed-dispersion approximation. Not supported with a [copula()] dependence.
+#'   fixed-dispersion approximation. Supported with both Famoye/Sarmanov and
+#'   [copula()] dependence (the copula path uses the same exact m = 0 branch).
 #' @param .fixed Internal. A named numeric vector of parameters (in the
 #'   optimization/log-scale parameterization) to pin at the supplied values and
 #'   hold fixed during estimation. Used by [rpbnb_boundary_tests()] to construct
@@ -119,13 +120,11 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   .chk_poisson_flag(poisson_2, "poisson_2")
 
   if (inherits(dependence, "rpbnb_copula")) {
-    if (isTRUE(poisson_1) || isTRUE(poisson_2)) {
-      stop("poisson_1 / poisson_2 (Poisson-limit margins) are not supported ",
-           "with a copula() dependence.", call. = FALSE)
-    }
     return(.fit_rpbnb_copula(formula_1, formula_2, data, random_1, random_2,
                              draws, draw_type, seed, start, control,
-                             family = dependence$family))
+                             family = dependence$family,
+                             poisson_1 = poisson_1, poisson_2 = poisson_2,
+                             .fixed = .fixed, .opt_draws = .opt_draws))
   }
   if (!identical(dependence, "famoye")) {
     stop("`dependence` must be \"famoye\" or a copula() object; got ",
