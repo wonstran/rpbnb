@@ -64,14 +64,13 @@ test_that("independence path fits an exact Poisson margin", {
   expect_equal(p1$npar, length(coef(g)) + length(coef(g2)) + 1L)  # +1 for m2 only
 })
 
-test_that("poisson flags error on a copula dependence", {
+test_that("poisson flags error on a fit_bnb copula dependence", {
+  # The fixed-coefficient copula path (fit_bnb) has no exact m = 0 branch, so it
+  # still rejects poisson_1/poisson_2. The random-parameter copula path
+  # (fit_rpbnb) DOES support Poisson-limit margins -- see test-copula-poisson.R.
   d <- make_od_data()
   expect_error(
     fit_bnb(y1 ~ x, y2 ~ x, data = d, dependence = copula("frank"), poisson_1 = TRUE),
-    "copula"
-  )
-  expect_error(
-    fit_rpbnb(y1 ~ x, y2 ~ x, data = d, dependence = copula("frank"), poisson_1 = TRUE),
     "copula"
   )
 })
