@@ -134,3 +134,17 @@ test_that(".fit_rpbnb_copula(poisson_1=TRUE) pins log_m1 and drops it from npar"
   expect_true(isTRUE(pois$poisson_1))          # flag stored
   expect_true(is.finite(as.numeric(logLik(pois))))
 })
+
+test_that(".fit_rpbnb_copula validates .opt_draws shape", {
+  set.seed(71)
+  n <- 80
+  d <- data.frame(x = rnorm(n))
+  d$y1 <- rpois(n, exp(0.2 + 0.3 * d$x)); d$y2 <- rnbinom(n, size = 2, mu = 1.2)
+  ctrl <- rpbnb_control(print_level = 0, compute_se = FALSE)
+  bad <- list(Z1 = matrix(0, 3, 1), Z2 = matrix(0, 3, 0))   # wrong nrow (3 != draws)
+  expect_error(
+    rpbnb:::.fit_rpbnb_copula(y1 ~ x, y2 ~ x, d, "x", character(0),
+      draws = 40, draw_type = "halton", seed = 1, start = NULL,
+      control = ctrl, family = "frank", .opt_draws = bad),
+    "opt_draws")
+})

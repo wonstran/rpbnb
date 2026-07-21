@@ -34,7 +34,16 @@
   XR2 <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else NULL
 
   if (!is.null(.opt_draws)) {
+    # Internal common-random-number path (rpbnb_boundary_tests): reuse a full
+    # fit's stored uniform draw matrices verbatim so a restricted refit is
+    # compared on identical draws. Validate shapes so a caller cannot misalign.
     Z1 <- .opt_draws$Z1; Z2 <- .opt_draws$Z2
+    if (!is.matrix(Z1) || !is.matrix(Z2) ||
+        nrow(Z1) != draws || nrow(Z2) != draws ||
+        ncol(Z1) != q1 || ncol(Z2) != q2) {
+      stop("`.opt_draws` must supply Z1 (", draws, "x", q1, ") and Z2 (",
+           draws, "x", q2, ") uniform draw matrices.", call. = FALSE)
+    }
   } else {
     set.seed(seed)
     if ((q1 + q2) > 0) {
@@ -42,7 +51,7 @@
       Z1 <- if (q1 > 0) Z[, 1:q1, drop = FALSE] else matrix(0, draws, 0)
       Z2 <- if (q2 > 0) Z[, (q1 + 1):(q1 + q2), drop = FALSE] else matrix(0, draws, 0)
     } else {
-      Z1 <- matrix(0, 1, 0); Z2 <- matrix(0, 1, 0)
+      Z1 <- matrix(0, draws, 0); Z2 <- matrix(0, draws, 0)
     }
   }
 
