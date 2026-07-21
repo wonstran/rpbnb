@@ -8,7 +8,9 @@
 #' @noRd
 .fit_rpbnb_copula <- function(formula_1, formula_2, data,
                               random_1, random_2, draws, draw_type,
-                              seed, start, control, family) {
+                              seed, start, control, family,
+                              poisson_1 = FALSE, poisson_2 = FALSE,
+                              .fixed = NULL, .opt_draws = NULL) {
   draw_type <- match.arg(draw_type, "halton")
   spec1 <- parse_rand_spec(random_1); spec2 <- parse_rand_spec(random_2)
 
@@ -31,13 +33,17 @@
   XR1 <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else NULL
   XR2 <- if (q2 > 0) X2[, rand_idx2, drop = FALSE] else NULL
 
-  set.seed(seed)
-  if ((q1 + q2) > 0) {
-    Z  <- halton_uniform(draws, q1 + q2, burn = control$halton_burn)
-    Z1 <- if (q1 > 0) Z[, 1:q1, drop = FALSE] else matrix(0, draws, 0)
-    Z2 <- if (q2 > 0) Z[, (q1 + 1):(q1 + q2), drop = FALSE] else matrix(0, draws, 0)
+  if (!is.null(.opt_draws)) {
+    Z1 <- .opt_draws$Z1; Z2 <- .opt_draws$Z2
   } else {
-    Z1 <- matrix(0, 1, 0); Z2 <- matrix(0, 1, 0)
+    set.seed(seed)
+    if ((q1 + q2) > 0) {
+      Z  <- halton_uniform(draws, q1 + q2, burn = control$halton_burn)
+      Z1 <- if (q1 > 0) Z[, 1:q1, drop = FALSE] else matrix(0, draws, 0)
+      Z2 <- if (q2 > 0) Z[, (q1 + 1):(q1 + q2), drop = FALSE] else matrix(0, draws, 0)
+    } else {
+      Z1 <- matrix(0, 1, 0); Z2 <- matrix(0, 1, 0)
+    }
   }
 
   scale_lab <- function(dist, cols)
@@ -57,6 +63,19 @@
       log(0.5), log(0.5), 0),
     par_names, "start")
 
+  fixed_names <- c(if (isTRUE(poisson_1)) "log_m1", if (isTRUE(poisson_2)) "log_m2")
+  if (length(fixed_names)) start[fixed_names] <- log(POISSON_M)
+  if (!is.null(.fixed)) {
+    if (is.null(names(.fixed)) || any(!nzchar(names(.fixed))))
+      stop("`.fixed` must be a fully named numeric vector.", call. = FALSE)
+    unknown <- setdiff(names(.fixed), par_names)
+    if (length(unknown))
+      stop("`.fixed` names not in the model: ", paste(unknown, collapse = ", "), call. = FALSE)
+    start[names(.fixed)] <- .fixed
+    fixed_names <- union(fixed_names, names(.fixed))
+  }
+  free <- !(par_names %in% fixed_names)
+
   se_method <- if (is.null(control$se_method)) "numeric" else control$se_method
 
   # Preferred fast path: multithreaded (OpenMP) C++ likelihood, mirroring the
@@ -70,19 +89,22 @@
     v <- if (use_cpp)
       bnbr_rp_copula_ll_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
                                  Z1, Z2, family, dist1, dist2, sign1, sign2,
-                                 n_threads = cpp_threads)
+                                 n_threads = cpp_threads, pois1 = poisson_1, pois2 = poisson_2)
     else
       bnbr_rp_copula_ll_grad(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
-                             Z1, Z2, family, dist1, dist2, sign1, sign2)
+                             Z1, Z2, family, dist1, dist2, sign1, sign2,
+                             pois1 = poisson_1, pois2 = poisson_2)
     ll_trace[[length(ll_trace) + 1L]] <<- as.numeric(v)
     v
   }
   fit <- maxLik::maxLik(logLik = ll_fun, start = start, method = "BFGS",
                         control = list(iterlim = control$iterlim,
                                        reltol = control$reltol,
-                                       printLevel = control$print_level))
+                                       printLevel = control$print_level),
+                        fixed = if (length(fixed_names)) fixed_names else NULL)
   par_hat <- stats::coef(fit); names(par_hat) <- par_names
-  npar <- length(par_hat)
+  npar_total <- length(par_hat)
+  npar <- npar_total - length(fixed_names)
 
   if (isTRUE(control$compute_se)) {
     if (identical(se_method, "analytic")) {
@@ -92,24 +114,28 @@
       res <- if (use_cpp)
         bnbr_rp_copula_ll_grad_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
                                    Z1, Z2, family, dist1, dist2, sign1, sign2,
-                                   want_scores = TRUE, n_threads = cpp_threads)
+                                   want_scores = TRUE, n_threads = cpp_threads,
+                                   pois1 = poisson_1, pois2 = poisson_2)
       else
         bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1, Z2, family,
-                              dist1, dist2, sign1, sign2, want_scores = TRUE)
-      inv <- opg_vcov(attr(res, "scores"), par_names)
+                              dist1, dist2, sign1, sign2, want_scores = TRUE,
+                              pois1 = poisson_1, pois2 = poisson_2)
+      inv <- .free_index_vcov(crossprod(attr(res, "scores")), par_names, free,
+                              label = "copula RP-BNB (OPG)")
       vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     } else {  # "numeric"
       H <- numDeriv::hessian(function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
-                             rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2),
+                             rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2,
+                             pois1 = poisson_1, pois2 = poisson_2),
                              par_hat,
                              method.args = list(r = control$hess_r, eps = control$hess_eps))
-      inv <- .observed_info_vcov(-H, par_names,
-                                 label = paste0(family, " copula RP-BNB (numeric Hessian)"))
+      inv <- .free_index_vcov(-H, par_names, free,
+                              label = paste0(family, " copula RP-BNB (numeric Hessian)"))
       vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     }
   } else {
-    vc <- matrix(NA_real_, npar, npar); se <- rep(NA_real_, npar)
+    vc <- matrix(NA_real_, npar_total, npar_total); se <- rep(NA_real_, npar_total)
     hdiag <- NULL
   }
   dimnames(vc) <- list(par_names, par_names); names(se) <- par_names
@@ -135,6 +161,7 @@
     ll_trace = ll_trace, convergence = convergence,
     cop_family = family, call = match.call(), hessian_diag = hdiag,
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
-                   Z1 = Z1, Z2 = Z2)
+                   Z1 = Z1, Z2 = Z2),
+    poisson_1 = poisson_1, poisson_2 = poisson_2
   )
 }

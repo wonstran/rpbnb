@@ -114,3 +114,23 @@ test_that("C++ copula Poisson path matches the R path (value, gradient, scores)"
   expect_equal(attr(rC, "gradient"), attr(rR, "gradient"), tolerance = 1e-6)
   expect_equal(attr(rC, "scores"),   attr(rR, "scores"),   tolerance = 1e-6)
 })
+
+test_that(".fit_rpbnb_copula(poisson_1=TRUE) pins log_m1 and drops it from npar", {
+  set.seed(31)
+  n <- 200
+  d <- data.frame(x = rnorm(n))
+  d$y1 <- rpois(n, exp(0.3 + 0.2 * d$x))
+  d$y2 <- rnbinom(n, size = 2, mu = exp(0.1 - 0.1 * d$x))
+  ctrl <- rpbnb_control(print_level = 0, compute_se = FALSE)
+
+  full <- rpbnb:::.fit_rpbnb_copula(y1 ~ x, y2 ~ x, d, character(0), character(0),
+    draws = 50, draw_type = "halton", seed = 1, start = NULL,
+    control = ctrl, family = "frank")
+  pois <- rpbnb:::.fit_rpbnb_copula(y1 ~ x, y2 ~ x, d, character(0), character(0),
+    draws = 50, draw_type = "halton", seed = 1, start = NULL,
+    control = ctrl, family = "frank", poisson_1 = TRUE)
+
+  expect_equal(pois$npar, full$npar - 1L)      # one fewer free parameter
+  expect_true(isTRUE(pois$poisson_1))          # flag stored
+  expect_true(is.finite(as.numeric(logLik(pois))))
+})
