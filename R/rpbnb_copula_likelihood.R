@@ -12,7 +12,8 @@
 bnbr_rp_copula_ll <- function(par, y1, y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1, Z2, family,
                               dist1 = NULL, dist2 = NULL,
-                              sign1 = NULL, sign2 = NULL) {
+                              sign1 = NULL, sign2 = NULL,
+                              pois1 = FALSE, pois2 = FALSE) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -25,7 +26,8 @@ bnbr_rp_copula_ll <- function(par, y1, y2, X1, X2, XR1, XR2,
   sd2 <- if (q2 > 0) exp(par[lg2]) else numeric(0)
   idx_end <- k1 + k2 + q1 + q2
   log_m1 <- par[idx_end + 1]; log_m2 <- par[idx_end + 2]; z_theta <- par[idx_end + 3]
-  r1 <- exp(-log_m1); r2 <- exp(-log_m2)
+  r1 <- if (pois1) Inf else exp(-log_m1)
+  r2 <- if (pois2) Inf else exp(-log_m2)
   theta <- z_to_native(family, z_theta)
 
   if (is.null(dist1) && q1 > 0) dist1 <- rep("normal", q1)
@@ -65,7 +67,7 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
                                    rand_idx1, rand_idx2, Z1, Z2, family,
                                    dist1 = NULL, dist2 = NULL,
                                    sign1 = NULL, sign2 = NULL,
-                                   want_scores = FALSE) {
+                                   want_scores = FALSE, pois1 = FALSE, pois2 = FALSE) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -79,7 +81,8 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
   sd2 <- if (q2 > 0) exp(par[lg2]) else numeric(0)
   idx_end <- k1 + k2 + q1 + q2
   log_m1 <- par[idx_end + 1]; log_m2 <- par[idx_end + 2]; z_theta <- par[idx_end + 3]
-  r1 <- exp(-log_m1); r2 <- exp(-log_m2)
+  r1 <- if (pois1) Inf else exp(-log_m1)
+  r2 <- if (pois2) Inf else exp(-log_m2)
   theta <- z_to_native(family, z_theta); dth_dz <- dnative_dz(family, z_theta)
 
   if (is.null(dist1) && q1 > 0) dist1 <- rep("normal", q1)
@@ -138,6 +141,9 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
     if (want_scores) S <- S + G * wv
   }
 
+  if (pois1) { grad[im1] <- 0; if (want_scores) S[, im1] <- 0 }
+  if (pois2) { grad[im2] <- 0; if (want_scores) S[, im2] <- 0 }
+
   out <- value
   attr(out, "gradient") <- grad
   if (want_scores) attr(out, "scores") <- S
@@ -156,7 +162,7 @@ bnbr_rp_copula_ll_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                        rand_idx1, rand_idx2, Z1, Z2, family,
                                        dist1 = NULL, dist2 = NULL,
                                        sign1 = NULL, sign2 = NULL,
-                                       want_scores = FALSE, n_threads = 0L) {
+                                       want_scores = FALSE, n_threads = 0L, pois1 = FALSE, pois2 = FALSE) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -167,7 +173,8 @@ bnbr_rp_copula_ll_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   sd2 <- if (q2>0) exp(par[lg2]) else numeric(0)
   idx_end <- k1+k2+q1+q2
   log_m1 <- par[idx_end+1]; log_m2 <- par[idx_end+2]; z_theta <- par[idx_end+3]
-  r1 <- exp(-log_m1); r2 <- exp(-log_m2)
+  r1 <- if (pois1) Inf else exp(-log_m1)
+  r2 <- if (pois2) Inf else exp(-log_m2)
   theta <- z_to_native(family, z_theta); dth_dz <- dnative_dz(family, z_theta)
   if (is.null(dist1) && q1>0) dist1 <- rep("normal", q1)
   if (is.null(dist2) && q2>0) dist2 <- rep("normal", q2)

@@ -55,3 +55,43 @@ test_that(".copula_pmf/.copula_score_scalars handle a Poisson margin 2 (and both
   expect_equal(pm2$b, stats::ppois(y2, mu2))
   expect_true(all(pm2$ok))
 })
+
+test_that("bnbr_rp_copula_ll(pois1=TRUE) matches a ppois-corner reference", {
+  set.seed(11)
+  n <- 40
+  X1 <- cbind(1, rnorm(n)); X2 <- cbind(1, rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rnbinom(n, size = 2, mu = 1.5)
+  # No random coefficients: R = 1, so the RP value reduces to the fixed pmf.
+  # par order: beta1(2), beta2(2), log_m1, log_m2, z_theta. log_m1 (index 5) is
+  # inert here because pois1 = TRUE forces r1 = Inf.
+  par <- c(0.3, 0.1, 0.2, -0.1, 0, 0.4, 0.5)
+  # Build the reference directly from the Poisson-margin pmf.
+  mu1 <- as.vector(exp(X1 %*% par[1:2])); mu2 <- as.vector(exp(X2 %*% par[3:4]))
+  r2 <- exp(-par[6]); theta <- rpbnb:::z_to_native("frank", par[7])
+  pm <- rpbnb:::.copula_pmf(y1, y2, mu1, mu2, Inf, r2, theta, "frank")
+  ref <- sum(log(pm$p_obs))
+
+  val <- rpbnb:::bnbr_rp_copula_ll(
+    par, y1, y2, X1, X2, NULL, NULL, integer(0), integer(0),
+    matrix(0, 1, 0), matrix(0, 1, 0), "frank", pois1 = TRUE)
+  expect_equal(as.numeric(val), ref, tolerance = 1e-8)
+})
+
+test_that("bnbr_rp_copula_ll_grad zeroes the log_m1 column for a Poisson margin", {
+  set.seed(12)
+  n <- 50
+  X1 <- cbind(1, rnorm(n)); X2 <- cbind(1, rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rnbinom(n, size = 2, mu = 1.5)
+  par <- c(0.3, 0.1, 0.2, -0.1, 0, 0.4, 0.5)  # index 5 = log_m1
+  g <- attr(rpbnb:::bnbr_rp_copula_ll_grad(
+    par, y1, y2, X1, X2, NULL, NULL, integer(0), integer(0),
+    matrix(0, 1, 0), matrix(0, 1, 0), "frank", pois1 = TRUE), "gradient")
+  expect_equal(g[5], 0)                    # log_m1 pinned -> zero gradient
+  # Free columns match a numeric gradient of the frozen (pois1) objective.
+  f <- function(p) as.numeric(rpbnb:::bnbr_rp_copula_ll(
+    p, y1, y2, X1, X2, NULL, NULL, integer(0), integer(0),
+    matrix(0, 1, 0), matrix(0, 1, 0), "frank", pois1 = TRUE))
+  gnum <- numDeriv::grad(f, par)
+  free <- c(1, 2, 3, 4, 6, 7)
+  expect_equal(unname(g[free]), gnum[free], tolerance = 1e-5)
+})
