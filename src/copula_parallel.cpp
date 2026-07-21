@@ -174,6 +174,8 @@ List rpbnb_copula_ll_grad_cpp(
 #ifdef _OPENMP
   if (num_threads > 0) omp_set_num_threads(num_threads);
 #endif
+  const bool pois1 = !R_finite(r1);
+  const bool pois2 = !R_finite(r2);
   const int n = y1.size(), k1 = X1.ncol(), k2 = X2.ncol();
   const int q1 = rand_idx1.size(), q2 = rand_idx2.size();
   const int R = (q1 + q2 > 0) ? dev1.nrow() : 1;
@@ -199,10 +201,10 @@ List rpbnb_copula_ll_grad_cpp(
       double m1i = std::exp(e1); if (m1i<1e-300) m1i=1e-300; if (m1i>1e15) m1i=1e15;
       double m2i = std::exp(e2); if (m2i<1e-300) m2i=1e-300; if (m2i>1e15) m2i=1e15;
       mu1[off+i]=m1i; mu2[off+i]=m2i;
-      double a = R::pnbinom(py1[i], r1, r1/(r1+m1i), 1, 0);
-      double am= (py1[i]>0) ? R::pnbinom(py1[i]-1, r1, r1/(r1+m1i), 1, 0) : 0.0;
-      double b = R::pnbinom(py2[i], r2, r2/(r2+m2i), 1, 0);
-      double bm= (py2[i]>0) ? R::pnbinom(py2[i]-1, r2, r2/(r2+m2i), 1, 0) : 0.0;
+      double a  = pois1 ? R::ppois(py1[i], m1i, 1, 0)   : R::pnbinom(py1[i], r1, r1/(r1+m1i), 1, 0);
+      double am = (py1[i]>0) ? (pois1 ? R::ppois(py1[i]-1, m1i, 1, 0) : R::pnbinom(py1[i]-1, r1, r1/(r1+m1i), 1, 0)) : 0.0;
+      double b  = pois2 ? R::ppois(py2[i], m2i, 1, 0)   : R::pnbinom(py2[i], r2, r2/(r2+m2i), 1, 0);
+      double bm = (py2[i]>0) ? (pois2 ? R::ppois(py2[i]-1, m2i, 1, 0) : R::pnbinom(py2[i]-1, r2, r2/(r2+m2i), 1, 0)) : 0.0;
       bool ok = R_finite(a)&&R_finite(am)&&R_finite(b)&&R_finite(bm);
       double p = cop_cdf(a,b,theta,family_code) - cop_cdf(am,b,theta,family_code)
                - cop_cdf(a,bm,theta,family_code) + cop_cdf(am,bm,theta,family_code);
@@ -241,10 +243,10 @@ List rpbnb_copula_ll_grad_cpp(
       for (int r = 0; r < R; r++) {
         size_t off = static_cast<size_t>(n)*r;
         double m1i=mu1[off+i], m2i=mu2[off+i], wv=W[off+i];
-        double a = R::pnbinom(py1[i], r1, r1/(r1+m1i), 1, 0);
-        double am= (py1[i]>0)?R::pnbinom(py1[i]-1, r1, r1/(r1+m1i), 1, 0):0.0;
-        double b = R::pnbinom(py2[i], r2, r2/(r2+m2i), 1, 0);
-        double bm= (py2[i]>0)?R::pnbinom(py2[i]-1, r2, r2/(r2+m2i), 1, 0):0.0;
+        double a  = pois1 ? R::ppois(py1[i], m1i, 1, 0)   : R::pnbinom(py1[i], r1, r1/(r1+m1i), 1, 0);
+        double am = (py1[i]>0) ? (pois1 ? R::ppois(py1[i]-1, m1i, 1, 0) : R::pnbinom(py1[i]-1, r1, r1/(r1+m1i), 1, 0)) : 0.0;
+        double b  = pois2 ? R::ppois(py2[i], m2i, 1, 0)   : R::pnbinom(py2[i], r2, r2/(r2+m2i), 1, 0);
+        double bm = (py2[i]>0) ? (pois2 ? R::ppois(py2[i]-1, m2i, 1, 0) : R::pnbinom(py2[i]-1, r2, r2/(r2+m2i), 1, 0)) : 0.0;
         bool ok = R_finite(a)&&R_finite(am)&&R_finite(b)&&R_finite(bm);
         double p = cop_cdf(a,b,theta,family_code)-cop_cdf(am,b,theta,family_code)
                  - cop_cdf(a,bm,theta,family_code)+cop_cdf(am,bm,theta,family_code);
@@ -264,22 +266,34 @@ List rpbnb_copula_ll_grad_cpp(
         double ct = cop_dtheta(a,b,theta,family_code)-cop_dtheta(am,b,theta,family_code)
                   - cop_dtheta(a,bm,theta,family_code)+cop_dtheta(am,bm,theta,family_code);
 
-        double da_dmu1 = -(py1[i]+1.0)*R::dnbinom_mu(py1[i]+1.0, r1, m1i, 0)/m1i;
-        double dam_dmu1= (py1[i]>0)? -py1[i]*R::dnbinom_mu(py1[i], r1, m1i, 0)/m1i : 0.0;
+        double da_dmu1 = pois1 ? -(py1[i]+1.0)*R::dpois(py1[i]+1.0, m1i, 0)/m1i
+                               : -(py1[i]+1.0)*R::dnbinom_mu(py1[i]+1.0, r1, m1i, 0)/m1i;
+        double dam_dmu1= (py1[i]>0)? (pois1 ? -py1[i]*R::dpois(py1[i], m1i, 0)/m1i
+                                            : -py1[i]*R::dnbinom_mu(py1[i], r1, m1i, 0)/m1i) : 0.0;
         double du_a = cu_ab - cu_abm, du_am = -cu_amb + cu_ambm;
         double s_eta1 = (du_a*da_dmu1*m1i + du_am*dam_dmu1*m1i)/p;
 
-        double db_dmu2 = -(py2[i]+1.0)*R::dnbinom_mu(py2[i]+1.0, r2, m2i, 0)/m2i;
-        double dbm_dmu2= (py2[i]>0)? -py2[i]*R::dnbinom_mu(py2[i], r2, m2i, 0)/m2i : 0.0;
+        double db_dmu2 = pois2 ? -(py2[i]+1.0)*R::dpois(py2[i]+1.0, m2i, 0)/m2i
+                               : -(py2[i]+1.0)*R::dnbinom_mu(py2[i]+1.0, r2, m2i, 0)/m2i;
+        double dbm_dmu2= (py2[i]>0)? (pois2 ? -py2[i]*R::dpois(py2[i], m2i, 0)/m2i
+                                            : -py2[i]*R::dnbinom_mu(py2[i], r2, m2i, 0)/m2i) : 0.0;
         double dv_b = cv_ab - cv_amb, dv_bm = -cv_abm + cv_ambm;
         double s_eta2 = (dv_b*db_dmu2*m2i + dv_bm*dbm_dmu2*m2i)/p;
 
-        double da_dr1 = dnb_cdf_dr((int)py1[i], m1i, r1);
-        double dam_dr1= (py1[i]>0)? dnb_cdf_dr((int)py1[i]-1, m1i, r1):0.0;
-        double s_logm1 = (-r1)*(du_a*da_dr1 + du_am*dam_dr1)/p;
-        double db_dr2 = dnb_cdf_dr((int)py2[i], m2i, r2);
-        double dbm_dr2= (py2[i]>0)? dnb_cdf_dr((int)py2[i]-1, m2i, r2):0.0;
-        double s_logm2 = (-r2)*(dv_b*db_dr2 + dv_bm*dbm_dr2)/p;
+        double s_logm1;
+        if (pois1) { s_logm1 = 0.0; }
+        else {
+          double da_dr1 = dnb_cdf_dr((int)py1[i], m1i, r1);
+          double dam_dr1= (py1[i]>0)? dnb_cdf_dr((int)py1[i]-1, m1i, r1):0.0;
+          s_logm1 = (-r1)*(du_a*da_dr1 + du_am*dam_dr1)/p;
+        }
+        double s_logm2;
+        if (pois2) { s_logm2 = 0.0; }
+        else {
+          double db_dr2 = dnb_cdf_dr((int)py2[i], m2i, r2);
+          double dbm_dr2= (py2[i]>0)? dnb_cdf_dr((int)py2[i]-1, m2i, r2):0.0;
+          s_logm2 = (-r2)*(dv_b*db_dr2 + dv_bm*dbm_dr2)/p;
+        }
         double s_z = ct*dth_dz/p;
 
         bool bad = !ok || underflow || !R_finite(s_eta1)||!R_finite(s_eta2)||!R_finite(s_logm1)

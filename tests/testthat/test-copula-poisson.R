@@ -95,3 +95,22 @@ test_that("bnbr_rp_copula_ll_grad zeroes the log_m1 column for a Poisson margin"
   free <- c(1, 2, 3, 4, 6, 7)
   expect_equal(unname(g[free]), gnum[free], tolerance = 1e-5)
 })
+
+test_that("C++ copula Poisson path matches the R path (value, gradient, scores)", {
+  skip_if_not(rpbnb:::rpbnb_copula_cpp_available(), "C++ copula core not compiled")
+  set.seed(21)
+  n <- 60
+  X1 <- cbind(1, rnorm(n)); X2 <- cbind(1, rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rnbinom(n, size = 2, mu = 1.5)
+  par <- c(0.3, 0.1, 0.2, -0.1, 0, 0.4, 0.5)
+  args <- list(par, y1, y2, X1, X2, NULL, NULL, integer(0), integer(0),
+               matrix(0, 1, 0), matrix(0, 1, 0), "frank")
+
+  rR <- do.call(rpbnb:::bnbr_rp_copula_ll_grad,
+                c(args, list(want_scores = TRUE, pois1 = TRUE)))
+  rC <- do.call(rpbnb:::bnbr_rp_copula_ll_grad_cpp,
+                c(args, list(want_scores = TRUE, pois1 = TRUE)))
+  expect_equal(as.numeric(rC), as.numeric(rR), tolerance = 1e-8)
+  expect_equal(attr(rC, "gradient"), attr(rR, "gradient"), tolerance = 1e-6)
+  expect_equal(attr(rC, "scores"),   attr(rR, "scores"),   tolerance = 1e-6)
+})
