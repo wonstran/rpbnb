@@ -79,10 +79,15 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
 #' @keywords internal
 #' @noRd
 .copula_pmf <- function(y1, y2, mu1, mu2, r1, r2, theta, family) {
-  a  <- pnbinom(y1,       size = r1, mu = mu1)
-  am <- ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
-  b  <- pnbinom(y2,       size = r2, mu = mu2)
-  bm <- ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
+  # A Poisson-restricted margin is signalled in-band by r = Inf (m = 0); its
+  # CDF corners use ppois, not pnbinom(size = Inf) which returns NaN.
+  pois1 <- !is.finite(r1); pois2 <- !is.finite(r2)
+  a  <- if (pois1) stats::ppois(y1, mu1) else pnbinom(y1, size = r1, mu = mu1)
+  am <- if (pois1) ifelse(y1 > 0L, stats::ppois(y1 - 1L, mu1), 0)
+        else       ifelse(y1 > 0L, pnbinom(y1 - 1L, size = r1, mu = mu1), 0)
+  b  <- if (pois2) stats::ppois(y2, mu2) else pnbinom(y2, size = r2, mu = mu2)
+  bm <- if (pois2) ifelse(y2 > 0L, stats::ppois(y2 - 1L, mu2), 0)
+        else       ifelse(y2 > 0L, pnbinom(y2 - 1L, size = r2, mu = mu2), 0)
   ok <- is.finite(a) & is.finite(am) & is.finite(b) & is.finite(bm)
   cop_cdf <- switch(family, frank = frank_cdf, normal = normal_cdf, kimeldorf = kimeldorf_cdf)
   p_obs <- cop_cdf(a, b, theta) - cop_cdf(am, b, theta) -
@@ -112,6 +117,7 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
 .copula_score_scalars <- function(y1, y2, mu1, mu2, r1, r2, theta, dth_dz, family) {
   pm <- .copula_pmf(y1, y2, mu1, mu2, r1, r2, theta, family)
   a <- pm$a; am <- pm$am; b <- pm$b; bm <- pm$bm; p_obs <- pm$p_obs; ok <- pm$ok
+  pois1 <- !is.finite(r1); pois2 <- !is.finite(r2)
 
   cu_ab   <- .cop_du(a,  b,  theta, family); cu_amb  <- .cop_du(am, b,  theta, family)
   cu_abm  <- .cop_du(a,  bm, theta, family); cu_ambm <- .cop_du(am, bm, theta, family)
@@ -120,25 +126,39 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   ct_rect <- .cop_dtheta(a, b, theta, family) - .cop_dtheta(am, b, theta, family) -
              .cop_dtheta(a, bm, theta, family) + .cop_dtheta(am, bm, theta, family)
 
-  da_dmu1  <- -(y1 + 1L) * dnbinom(y1 + 1L, size = r1, mu = mu1) / mu1
-  dam_dmu1 <- ifelse(y1 > 0L, -y1 * dnbinom(y1, size = r1, mu = mu1) / mu1, 0)
+  # mu-score: dpois for a Poisson margin (dnbinom(size = Inf) is NaN).
+  da_dmu1  <- if (pois1) -(y1 + 1L) * stats::dpois(y1 + 1L, mu1) / mu1
+              else       -(y1 + 1L) * dnbinom(y1 + 1L, size = r1, mu = mu1) / mu1
+  dam_dmu1 <- if (pois1) ifelse(y1 > 0L, -y1 * stats::dpois(y1, mu1) / mu1, 0)
+              else       ifelse(y1 > 0L, -y1 * dnbinom(y1, size = r1, mu = mu1) / mu1, 0)
   delta_u_a  <- cu_ab - cu_abm
   delta_u_am <- -cu_amb + cu_ambm
   s_eta1 <- (delta_u_a * da_dmu1 * mu1 + delta_u_am * dam_dmu1 * mu1) / p_obs
 
-  db_dmu2  <- -(y2 + 1L) * dnbinom(y2 + 1L, size = r2, mu = mu2) / mu2
-  dbm_dmu2 <- ifelse(y2 > 0L, -y2 * dnbinom(y2, size = r2, mu = mu2) / mu2, 0)
+  db_dmu2  <- if (pois2) -(y2 + 1L) * stats::dpois(y2 + 1L, mu2) / mu2
+              else       -(y2 + 1L) * dnbinom(y2 + 1L, size = r2, mu = mu2) / mu2
+  dbm_dmu2 <- if (pois2) ifelse(y2 > 0L, -y2 * stats::dpois(y2, mu2) / mu2, 0)
+              else       ifelse(y2 > 0L, -y2 * dnbinom(y2, size = r2, mu = mu2) / mu2, 0)
   delta_v_b  <- cv_ab - cv_amb
   delta_v_bm <- -cv_abm + cv_ambm
   s_eta2 <- (delta_v_b * db_dmu2 * mu2 + delta_v_bm * dbm_dmu2 * mu2) / p_obs
 
-  da_dr1  <- mapply(.dnb_cdf_dr, y1,      mu1, r1)
-  dam_dr1 <- ifelse(y1 > 0L, mapply(.dnb_cdf_dr, y1 - 1L, mu1, r1), 0)
-  s_logm1 <- (-r1) * (delta_u_a * da_dr1 + delta_u_am * dam_dr1) / p_obs
-
-  db_dr2  <- mapply(.dnb_cdf_dr, y2,      mu2, r2)
-  dbm_dr2 <- ifelse(y2 > 0L, mapply(.dnb_cdf_dr, y2 - 1L, mu2, r2), 0)
-  s_logm2 <- (-r2) * (delta_v_b * db_dr2 + delta_v_bm * dbm_dr2) / p_obs
+  # Dispersion score: a Poisson margin's log_m is pinned -> zero score (the NB2
+  # form (-r)*(...) would be (-Inf)*0 = NaN at r = Inf).
+  if (pois1) {
+    s_logm1 <- rep(0, length(y1))
+  } else {
+    da_dr1  <- mapply(.dnb_cdf_dr, y1,      mu1, r1)
+    dam_dr1 <- ifelse(y1 > 0L, mapply(.dnb_cdf_dr, y1 - 1L, mu1, r1), 0)
+    s_logm1 <- (-r1) * (delta_u_a * da_dr1 + delta_u_am * dam_dr1) / p_obs
+  }
+  if (pois2) {
+    s_logm2 <- rep(0, length(y2))
+  } else {
+    db_dr2  <- mapply(.dnb_cdf_dr, y2,      mu2, r2)
+    dbm_dr2 <- ifelse(y2 > 0L, mapply(.dnb_cdf_dr, y2 - 1L, mu2, r2), 0)
+    s_logm2 <- (-r2) * (delta_v_b * db_dr2 + delta_v_bm * dbm_dr2) / p_obs
+  }
 
   s_ztheta <- ct_rect * dth_dz / p_obs
 
