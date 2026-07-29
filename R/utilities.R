@@ -178,9 +178,12 @@ signif_stars <- function(p) {
 #' downstream NB functions) and underflow (mu -> 0, a 0/0 NaN source in
 #' several analytic gradients). Used by every likelihood family so the
 #' objective, gradient, and Hessian for a given fit always see the exact
-#' same (implicitly capped) function of the parameters.
+#' same (implicitly capped) function of the parameters. `offset` (NULL for
+#' none) enters the linear predictor additively: mu = exp(X'beta + offset).
 #' @keywords internal
 #' @noRd
-.bound_mu <- function(X, beta) {
-  pmin(pmax(as.vector(exp(X %*% beta)), 1e-300), 1e15)
+.bound_mu <- function(X, beta, offset = NULL) {
+  eta <- as.vector(X %*% beta)
+  if (!is.null(offset)) eta <- eta + offset
+  pmin(pmax(exp(eta), 1e-300), 1e15)
 }

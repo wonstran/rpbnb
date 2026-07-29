@@ -26,6 +26,7 @@
 #' @importFrom stats residuals
 #' @importFrom stats vcov
 #' @importFrom stats dnbinom
+#' @importFrom stats dnorm
 #' @importFrom stats pnbinom
 #' @importFrom stats qnbinom
 #' @importFrom stats rnbinom

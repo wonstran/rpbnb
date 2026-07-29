@@ -23,7 +23,11 @@ fit_rpbnb(
 )
 }
 \arguments{
-\item{formula_1, formula_2}{Model formulas for the two count outcomes.}
+\item{formula_1, formula_2}{Model formulas for the two count outcomes. An
+equation-specific \code{offset()} term (e.g. \code{y ~ x + offset(log(exposure))}) is
+supported: the offset enters that margin's linear predictor additively
+(integrated mean \verb{E[exp(x'beta + offset)]}) during estimation and is carried
+through the stored fitted means and \code{predict()}.}
 
 \item{data}{A data frame.}
 

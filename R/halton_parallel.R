@@ -32,7 +32,8 @@ rpbnb_cpp_available <- function() {
 .rp_prepare <- function(par, y1, y2, X1, X2, XR1, XR2,
                         rand_idx1, rand_idx2, Z1, Z2,
                         dist1, dist2, sign1, sign2,
-                        pois1 = FALSE, pois2 = FALSE) {
+                        pois1 = FALSE, pois2 = FALSE,
+                        off1 = NULL, off2 = NULL) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -67,7 +68,11 @@ rpbnb_cpp_available <- function() {
     ri1 = as.integer(rand_idx1 - 1L), ri2 = as.integer(rand_idx2 - 1L),
     dev1 = p1$dev, dev2 = p2$dev, dloc1 = p1$dloc, dloc2 = p2$dloc,
     dscale1 = p1$dscale, dscale2 = p2$dscale,
-    xb1 = as.vector(X1 %*% beta1), xb2 = as.vector(X2 %*% beta2),
+    # Offsets enter the linear predictor additively; folding them into xb here
+    # threads offset support through the C++ core with no signature change (the
+    # core consumes a precomputed xb1/xb2).
+    xb1 = as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1)),
+    xb2 = as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2)),
     S1 = S1, S2 = S2, m1 = m1, m2 = m2, zlam = zlam
   )
 }
@@ -80,10 +85,11 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                     dist1 = NULL, dist2 = NULL,
                                     sign1 = NULL, sign2 = NULL,
                                     n_threads = 0L,
-                                    pois1 = FALSE, pois2 = FALSE) {
+                                    pois1 = FALSE, pois2 = FALSE,
+                                    off1 = NULL, off2 = NULL) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
-                   pois1 = pois1, pois2 = pois2)
+                   pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
@@ -109,10 +115,11 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                dist1 = NULL, dist2 = NULL,
                                sign1 = NULL, sign2 = NULL,
                                n_threads = 0L,
-                               pois1 = FALSE, pois2 = FALSE) {
+                               pois1 = FALSE, pois2 = FALSE,
+                               off1 = NULL, off2 = NULL) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
-                   pois1 = pois1, pois2 = pois2)
+                   pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
@@ -144,10 +151,11 @@ bnbr_rp_ll_fixed_bounds_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                         dist1 = NULL, dist2 = NULL,
                                         sign1 = NULL, sign2 = NULL,
                                         n_threads = 0L,
-                                        pois1 = FALSE, pois2 = FALSE) {
+                                        pois1 = FALSE, pois2 = FALSE,
+                                        off1 = NULL, off2 = NULL) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
-                   pois1 = pois1, pois2 = pois2)
+                   pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,

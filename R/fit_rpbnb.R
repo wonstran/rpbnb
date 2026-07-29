@@ -11,7 +11,7 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           rand_idx1, rand_idx2, formula_1, formula_2,
                           draws, draw_type, seed, ll_trace, convergence,
                           cop_family = NULL, call, hessian_diag = NULL,
-                          rp_meta = NULL,
+                          rp_meta = NULL, predict_meta = NULL,
                           poisson_1 = FALSE, poisson_2 = FALSE) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
@@ -29,6 +29,8 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          # everything predict() needs to reproduce the integrated (population)
          # mean E[exp(x'beta)] for any supported distribution on new data.
          rp_meta = rp_meta,
+         # terms/xlevels/contrasts/offsets for column-stable predict() designs.
+         predict_meta = predict_meta,
          # Poisson-limit (m = 0) restriction flags per margin, so residuals /
          # diagnostics use the exact Poisson CDF/variance for a restricted margin.
          poisson_1 = poisson_1, poisson_2 = poisson_2),
@@ -42,7 +44,11 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #' Famoye/Sarmanov dependence. Random coefficients are selected per equation by
 #' name via `random_1` / `random_2`.
 #'
-#' @param formula_1,formula_2 Model formulas for the two count outcomes.
+#' @param formula_1,formula_2 Model formulas for the two count outcomes. An
+#'   equation-specific `offset()` term (e.g. `y ~ x + offset(log(exposure))`) is
+#'   supported: the offset enters that margin's linear predictor additively
+#'   (integrated mean `E[exp(x'beta + offset)]`) during estimation and is carried
+#'   through the stored fitted means and `predict()`.
 #' @param data A data frame.
 #' @param random_1,random_2 Random coefficients per equation. Either a character
 #'   vector of `model.matrix` column names (all Normal), or a named list whose
@@ -149,6 +155,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   prep <- .prepare_bnb_data(formula_1, formula_2, data)
   Y1 <- prep$Y1; Y2 <- prep$Y2
   X1 <- prep$X1; X2 <- prep$X2
+  off1 <- prep$off1; off2 <- prep$off2   # equation-specific offsets (0 if none)
 
   # random names -> indices; unknown names are an error (not silently dropped)
   idx_from_names <- function(who, X) {
@@ -286,12 +293,14 @@ fit_rpbnb <- function(formula_1, formula_2, data,
       bnbr_rp_ll_and_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                               dist1, dist2, sign1, sign2, n_threads = cpp_threads,
-                              pois1 = poisson_1, pois2 = poisson_2)
+                              pois1 = poisson_1, pois2 = poisson_2,
+                              off1 = off1, off2 = off2)
     else
       bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                           dist1, dist2, sign1, sign2, cl = cl,
-                          pois1 = poisson_1, pois2 = poisson_2)
+                          pois1 = poisson_1, pois2 = poisson_2,
+                          off1 = off1, off2 = off2)
     ll_trace <<- c(ll_trace, as.numeric(v))
     v
   }
@@ -325,7 +334,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     m2 <- if (isTRUE(poisson_2)) 0 else exp(p[idx_end+2])
     sd1 <- if (q1 > 0) exp(p[(k1+k2+1):(k1+k2+q1)]) else numeric(0)
     sd2 <- if (q2 > 0) exp(p[(k1+k2+q1+1):(k1+k2+q1+q2)]) else numeric(0)
-    xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+    xb1 <- as.vector(X1 %*% beta1) + off1; xb2 <- as.vector(X2 %*% beta2) + off2
     dev1 <- if (q1>0) rand_realize(Z1_opt, dist1, sign1, beta1[rand_idx1], sd1)$dev
             else matrix(0, n_draws, 0)
     dev2 <- if (q2>0) rand_realize(Z2_opt, dist2, sign2, beta2[rand_idx2], sd2)$dev
@@ -362,7 +371,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     S <- bnbr_rp_scores_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                             dist1, dist2, sign1, sign2, n_threads = cpp_threads,
-                            pois1 = poisson_1, pois2 = poisson_2)
+                            pois1 = poisson_1, pois2 = poisson_2,
+                            off1 = off1, off2 = off2)
     inv <- .free_index_vcov(crossprod(S), par_names, free, label = "OPG (BHHH)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (use_analytic) {
@@ -374,7 +384,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                          dist1, dist2, sign1, sign2,
                          lamLo = lamLo_h, lamHi = lamHi_h,
-                         pois1 = poisson_1, pois2 = poisson_2)
+                         pois1 = poisson_1, pois2 = poisson_2,
+                         off1 = off1, off2 = off2)
     info <- -H
     inv <- .free_index_vcov(info, par_names, free, label = "RP-BNB (analytic Hessian)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
@@ -403,14 +414,16 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                                               lamLo_h, lamHi_h,
                                               dist1, dist2, sign1, sign2,
                                               n_threads = cpp_threads,
-                                              pois1 = poisson_1, pois2 = poisson_2)
+                                              pois1 = poisson_1, pois2 = poisson_2,
+                                              off1 = off1, off2 = off2)
     else
       function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
                                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                                           lamLo_h, lamHi_h,
                                           dist1, dist2, sign1, sign2,
                                           cl = cl_h,
-                                          pois1 = poisson_1, pois2 = poisson_2)
+                                          pois1 = poisson_1, pois2 = poisson_2,
+                                          off1 = off1, off2 = off2)
     H <- numDeriv::hessian(ll_fb, par_hat,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2
@@ -433,16 +446,19 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   }
 
   # --- Natural-scale fields ---
+  # A Poisson-restricted margin is exactly m = 0; its pinned log_m is only the
+  # POISSON_M display placeholder, so store 0 rather than exp(log(1e-6)) = 1e-6
+  # (matches fit_bnb() and keeps the natural-scale contract consistent).
   idx_end    <- k1 + k2 + q1 + q2
-  m1_hat     <- unname(exp(par_hat[idx_end + 1]))
-  m2_hat     <- unname(exp(par_hat[idx_end + 2]))
+  m1_hat     <- if (isTRUE(poisson_1)) 0 else unname(exp(par_hat[idx_end + 1]))
+  m2_hat     <- if (isTRUE(poisson_2)) 0 else unname(exp(par_hat[idx_end + 2]))
   z_hat      <- unname(par_hat[idx_end + 3])
   eps        <- 1e-6; sig <- plogis(z_hat)
   lambda_hat <- lamLo_h + (lamHi_h - lamLo_h) * (eps + (1 - 2*eps) * sig)
 
   # --- Fitted draw-averaged unconditional means ---
   beta1_hat <- par_hat[1:k1]; beta2_hat <- par_hat[(k1+1):(k1+k2)]
-  xb1 <- as.vector(X1 %*% beta1_hat); xb2 <- as.vector(X2 %*% beta2_hat)
+  xb1 <- as.vector(X1 %*% beta1_hat) + off1; xb2 <- as.vector(X2 %*% beta2_hat) + off2
   if (q1 > 0) {
     sd1  <- exp(par_hat[(k1+k2+1):(k1+k2+q1)])
     dev1 <- rand_realize(Z1_opt, dist1, sign1, beta1_hat[rand_idx1], sd1)$dev
@@ -483,5 +499,6 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     hessian_diag = hdiag,
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
                    Z1 = Z1_opt, Z2 = Z2_opt, halton_burn = halton_burn),
+    predict_meta = .prep_predict_meta(prep),
     poisson_1 = poisson_1, poisson_2 = poisson_2)
 }

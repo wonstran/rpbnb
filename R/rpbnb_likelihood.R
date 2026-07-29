@@ -18,7 +18,8 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
                                                  dist1 = NULL, dist2 = NULL,
                                                  sign1 = NULL, sign2 = NULL,
                                                  cl = NULL,
-                                                 pois1 = FALSE, pois2 = FALSE) {
+                                                 pois1 = FALSE, pois2 = FALSE,
+                                                 off1 = NULL, off2 = NULL) {
   n   <- length(y1)
   k1  <- ncol(X1); k2 <- ncol(X2)
   q1  <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -41,8 +42,8 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   sd1 <- if (q1 > 0) exp(log_sd1) else numeric(0)
   sd2 <- if (q2 > 0) exp(log_sd2) else numeric(0)
 
-  xb1 <- as.vector(X1 %*% beta1)
-  xb2 <- as.vector(X2 %*% beta2)
+  xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
+  xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))
 
   # Determine if we use the new distribution-aware path or the legacy path.
   use_dist <- !is.null(dist1)
@@ -208,7 +209,8 @@ bnbr_rp_ll_fixed_bounds <- function(par, y1, y2, X1, X2, XR1, XR2,
                                     dist1 = NULL, dist2 = NULL,
                                     sign1 = NULL, sign2 = NULL,
                                     cl = NULL,
-                                    pois1 = FALSE, pois2 = FALSE) {
+                                    pois1 = FALSE, pois2 = FALSE,
+                                    off1 = NULL, off2 = NULL) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -230,7 +232,8 @@ bnbr_rp_ll_fixed_bounds <- function(par, y1, y2, X1, X2, XR1, XR2,
   eps <- 1e-6; sig <- plogis(zlam)
   lam <- lamLo + (lamHi - lamLo) * (eps + (1 - 2*eps) * sig)
 
-  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+  xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
+  xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))
 
   use_dist <- !is.null(dist1)
   if (use_dist) {

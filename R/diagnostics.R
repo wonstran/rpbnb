@@ -51,7 +51,10 @@
 #' Reports log-likelihood, AIC, BIC, and four pseudo-R-squared measures
 #' (McFadden, McFadden adjusted, Cox-Snell, Nagelkerke) relative to an
 #' intercept-only null model refit with the same dependence structure (copula
-#' fits rebuild the copula from `fit$cop_family`). Pseudo-R-squared values are
+#' fits rebuild the copula from `fit$cop_family`). A margin fitted with an
+#' `offset()` keeps that offset in the null (an intercept-plus-offset model), so
+#' the null shares the full model's exposure/sampling structure and the
+#' pseudo-R-squared values remain comparable. Pseudo-R-squared values are
 #' returned raw and are not clamped to `[0, 1]`; a negative value flags a full
 #' model that fits worse than the null.
 #'
@@ -82,6 +85,18 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
   # intercept-only glm.nb / optimizer fail. Treat that as missing pseudo-R^2
   # rather than aborting goodness-of-fit entirely.
   df_null  <- data.frame(Y1 = fit$Y1, Y2 = fit$Y2)
+  # An offset fit's null must retain each margin's training offset, or its
+  # log-likelihood (and every pseudo-R^2) is not comparable with the offset-aware
+  # full model (the null would estimate constant RAW means instead of the same
+  # exposure/sampling model). Carry the stored offsets and use intercept + offset
+  # null formulas; a margin with no offset keeps the plain `Y ~ 1` form. Older
+  # fits without predict_meta fall back to no offset.
+  off1 <- .fit_offset(fit, 1L); off2 <- .fit_offset(fit, 2L)
+  has_off1 <- !is.null(off1) && any(off1 != 0)
+  has_off2 <- !is.null(off2) && any(off2 != 0)
+  f1_null <- Y1 ~ 1; f2_null <- Y2 ~ 1
+  if (has_off1) { df_null$.rpbnb_off1 <- off1; f1_null <- Y1 ~ 1 + offset(.rpbnb_off1) }
+  if (has_off2) { df_null$.rpbnb_off2 <- off2; f2_null <- Y2 ~ 1 + offset(.rpbnb_off2) }
   # Reconstruct the dependence structure the null must share. A copula fit stores
   # dependence as a bare family string (e.g. "normal") in fit$dependence, which
   # fit_bnb() would reject; rebuild the copula() object from fit$cop_family.
@@ -90,7 +105,7 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
   # (Poisson-restricted) intercept-only model, not an unrestricted NB null. Older
   # fits predating the stored flags default to FALSE via isTRUE().
   fit_null <- tryCatch(
-    fit_bnb(Y1 ~ 1, Y2 ~ 1, data = df_null, dependence = null_dep,
+    fit_bnb(f1_null, f2_null, data = df_null, dependence = null_dep,
             poisson_1 = isTRUE(fit$poisson_1), poisson_2 = isTRUE(fit$poisson_2)),
     error = function(e) {
       warning("Null model could not be fitted (", conditionMessage(e),
@@ -146,6 +161,10 @@ bnb_gof <- function(fit, digits = 4, print_output = TRUE) {
 #' continuous effects use \eqn{\partial E[Y]/\partial x_j = \beta_j \mu} and
 #' binary effects use \eqn{E[Y|x_j=1] - E[Y|x_j=0]}.
 #'
+#' For a model fitted with an `offset()`, absolute marginal effects scale with
+#' the fitted mean \eqn{\mu = \exp(x'\beta + \text{offset})}: AME uses each
+#' observation's training offset, and MEM uses the mean training offset.
+#'
 #' @param fit A `bnb_fit` object from [fit_bnb()].
 #' @param which Which margin(s): "y1", "y2", "both", or "all".
 #' @param type "AME" (average marginal effect) or "MEM" (effect at the mean).
@@ -175,9 +194,14 @@ bnb_marginal_effects <- function(fit,
   parts <- .bnb_diag_parts(fit)
 
   # worker for ONE response -----------------------------------------
-  .one_resp <- function(X, beta, Vb, resp_name) {
+  # `off` is the equation's per-observation training offset (0 when none). The
+  # mean E[Y] = exp(x'beta + offset), so absolute marginal effects scale with the
+  # offset. AME averages over observations at their actual offsets; MEM evaluates
+  # at the mean design row and the MEAN training offset.
+  .one_resp <- function(X, beta, Vb, resp_name, off) {
     cn <- colnames(X)
     p  <- ncol(X)
+    off_bar <- mean(off)
 
     # ---- select variables first ----
     if (is.null(vars)) {
@@ -213,7 +237,7 @@ bnb_marginal_effects <- function(fit,
     pos_bin  <- idx[is_bin]
     pos_cont <- idx[!is_bin]
 
-    mu <- as.vector(exp(X %*% beta))
+    mu <- as.vector(exp(X %*% beta + off))
     n  <- NROW(X)
     out_list <- list()
 
@@ -234,7 +258,7 @@ bnb_marginal_effects <- function(fit,
         }
       } else {  # MEM
         Xbar   <- colMeans(X)
-        mu_bar <- exp(sum(Xbar * beta))
+        mu_bar <- exp(sum(Xbar * beta) + off_bar)
         for (h in seq_along(pos_cont)) {
           j <- pos_cont[h]
           est_c[h] <- beta[j] * mu_bar
@@ -261,7 +285,7 @@ bnb_marginal_effects <- function(fit,
           X0 <- X; X0[, j] <- 0
           X1 <- X; X1[, j] <- 1
 
-          fval <- function(b) mean(exp(X1 %*% b) - exp(X0 %*% b))
+          fval <- function(b) mean(exp(X1 %*% b + off) - exp(X0 %*% b + off))
           est_b[k] <- fval(beta)
 
           g <- as.numeric(numDeriv::jacobian(fval, beta))
@@ -271,8 +295,8 @@ bnb_marginal_effects <- function(fit,
           X0   <- Xbar; X0[, j] <- 0
           X1   <- Xbar; X1[, j] <- 1
 
-          mu0  <- as.numeric(exp(X0 %*% beta))
-          mu1  <- as.numeric(exp(X1 %*% beta))
+          mu0  <- as.numeric(exp(X0 %*% beta + off_bar))
+          mu1  <- as.numeric(exp(X1 %*% beta + off_bar))
 
           est_b[k] <- mu1 - mu0
 
@@ -300,19 +324,22 @@ bnb_marginal_effects <- function(fit,
     out
   }
 
+  off1 <- .as_offset(.fit_offset(fit, 1L), nrow(fit$X1))
+  off2 <- .as_offset(.fit_offset(fit, 2L), nrow(fit$X2))
+
   # y1 + y2
   if (which %in% c("both", "all")) {
     res <- list()
-    res$y1 <- .one_resp(fit$X1, parts$beta1, parts$Vb1, "y1")
-    res$y2 <- .one_resp(fit$X2, parts$beta2, parts$Vb2, "y2")
+    res$y1 <- .one_resp(fit$X1, parts$beta1, parts$Vb1, "y1", off1)
+    res$y2 <- .one_resp(fit$X2, parts$beta2, parts$Vb2, "y2", off2)
     return(invisible(res))
   }
 
   # single response
   if (which == "y1") {
-    out <- .one_resp(fit$X1, parts$beta1, parts$Vb1, "y1")
+    out <- .one_resp(fit$X1, parts$beta1, parts$Vb1, "y1", off1)
   } else {
-    out <- .one_resp(fit$X2, parts$beta2, parts$Vb2, "y2")
+    out <- .one_resp(fit$X2, parts$beta2, parts$Vb2, "y2", off2)
   }
   invisible(out)
 }
@@ -451,11 +478,12 @@ bnb_elasticities <- function(fit,
 # parameter block is exactly (b{e}, log-scale{e}).
 # ============================================================================
 
-# Per-draw n x R matrix of pmin(exp(x'b + XR %*% dev_r), cap) for one design X.
-# `dev` is the R x q deviation matrix from rand_realize(); q == 0 collapses to R
-# identical columns of exp(x'b) (so a fully-fixed equation reduces cleanly).
-.rp_g_matrix <- function(X, b, rand_idx, dev, cap = RP_PRED_CAP) {
-  xb <- as.vector(X %*% b)
+# Per-draw n x R matrix of pmin(exp(x'b + offset + XR %*% dev_r), cap) for one
+# design X. `dev` is the R x q deviation matrix from rand_realize(); q == 0
+# collapses to R identical columns of exp(x'b + offset) (so a fully-fixed equation
+# reduces cleanly). `offset` (NULL for none) enters the linear predictor.
+.rp_g_matrix <- function(X, b, rand_idx, dev, offset = NULL, cap = RP_PRED_CAP) {
+  xb <- as.vector(X %*% b) + .as_offset(offset, nrow(X))
   R  <- nrow(dev)
   if (length(rand_idx) == 0) {
     return(matrix(pmin(exp(xb), cap), nrow = length(xb), ncol = R))
@@ -525,8 +553,14 @@ bnb_elasticities <- function(fit,
 
   Xbar <- matrix(colMeans(X), nrow = 1, dimnames = list(NULL, cn))
 
+  # Offset to use given `type`: per-observation training offset for AME (matches
+  # X's n rows); the MEAN training offset for MEM (matches the single Xbar row).
+  off_full <- .as_offset(.fit_offset(fit, eq), nrow(X))
+  offset   <- if (type == "MEM") mean(off_full) else off_full
+
   list(X = X, Xbar = Xbar, cn = cn, b_names = b_names, scale_names = scale_names,
        rand_idx = rand_idx, dist = dist, sign = sign, Z = Z, type = type,
+       offset = offset,
        sel = idx, is_bin = is_bin, is_rand = is_rand)
 }
 
@@ -551,7 +585,7 @@ bnb_elasticities <- function(fit,
                 .rp_inf_rows(X, meta$rand_idx, meta$dist, meta$sign)
               else logical(nrow(X))
 
-  g  <- .rp_g_matrix(X, b, meta$rand_idx, dev)
+  g  <- .rp_g_matrix(X, b, meta$rand_idx, dev, meta$offset)
   mu <- rowMeans(g)
 
   out <- numeric(length(meta$sel))
@@ -560,8 +594,8 @@ bnb_elasticities <- function(fit,
     if (meta$is_bin[m]) {
       X0 <- X; X0[, j] <- 0
       X1 <- X; X1[, j] <- 1
-      mu0 <- rowMeans(.rp_g_matrix(X0, b, meta$rand_idx, dev))
-      mu1 <- rowMeans(.rp_g_matrix(X1, b, meta$rand_idx, dev))
+      mu0 <- rowMeans(.rp_g_matrix(X0, b, meta$rand_idx, dev, meta$offset))
+      mu1 <- rowMeans(.rp_g_matrix(X1, b, meta$rand_idx, dev, meta$offset))
       val <- if (quantity == "me") mu1 - mu0 else mu1 / mu0 - 1
     } else {
       rk <- match(j, meta$rand_idx)
@@ -584,13 +618,13 @@ bnb_elasticities <- function(fit,
 # per-parameter calls is what makes the standard-error step embarrassingly
 # parallel across a cluster.
 #
-# Uses a BARE (unqualified) call to .rp_estimand, NOT rpbnb:::.rp_estimand:
-# on a parallel::makeCluster() worker the rpbnb namespace is not loaded (this
-# project's dev workflow runs off pkgload::load_all(), not an installed
-# package), so a `:::`-qualified call fails on a worker. A bare call resolves
-# via ordinary lexical/global-env lookup, which parallel::clusterExport()
-# (see .rp_make_cluster()) satisfies by placing .rp_estimand and its own
-# transitive callees into each worker's .GlobalEnv.
+# The call to .rp_estimand is deliberately BARE (not rpbnb:::.rp_estimand): on a
+# worker this function's environment is rebound to .GlobalEnv (see the parLapply
+# call site in .rp_diag_one() and the rebinding in .rp_make_cluster()), so the
+# name resolves among the CURRENT source copies exported into the worker's
+# .GlobalEnv. The worker therefore loads no rpbnb namespace at all and cannot
+# pick up a stale installed version -- which matters under pkgload::load_all(),
+# where an installed copy may predate offset-aware .rp_g_matrix()/.as_offset().
 .rp_jac_col <- function(k, theta_hat, theta_names, meta, quantity) {
   fk <- function(tk) {
     t <- theta_hat; t[[k]] <- tk
@@ -629,7 +663,13 @@ bnb_elasticities <- function(fit,
   } else {
     theta_hat <- fit$coef[theta_names]
     G <- if (!is.null(cl)) {
-      do.call(cbind, parallel::parLapply(cl, seq_along(theta_hat), .rp_jac_col,
+      # Rebind the worker function's environment to .GlobalEnv so its bare call to
+      # .rp_estimand resolves among the current copies exported to each worker's
+      # .GlobalEnv (see .rp_make_cluster()), not the worker's possibly-stale
+      # installed namespace.
+      jac_fn <- .rp_jac_col
+      environment(jac_fn) <- globalenv()
+      do.call(cbind, parallel::parLapply(cl, seq_along(theta_hat), jac_fn,
                                          theta_hat = theta_hat, theta_names = theta_names,
                                          meta = meta, quantity = quantity))
     } else {
@@ -679,6 +719,12 @@ bnb_elasticities <- function(fit,
 # cluster's lifetime and must parallel::stopCluster() it when done (typically
 # via on.exit()), and should reuse the SAME cluster across every equation
 # computed in one call (y1/y2/both/all) rather than building one per equation.
+# The pure-R functions/objects the delta-method estimand needs on a worker. The
+# estimand path (.rp_estimand -> rand_realize / .rp_g_matrix / .rp_inf_rows ->
+# .as_offset / tri_icdf) touches no compiled code, so workers stay DLL-free.
+.RP_WORKER_FNS <- c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", ".as_offset",
+                    "rand_realize", "tri_icdf")
+
 .rp_make_cluster <- function(n_cores) {
   if (n_cores <= 1) return(NULL)
   if (!requireNamespace("parallel", quietly = TRUE)) {
@@ -688,10 +734,38 @@ bnb_elasticities <- function(fit,
   cl <- parallel::makeCluster(as.integer(n_cores))
   ok <- FALSE
   on.exit(if (!ok) parallel::stopCluster(cl))
+
+  # Export the CURRENT source versions of every estimand helper (plus the
+  # random-coefficient registry and the per-draw cap) into each worker's
+  # .GlobalEnv, then REBIND their environments to that .GlobalEnv. The rebind is
+  # the crucial step: a package function's free names (its bare calls) resolve
+  # through its *closure environment*, which is the rpbnb namespace. Under
+  # pkgload / devtools::load_all() a worker that resolved through the separately
+  # installed namespace would run a stale, offset-free .rp_g_matrix() and return
+  # wrong curvature. Rebinding to .GlobalEnv makes each worker function resolve
+  # its callees among the exported current copies, so the worker is
+  # self-contained and independent of any installed namespace (and loads no
+  # compiled DLL). The registry holds closures too, so rebind those as well.
   parallel::clusterExport(cl,
-    c(".rp_estimand", ".rp_g_matrix", ".rp_inf_rows", "rand_realize", "rand_dist_registry",
-      "RP_PRED_CAP", "tri_icdf"),
+    c(.RP_WORKER_FNS, "rand_dist_registry", "RP_PRED_CAP"),
     envir = environment())
+  parallel::clusterCall(cl, function(fn_names) {
+    ge <- globalenv()
+    rebind <- function(f) { if (is.function(f)) environment(f) <- ge; f }
+    for (nm in fn_names) {
+      if (exists(nm, envir = ge, inherits = FALSE)) {
+        assign(nm, rebind(get(nm, envir = ge, inherits = FALSE)), envir = ge)
+      }
+    }
+    reg <- get0("rand_dist_registry", envir = ge, inherits = FALSE)
+    if (is.list(reg)) {
+      assign("rand_dist_registry",
+             lapply(reg, function(e)
+               if (is.list(e)) lapply(e, rebind) else rebind(e)),
+             envir = ge)
+    }
+    invisible(TRUE)
+  }, fn_names = .RP_WORKER_FNS)
   ok <- TRUE
   cl
 }
@@ -701,12 +775,16 @@ bnb_elasticities <- function(fit,
 #' Average marginal effects (AME) or marginal effects at the mean (MEM) for each
 #' margin of an [fit_rpbnb()] fit, built on the Monte-Carlo integrated population
 #' mean \eqn{\mu_i = E_\beta[\exp(x_i'\beta)]} (the same estimand as
-#' [predict.rpbnb_fit()], reusing the fit's stored draws). Continuous effects are
+#' `predict.rpbnb_fit()`, reusing the fit's stored draws). Continuous effects are
 #' \eqn{\partial \mu_i/\partial x_{ij} = \mathrm{mean}_r\, \mathrm{coef}_{rj}
 #' \exp(\mathrm{lp}_{ir})} (the realized coefficient per draw, so random and fixed
 #' columns are handled uniformly); binary (0/1) effects are the integrated
 #' discrete difference \eqn{E[Y|x_j=1] - E[Y|x_j=0]}. Standard errors use a
 #' numeric delta method over the equation's mean and log-scale parameters.
+#'
+#' For a model fitted with an `offset()`, absolute marginal effects scale with
+#' the offset-inclusive mean: AME uses each observation's training offset, and
+#' MEM uses the mean training offset.
 #'
 #' @param fit An `rpbnb_fit` object from [fit_rpbnb()].
 #' @param which Which margin(s): "y1", "y2", "both", or "all".

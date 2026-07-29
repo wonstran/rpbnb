@@ -40,6 +40,11 @@ each margin. Continuous and binary (0/1) regressors are auto-detected;
 continuous effects use \eqn{\partial E[Y]/\partial x_j = \beta_j \mu} and
 binary effects use \eqn{E[Y|x_j=1] - E[Y|x_j=0]}.
 }
+\details{
+For a model fitted with an \code{offset()}, absolute marginal effects scale with
+the fitted mean \eqn{\mu = \exp(x'\beta + \text{offset})}: AME uses each
+observation's training offset, and MEM uses the mean training offset.
+}
 \examples{
 d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
 fit <- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,

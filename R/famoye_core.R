@@ -20,10 +20,15 @@ c_val <- function(mu, m) {
 
 #' NB2 log pmf with mean mu and size r = 1/m
 #'
-#' `r = Inf` (m = 0) selects the exact Poisson log-pmf dpois(y, mu, log). The
-#' finite-r NB2 form converges to it as r -> Inf but never equals it (the error
-#' is governed by m*mu = mu/r), so a Poisson-restricted margin must take this
-#' branch rather than a large-but-finite r.
+#' A size of r = Inf (m = 0) selects the exact Poisson log-pmf dpois(y, mu, log).
+#' The finite-r NB2 form converges to it as r -> Inf but never equals it (the
+#' error is governed by m*mu = mu/r), so a Poisson-restricted margin must take
+#' this branch rather than a large-but-finite r.
+#'
+#' Leave that leading "r = Inf" unbackticked. DESCRIPTION sets
+#' `Roxygen: list(markdown = TRUE)`, and a backticked span opening with "r "
+#' is markdown's inline-R-code syntax, so roxygen tries to evaluate `= Inf`
+#' as R and aborts the block on every document() run.
 #' @keywords internal
 #' @noRd
 nb_logpmf_y_mu_r <- function(y, mu, r) {

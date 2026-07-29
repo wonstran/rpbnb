@@ -7,6 +7,21 @@
 # the term -- with a boundary correction when the null pins a variance-type
 # parameter to zero.
 
+# Reject a package fit (bnb_fit / rpbnb_fit) whose optimizer did not converge:
+# an LR test needs maximized likelihoods, and a non-converged fit invalidates the
+# comparison. Generic logLik-only objects carry no convergence record and pass
+# through (documented as unvalidated).
+.lr_chk_converged <- function(fit, role) {
+  if (inherits(fit, c("bnb_fit", "rpbnb_fit")) &&
+      !is.null(fit$convergence) && !isTRUE(fit$convergence$converged)) {
+    stop("The ", role, " model did not converge (code ",
+         fit$convergence$code, ": ", fit$convergence$message,
+         "). A likelihood-ratio test requires maximized likelihoods; refit it to ",
+         "convergence before calling lr_test().", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 #' Likelihood-ratio test between two nested model fits
 #'
 #' Compares a restricted fit against a full (nesting) fit by the likelihood-ratio
@@ -19,6 +34,14 @@
 #' a plain NB / independence fit (testing an NB2 dispersion). This is the
 #' statistically appropriate replacement for the Wald z/p that the natural-scale
 #' summary suppresses on positive scale/dispersion parameters.
+#'
+#' A likelihood-ratio test requires two *maximized* likelihoods. When either
+#' argument is a package fit (`bnb_fit` / `rpbnb_fit`) that records a failed
+#' optimization (`convergence$converged = FALSE`), `lr_test()` errors rather than
+#' returning a p-value from an unfinished fit -- the sign of the statistic cannot
+#' establish convergence. Generic objects that only carry a `logLik()` (no
+#' convergence record) are still accepted, but their convergence cannot be
+#' validated and is the caller's responsibility.
 #'
 #' @param restricted The smaller (restricted) fit -- fewer estimated parameters.
 #' @param full The larger (full) fit that nests `restricted`.
@@ -51,6 +74,9 @@
 #'                   draws = 100, control = ctrl)   # no random coefficient
 #' lr_test(rest, full, boundary = TRUE)             # test sd(x1) = 0
 lr_test <- function(restricted, full, boundary = FALSE) {
+  .lr_chk_converged(restricted, "restricted")
+  .lr_chk_converged(full, "full")
+
   ll_f <- stats::logLik(full)
   ll_r <- stats::logLik(restricted)
   df_f <- attr(ll_f, "df")

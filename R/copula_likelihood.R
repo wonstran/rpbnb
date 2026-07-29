@@ -29,7 +29,8 @@
 #' @return Numeric vector of length n.
 #' @keywords internal
 #' @noRd
-copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
+copula_loglik_vec <- function(par, y1, y2, X1, X2, family,
+                              off1 = NULL, off2 = NULL) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
   beta1   <- par[seq_len(p1)]
   beta2   <- par[p1 + seq_len(p2)]
@@ -38,8 +39,8 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
   z_theta <- par[p1 + p2 + 3L]
 
   r1  <- exp(-log_m1); r2 <- exp(-log_m2)
-  mu1 <- .bound_mu(X1, beta1)
-  mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1)
+  mu2 <- .bound_mu(X2, beta2, off2)
   theta <- z_to_native(family, z_theta)
 
   .cop_cdf <- switch(family,
@@ -180,7 +181,8 @@ copula_loglik_vec <- function(par, y1, y2, X1, X2, family) {
 #' @return Named numeric vector of length k = p1 + p2 + 3.
 #' @keywords internal
 #' @noRd
-copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
+copula_grad_vec <- function(par, y1, y2, X1, X2, family,
+                            off1 = NULL, off2 = NULL) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
   beta1   <- par[seq_len(p1)]
   beta2   <- par[p1 + seq_len(p2)]
@@ -189,8 +191,8 @@ copula_grad_vec <- function(par, y1, y2, X1, X2, family) {
   z_theta <- par[p1 + p2 + 3L]
 
   r1  <- exp(-log_m1); r2 <- exp(-log_m2)
-  mu1 <- .bound_mu(X1, beta1)
-  mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1)
+  mu2 <- .bound_mu(X2, beta2, off2)
   theta  <- z_to_native(family, z_theta)
   dth_dz <- dnative_dz(family, z_theta)
 

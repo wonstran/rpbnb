@@ -44,8 +44,11 @@ simulate_bnb <- function(n, beta1, beta2,
     stop("`beta1` must include an '(Intercept)' element.", call. = FALSE)
   if (!"(Intercept)" %in% names(beta2))
     stop("`beta2` must include an '(Intercept)' element.", call. = FALSE)
-  if (!all(c("m1", "m2") %in% names(dispersion)))
-    stop("`dispersion` must be a named vector c(m1 = ., m2 = .).", call. = FALSE)
+  # Shared validator (also used by simulate_rpbnb / simulate_rpbnb_copula):
+  # requires named c(m1 = ., m2 = .) with finite, strictly positive values, so a
+  # negative/zero/non-finite dispersion errors here rather than silently
+  # producing NaN counts downstream via rnbinom(size = 1/m).
+  chk_dispersion(dispersion)
 
   # Only touch the RNG when a seed is explicitly supplied; with seed = NULL the
   # draws continue from the caller's current RNG stream (idiomatic R), so

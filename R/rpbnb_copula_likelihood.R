@@ -13,7 +13,8 @@ bnbr_rp_copula_ll <- function(par, y1, y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1, Z2, family,
                               dist1 = NULL, dist2 = NULL,
                               sign1 = NULL, sign2 = NULL,
-                              pois1 = FALSE, pois2 = FALSE) {
+                              pois1 = FALSE, pois2 = FALSE,
+                              off1 = NULL, off2 = NULL) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -35,7 +36,8 @@ bnbr_rp_copula_ll <- function(par, y1, y2, X1, X2, XR1, XR2,
   if (is.null(sign1) && q1 > 0) sign1 <- rep(1, q1)
   if (is.null(sign2) && q2 > 0) sign2 <- rep(1, q2)
 
-  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+  xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
+  xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))
   real1 <- if (q1 > 0) rand_realize(Z1, dist1, sign1, beta1[rand_idx1], sd1) else NULL
   real2 <- if (q2 > 0) rand_realize(Z2, dist2, sign2, beta2[rand_idx2], sd2) else NULL
   XR1m <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else NULL
@@ -67,7 +69,8 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
                                    rand_idx1, rand_idx2, Z1, Z2, family,
                                    dist1 = NULL, dist2 = NULL,
                                    sign1 = NULL, sign2 = NULL,
-                                   want_scores = FALSE, pois1 = FALSE, pois2 = FALSE) {
+                                   want_scores = FALSE, pois1 = FALSE, pois2 = FALSE,
+                                   off1 = NULL, off2 = NULL) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -90,7 +93,8 @@ bnbr_rp_copula_ll_grad <- function(par, y1, y2, X1, X2, XR1, XR2,
   if (is.null(sign1) && q1 > 0) sign1 <- rep(1, q1)
   if (is.null(sign2) && q2 > 0) sign2 <- rep(1, q2)
 
-  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+  xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
+  xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))
   real1 <- if (q1 > 0) rand_realize(Z1, dist1, sign1, beta1[rand_idx1], sd1) else NULL
   real2 <- if (q2 > 0) rand_realize(Z2, dist2, sign2, beta2[rand_idx2], sd2) else NULL
   XR1m <- if (q1 > 0) X1[, rand_idx1, drop = FALSE] else matrix(0, n, 0)
@@ -162,7 +166,8 @@ bnbr_rp_copula_ll_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                        rand_idx1, rand_idx2, Z1, Z2, family,
                                        dist1 = NULL, dist2 = NULL,
                                        sign1 = NULL, sign2 = NULL,
-                                       want_scores = FALSE, n_threads = 0L, pois1 = FALSE, pois2 = FALSE) {
+                                       want_scores = FALSE, n_threads = 0L, pois1 = FALSE, pois2 = FALSE,
+                                       off1 = NULL, off2 = NULL) {
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   R  <- if (q1 + q2 > 0) nrow(Z1) else 1L
@@ -190,7 +195,8 @@ bnbr_rp_copula_ll_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   res <- rpbnb_copula_ll_grad_cpp(
     y1, y2, X1, X2, xr1, xr2, as.integer(rand_idx1-1L), as.integer(rand_idx2-1L),
     real1$dev, real2$dev, real1$dloc, real2$dloc, real1$dscale, real2$dscale,
-    as.vector(X1 %*% beta1), as.vector(X2 %*% beta2),
+    as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1)),
+    as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2)),
     r1, r2, theta, dth_dz, as.integer(fam_code),
     as.integer(isTRUE(want_scores)), as.integer(n_threads))
   val <- res$value

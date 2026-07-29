@@ -83,6 +83,24 @@ test_that("simulate_bnb errors when dispersion names are wrong", {
   )
 })
 
+test_that("simulate_bnb rejects invalid dispersion values", {
+  base <- list(n = 50, beta1 = c("(Intercept)" = 0.2),
+               beta2 = c("(Intercept)" = 0.1), seed = 1)
+  # Negative, zero, and non-finite dispersions must error (not warn + NaN).
+  expect_error(do.call(simulate_bnb, c(base, list(dispersion = c(m1 = -1, m2 = 0.5)))),
+               "finite and positive")
+  expect_error(do.call(simulate_bnb, c(base, list(dispersion = c(m1 = 0, m2 = 0.5)))),
+               "finite and positive")
+  expect_error(do.call(simulate_bnb, c(base, list(dispersion = c(m1 = Inf, m2 = 0.5)))),
+               "finite and positive")
+  expect_error(do.call(simulate_bnb, c(base, list(dispersion = c(m1 = NA_real_, m2 = 0.5)))),
+               "finite and positive")
+  # A valid negative dispersion no longer silently produces NaN counts.
+  s <- do.call(simulate_bnb, c(base, list(dispersion = c(m1 = 0.4, m2 = 0.5))))
+  expect_false(anyNA(s$data$y1))
+  expect_false(anyNA(s$data$y2))
+})
+
 test_that("simulate_bnb errors when supplied covariates miss a column", {
   cov <- data.frame(x1 = rnorm(50))
   expect_error(

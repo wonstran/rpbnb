@@ -127,9 +127,14 @@ residuals.bnb_fit <- function(object,
   rand_idx <- if (eq == 1L) object$rand_idx1 else object$rand_idx2
   meta     <- object$rp_meta
   has_rand <- !is.null(meta) && length(rand_idx) > 0
+  # The fitted offset must enter the per-draw linear predictor (mu = exp(x'b +
+  # offset)); without it the mixture CDF/variance -- and hence Pearson/quantile
+  # residuals (and response residuals for copula RP fits, whose mean is
+  # reconstructed here) -- would use no-offset means.
+  off <- .as_offset(.fit_offset(object, eq), nrow(X))
   parts <- list(X = X, y = y, m = m, r = if (pois) Inf else 1 / m, pois = pois,
                 b = b, rand_idx = rand_idx,
-                xb = as.vector(X %*% b), has_rand = has_rand,
+                xb = as.vector(X %*% b) + off, has_rand = has_rand,
                 dist = NULL, sgn = NULL, Z = NULL, scales = NULL)
   if (!has_rand) return(parts)
   parts$dist <- if (eq == 1L) meta$dist1 else meta$dist2

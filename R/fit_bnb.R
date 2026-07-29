@@ -8,7 +8,7 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
                         lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
                         formula_1, formula_2, ll_trace, convergence, call,
                         cop_family = NULL, cop_par = NULL, cop_tau = NULL,
-                        hessian_diag = NULL,
+                        hessian_diag = NULL, predict_meta = NULL,
                         poisson_1 = FALSE, poisson_2 = FALSE) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
@@ -21,6 +21,8 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
          call = call,
          cop_family = cop_family, cop_par = cop_par, cop_tau = cop_tau,
          hessian_diag = hessian_diag,
+         # terms/xlevels/contrasts/offsets for column-stable predict() designs.
+         predict_meta = predict_meta,
          # Poisson-limit restriction flags per margin, so bnb_gof() can rebuild a
          # same-family (Poisson-restricted) null instead of an unrestricted NB one.
          poisson_1 = poisson_1, poisson_2 = poisson_2),
@@ -35,8 +37,10 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
 #' @keywords internal
 #' @noRd
 fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
-                           poisson_1 = FALSE, poisson_2 = FALSE) {
+                           poisson_1 = FALSE, poisson_2 = FALSE,
+                           off1 = NULL, off2 = NULL) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
+  off1 <- .as_offset(off1, nrow(X1)); off2 <- .as_offset(off2, nrow(X2))
 
   par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
                  "log_m1", "log_m2", "z_lambda")
@@ -71,11 +75,13 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   # the parameter vector is only a display placeholder, ignored by the math.
   .ll_eval <- numeric(0)
   ll_fun <- function(p) {
-    v <- bnb_loglik_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1, pois2 = poisson_2)
+    v <- bnb_loglik_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1, pois2 = poisson_2,
+                        off1 = off1, off2 = off2)
     .ll_eval <<- c(.ll_eval, sum(v))         # record total logLik
     v
   }
-  grad_fun <- function(p) bnb_grad_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1, pois2 = poisson_2)
+  grad_fun <- function(p) bnb_grad_vec(p, Y1, Y2, X1, X2, pois1 = poisson_1,
+                                       pois2 = poisson_2, off1 = off1, off2 = off2)
 
   ml_control <- list(iterlim = control$iterlim,
                      reltol = control$reltol,
@@ -109,8 +115,8 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   m2_hat <- unname(exp(par_hat["log_m2"]))
   z_hat  <- unname(par_hat["z_lambda"])
 
-  mu1_hat <- as.vector(exp(X1 %*% beta1_hat))
-  mu2_hat <- as.vector(exp(X2 %*% beta2_hat))
+  mu1_hat <- as.vector(exp(X1 %*% beta1_hat + off1))
+  mu2_hat <- as.vector(exp(X2 %*% beta2_hat + off2))
   # A Poisson-restricted margin uses the exact m = 0 limit everywhere, so its
   # dependence constant is c = exp(-d*mu) (m -> 0). Force m = 0 here too, so the
   # frozen lambda-bounds used for the SEs match the objective's Poisson margin.
@@ -130,11 +136,13 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   if (isTRUE(control$compute_se)) {
     lamLo_h <- bnds_hat[1]; lamHi_h <- bnds_hat[2]
     ll_fb <- function(p) bnbr_loglik_fixed_bounds(p, Y1, Y2, X1, X2, lamLo_h, lamHi_h,
-                                                  pois1 = poisson_1, pois2 = poisson_2)
+                                                  pois1 = poisson_1, pois2 = poisson_2,
+                                                  off1 = off1, off2 = off2)
 
     H <- if (identical(control$hessian, "analytic")) {
       bnb_hessian_fixed_bounds(par_hat, Y1, Y2, X1, X2, lamLo_h, lamHi_h,
-                               pois1 = poisson_1, pois2 = poisson_2)
+                               pois1 = poisson_1, pois2 = poisson_2,
+                               off1 = off1, off2 = off2)
     } else {
       numDeriv::hessian(ll_fb, par_hat,
                         method.args = list(r = control$hess_r, eps = control$hess_eps))
@@ -172,8 +180,10 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
 #' Internal estimator: copula with NB2 margins via maxLik BFGS + analytic gradient
 #' @keywords internal
 #' @noRd
-fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
+fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control,
+                           off1 = NULL, off2 = NULL) {
   p1 <- NCOL(X1); p2 <- NCOL(X2)
+  off1 <- .as_offset(off1, nrow(X1)); off2 <- .as_offset(off2, nrow(X2))
 
   nb <- .marginal_nb_starts(Y1, X1, Y2, X2)             # z_theta = 0 (independence)
   par_names <- c(paste0("b1:", cn1), paste0("b2:", cn2),
@@ -183,11 +193,12 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
 
   .ll_eval <- numeric(0)
   ll_fun <- function(p) {
-    v <- copula_loglik_vec(p, Y1, Y2, X1, X2, family)
+    v <- copula_loglik_vec(p, Y1, Y2, X1, X2, family, off1 = off1, off2 = off2)
     .ll_eval <<- c(.ll_eval, sum(v))
     v
   }
-  grad_fun <- function(p) copula_grad_vec(p, Y1, Y2, X1, X2, family)
+  grad_fun <- function(p) copula_grad_vec(p, Y1, Y2, X1, X2, family,
+                                          off1 = off1, off2 = off2)
 
   ml_control <- list(iterlim = control$iterlim, reltol = control$reltol,
                      printLevel = control$print_level)
@@ -199,15 +210,16 @@ fit_bnb_copula <- function(Y1, Y2, X1, X2, cn1, cn2, family, start, control) {
   beta1_hat <- par_hat[paste0("b1:", cn1)]
   beta2_hat <- par_hat[paste0("b2:", cn2)]
   z_hat     <- unname(par_hat["z_theta"])
-  mu1_hat   <- as.vector(exp(X1 %*% beta1_hat))
-  mu2_hat   <- as.vector(exp(X2 %*% beta2_hat))
+  mu1_hat   <- as.vector(exp(X1 %*% beta1_hat + off1))
+  mu2_hat   <- as.vector(exp(X2 %*% beta2_hat + off2))
 
   native_hat <- z_to_native(family, z_hat)
   td         <- copula_tau_and_deriv(family, z_hat)
   ll_hat     <- as.numeric(stats::logLik(fit))
 
   if (isTRUE(control$compute_se)) {
-    ll_total <- function(p) sum(copula_loglik_vec(p, Y1, Y2, X1, X2, family))
+    ll_total <- function(p) sum(copula_loglik_vec(p, Y1, Y2, X1, X2, family,
+                                                  off1 = off1, off2 = off2))
     H <- numDeriv::hessian(ll_total, par_hat,
                            method.args = list(r = control$hess_r, eps = control$hess_eps))
     info <- -H; info <- (info + t(info)) / 2
@@ -307,7 +319,11 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 
 #' Fit a bivariate negative binomial regression model
 #'
-#' @param formula_1,formula_2 Model formulas for the two count outcomes.
+#' @param formula_1,formula_2 Model formulas for the two count outcomes. An
+#'   equation-specific `offset()` term (e.g. `y ~ x + offset(log(exposure))`) is
+#'   supported on every dependence path: the offset enters that margin's linear
+#'   predictor additively (mean `exp(x'beta + offset)`) during estimation, and is
+#'   carried through the stored fitted means and both `predict()` methods.
 #' @param data A data frame.
 #' @param dependence Dependence structure: "independence" (two univariate NB2
 #'   margins), "famoye" (Famoye/Sarmanov bivariate NB), or a [copula()] object
@@ -369,7 +385,8 @@ fit_bnb <- function(formula_1, formula_2, data,
            "with a copula() dependence.", call. = FALSE)
     }
     res <- fit_bnb_copula(Y1, Y2, X1, X2, cn1, cn2,
-                          family = dependence$family, start = start, control = control)
+                          family = dependence$family, start = start, control = control,
+                          off1 = prep$off1, off2 = prep$off2)
     return(new_bnb_fit(
       coef = res$coef, vcov = res$vcov, se = res$se,
       logLik = res$logLik, nobs = length(Y1), npar = res$npar,
@@ -379,7 +396,7 @@ fit_bnb <- function(formula_1, formula_2, data,
       formula_1 = formula_1, formula_2 = formula_2,
       ll_trace = res$ll_trace, convergence = res$convergence, call = match.call(),
       cop_family = res$cop_family, cop_par = res$cop_par, cop_tau = res$cop_tau,
-      hessian_diag = res$hessian_diag
+      hessian_diag = res$hessian_diag, predict_meta = .prep_predict_meta(prep)
     ))
   }
 
@@ -387,7 +404,8 @@ fit_bnb <- function(formula_1, formula_2, data,
 
   res <- if (dependence == "famoye") {
     fit_bnb_famoye(Y1, Y2, X1, X2, cn1, cn2, start, control,
-                   poisson_1 = poisson_1, poisson_2 = poisson_2)
+                   poisson_1 = poisson_1, poisson_2 = poisson_2,
+                   off1 = prep$off1, off2 = prep$off2)
   } else {
     fit_bnb_independence(formula_1, formula_2, prep$data, cn1, cn2, X1, X2, Y1, Y2,
                          poisson_1 = poisson_1, poisson_2 = poisson_2)
@@ -400,5 +418,6 @@ fit_bnb <- function(formula_1, formula_2, data,
               formula_1 = formula_1, formula_2 = formula_2,
               ll_trace = res$ll_trace, convergence = res$convergence,
               call = match.call(), hessian_diag = res$hessian_diag,
+              predict_meta = .prep_predict_meta(prep),
               poisson_1 = poisson_1, poisson_2 = poisson_2)
 }

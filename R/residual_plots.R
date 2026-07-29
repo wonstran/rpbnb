@@ -41,7 +41,14 @@
       graphics::hist(rqr[fin_rq], freq = FALSE, breaks = "FD",
                      xlab = "Randomized quantile residual",
                      main = paste0(resp_name, ": Histogram (RQR)"))
-      graphics::curve(stats::dnorm(x), add = TRUE, col = "red")
+      # Pass the bare NAME dnorm rather than the expression stats::dnorm(x):
+      # curve() substitutes its first argument and, for a name, builds the call
+      # itself -- so no free `x` appears here for R CMD check to report as an
+      # undefined global variable. It must be the unqualified name: curve()
+      # accepts a name or a call mentioning `x`, and `stats::dnorm` is a call
+      # that mentions neither, which curve() rejects. The bare `dnorm` resolves
+      # through this package's @importFrom stats dnorm (rpbnb-package.R).
+      graphics::curve(dnorm, add = TRUE, col = "red")
     }
   }
   if (4 %in% which) {

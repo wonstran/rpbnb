@@ -37,6 +37,14 @@ example dropping a name from \code{random_1} (testing a random-coefficient SD), 
 a plain NB / independence fit (testing an NB2 dispersion). This is the
 statistically appropriate replacement for the Wald z/p that the natural-scale
 summary suppresses on positive scale/dispersion parameters.
+
+A likelihood-ratio test requires two \emph{maximized} likelihoods. When either
+argument is a package fit (\code{bnb_fit} / \code{rpbnb_fit}) that records a failed
+optimization (\code{convergence$converged = FALSE}), \code{lr_test()} errors rather than
+returning a p-value from an unfinished fit -- the sign of the statistic cannot
+establish convergence. Generic objects that only carry a \code{logLik()} (no
+convergence record) are still accepted, but their convergence cannot be
+validated and is the caller's responsibility.
 }
 \examples{
 sim <- simulate_rpbnb(n = 600,

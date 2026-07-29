@@ -34,6 +34,26 @@ test_that("summary surfaces natural-scale dispersion and dependence with finite 
   expect_true(is.finite(m1_row$StdErr))
 })
 
+test_that("exact-Poisson natural-scale reports m = 0, not the 1e-6 placeholder", {
+  # A poisson_1 = TRUE fit pins log_m1 at log(POISSON_M) = log(1e-6) only as a
+  # display placeholder; the public contract is that the margin is exactly m = 0.
+  # The natural-scale table must report 0 for the restricted margin (with an NA
+  # SE, a fixed parameter) and leave the unrestricted margin untouched.
+  cf <- c("b1:(Intercept)" = 0.3, "b2:(Intercept)" = 0.1,
+          log_m1 = log(1e-6), log_m2 = log(0.5), z_lambda = 0)
+  se <- c("b1:(Intercept)" = 0.1, "b2:(Intercept)" = 0.1,
+          log_m1 = NA_real_, log_m2 = 0.2, z_lambda = 0.3)
+  fit <- structure(list(coef = cf, se = se, poisson_1 = TRUE, poisson_2 = FALSE,
+                        lambda = 0, bounds = c(-1, 1)),
+                   class = "bnb_fit")
+  nat <- rpbnb:::.natural_scale_flat(fit)
+  m1  <- nat[nat$Parameter == "m1 (dispersion)", ]
+  m2  <- nat[nat$Parameter == "m2 (dispersion)", ]
+  expect_equal(m1$Estimate, 0)                       # exact Poisson, not 1e-6
+  expect_true(is.na(m1$StdErr))                      # fixed parameter -> NA SE
+  expect_equal(m2$Estimate, 0.5, tolerance = 1e-12)  # unrestricted margin unchanged
+})
+
 test_that("raw summary()$coefficients suppresses Wald tests for log-scale/dispersion", {
   ff  <- make_small_bnb()
   cm  <- summary(ff)$coefficients

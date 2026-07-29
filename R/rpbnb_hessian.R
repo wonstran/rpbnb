@@ -14,7 +14,8 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
                             dist1 = NULL, dist2 = NULL,
                             sign1 = NULL, sign2 = NULL,
                             lamLo = NULL, lamHi = NULL,
-                            pois1 = FALSE, pois2 = FALSE) {
+                            pois1 = FALSE, pois2 = FALSE,
+                            off1 = NULL, off2 = NULL) {
   n  <- length(y1)
   k1 <- ncol(X1); k2 <- ncol(X2)
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -41,7 +42,8 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
   if (is.null(sign1) && q1 > 0) sign1 <- rep(1, q1)
   if (is.null(sign2) && q2 > 0) sign2 <- rep(1, q2)
 
-  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
+  xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
+  xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))
 
   # Per-draw realizations (dev/dloc/dscale/base) via the tested registry path.
   real1 <- if (q1 > 0) rand_realize(Z1, dist1, sign1, beta1[rand_idx1], sd1)

@@ -47,12 +47,17 @@ A data frame (single margin, invisibly) or a named list of data frames
 Average marginal effects (AME) or marginal effects at the mean (MEM) for each
 margin of an \code{\link[=fit_rpbnb]{fit_rpbnb()}} fit, built on the Monte-Carlo integrated population
 mean \eqn{\mu_i = E_\beta[\exp(x_i'\beta)]} (the same estimand as
-\code{\link[=predict.rpbnb_fit]{predict.rpbnb_fit()}}, reusing the fit's stored draws). Continuous effects are
+\code{predict.rpbnb_fit()}, reusing the fit's stored draws). Continuous effects are
 \eqn{\partial \mu_i/\partial x_{ij} = \mathrm{mean}_r\, \mathrm{coef}_{rj}
 \exp(\mathrm{lp}_{ir})} (the realized coefficient per draw, so random and fixed
 columns are handled uniformly); binary (0/1) effects are the integrated
 discrete difference \eqn{E[Y|x_j=1] - E[Y|x_j=0]}. Standard errors use a
 numeric delta method over the equation's mean and log-scale parameters.
+}
+\details{
+For a model fitted with an \code{offset()}, absolute marginal effects scale with
+the offset-inclusive mean: AME uses each observation's training offset, and
+MEM uses the mean training offset.
 }
 \examples{
 sim <- simulate_rpbnb(n = 400,

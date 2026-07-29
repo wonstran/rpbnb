@@ -76,6 +76,50 @@ test_that("print method reports both fits, the statistic, and the mixture note",
   expect_match(txt, "mixture")                # boundary note present
 })
 
+# Minimal package-fit stand-in that DOES carry a convergence record, to exercise
+# the convergence guard without a real optimization. Class is bnb_fit/rpbnb_fit
+# so lr_test() recognizes it as a package fit; logLik() reads $logLik / $npar.
+fake_pkg_fit <- function(ll, df, converged, cls = "bnb_fit") {
+  structure(list(logLik = ll, npar = df,
+                 convergence = list(converged = converged, code = 1L,
+                                    message = "iteration limit exceeded")),
+            class = cls)
+}
+
+test_that("lr_test rejects a non-converged package fit (either argument)", {
+  # Review repro: two bnb_fit stand-ins at -105 / -100 previously returned
+  # LR = 10, p = 0.0016 with no warning even though both were non-converged.
+  full_ok  <- fake_pkg_fit(-100, df = 7, converged = TRUE)
+  rest_ok  <- fake_pkg_fit(-105, df = 5, converged = TRUE)
+  full_bad <- fake_pkg_fit(-100, df = 7, converged = FALSE)
+  rest_bad <- fake_pkg_fit(-105, df = 5, converged = FALSE)
+
+  expect_error(lr_test(rest_bad, full_ok),  "did not converge")
+  expect_error(lr_test(rest_ok,  full_bad), "did not converge")
+  expect_error(lr_test(rest_bad, full_bad), "did not converge")
+
+  # Two converged package fits still produce an ordinary test.
+  res <- lr_test(rest_ok, full_ok)
+  expect_equal(res$statistic, 2 * (-100 - (-105)))
+  expect_equal(res$df, 2)
+})
+
+test_that("lr_test recognizes non-converged rpbnb_fit objects too", {
+  full <- fake_pkg_fit(-100, df = 7, converged = TRUE,  cls = "rpbnb_fit")
+  rest <- fake_pkg_fit(-105, df = 5, converged = FALSE, cls = "rpbnb_fit")
+  expect_error(lr_test(rest, full), "did not converge")
+})
+
+test_that("lr_test still accepts generic logLik-only objects (no convergence field)", {
+  # Generic support is intentional and documented as unable to validate
+  # convergence; a plain logLik stand-in with no convergence record is unaffected.
+  full <- fake_fit(-100, df = 7)
+  rest <- fake_fit(-105, df = 5)
+  res  <- lr_test(rest, full)
+  expect_equal(res$df, 2)
+  expect_true(is.finite(res$p.value))
+})
+
 test_that("end-to-end: real rpbnb_fit with vs without a random coefficient", {
   skip_slow()
   sim <- simulate_rpbnb(n = 600,

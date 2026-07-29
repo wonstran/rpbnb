@@ -16,6 +16,7 @@
 
   prep <- .prepare_bnb_data(formula_1, formula_2, data)
   Y1 <- prep$Y1; Y2 <- prep$Y2; X1 <- prep$X1; X2 <- prep$X2
+  off1 <- prep$off1; off2 <- prep$off2   # equation-specific offsets (0 if none)
   k1 <- ncol(X1); k2 <- ncol(X2)
 
   idx_from_names <- function(who, X) {
@@ -98,11 +99,13 @@
     v <- if (use_cpp)
       bnbr_rp_copula_ll_grad_cpp(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
                                  Z1, Z2, family, dist1, dist2, sign1, sign2,
-                                 n_threads = cpp_threads, pois1 = poisson_1, pois2 = poisson_2)
+                                 n_threads = cpp_threads, pois1 = poisson_1, pois2 = poisson_2,
+                                 off1 = off1, off2 = off2)
     else
       bnbr_rp_copula_ll_grad(p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
                              Z1, Z2, family, dist1, dist2, sign1, sign2,
-                             pois1 = poisson_1, pois2 = poisson_2)
+                             pois1 = poisson_1, pois2 = poisson_2,
+                             off1 = off1, off2 = off2)
     ll_trace[[length(ll_trace) + 1L]] <<- as.numeric(v)
     v
   }
@@ -124,19 +127,22 @@
         bnbr_rp_copula_ll_grad_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
                                    Z1, Z2, family, dist1, dist2, sign1, sign2,
                                    want_scores = TRUE, n_threads = cpp_threads,
-                                   pois1 = poisson_1, pois2 = poisson_2)
+                                   pois1 = poisson_1, pois2 = poisson_2,
+                                   off1 = off1, off2 = off2)
       else
         bnbr_rp_copula_ll_grad(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                               rand_idx1, rand_idx2, Z1, Z2, family,
                               dist1, dist2, sign1, sign2, want_scores = TRUE,
-                              pois1 = poisson_1, pois2 = poisson_2)
+                              pois1 = poisson_1, pois2 = poisson_2,
+                              off1 = off1, off2 = off2)
       inv <- .free_index_vcov(crossprod(attr(res, "scores")), par_names, free,
                               label = "copula RP-BNB (OPG)")
       vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     } else {  # "numeric"
       H <- numDeriv::hessian(function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
                              rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2,
-                             pois1 = poisson_1, pois2 = poisson_2),
+                             pois1 = poisson_1, pois2 = poisson_2,
+                             off1 = off1, off2 = off2),
                              par_hat,
                              method.args = list(r = control$hess_r, eps = control$hess_eps))
       inv <- .free_index_vcov(-H, par_names, free,
@@ -149,9 +155,11 @@
   }
   dimnames(vc) <- list(par_names, par_names); names(se) <- par_names
 
+  # A Poisson-restricted margin is exactly m = 0; its pinned log_m is only the
+  # POISSON_M display placeholder, so store 0 rather than exp(log(1e-6)) = 1e-6.
   idx_end <- k1 + k2 + q1 + q2
-  m1_hat <- unname(exp(par_hat[idx_end + 1]))
-  m2_hat <- unname(exp(par_hat[idx_end + 2]))
+  m1_hat <- if (isTRUE(poisson_1)) 0 else unname(exp(par_hat[idx_end + 1]))
+  m2_hat <- if (isTRUE(poisson_2)) 0 else unname(exp(par_hat[idx_end + 2]))
 
   ll_hat <- as.numeric(stats::logLik(fit))
   # maxLik BFGS (optim-based) returns code 0 on success; code 1 is
@@ -171,6 +179,7 @@
     cop_family = family, call = match.call(), hessian_diag = hdiag,
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
                    Z1 = Z1, Z2 = Z2),
+    predict_meta = .prep_predict_meta(prep),
     poisson_1 = poisson_1, poisson_2 = poisson_2
   )
 }

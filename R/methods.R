@@ -12,13 +12,33 @@ logLik.bnb_fit <- function(object, ...) {
             nobs = object$nobs, class = "logLik")
 }
 
+# Build a column-stable design matrix and the newdata offset for equation `eq`
+# from `newdata`. Uses the stored training terms/xlevels/contrasts so that absent
+# factor levels reproduce the TRAINING columns (as zeros) rather than shifting
+# positions -- standard model-method behavior, and a precondition for aligning
+# fitted coefficients and random-coefficient columns by name. Falls back to the
+# bare formula RHS for fits made before `predict_meta` was stored (offset 0).
+.newdata_design <- function(object, eq, newdata) {
+  pm   <- object$predict_meta
+  form <- if (eq == 1) object$formula_1 else object$formula_2
+  if (is.null(pm)) {
+    X <- stats::model.matrix(form[-2L], newdata)
+    return(list(X = X, offset = numeric(nrow(X))))
+  }
+  tt <- stats::delete.response(if (eq == 1) pm$terms1 else pm$terms2)
+  xl <- if (eq == 1) pm$xlevels1 else pm$xlevels2
+  cc <- if (eq == 1) pm$contrasts1 else pm$contrasts2
+  mf <- stats::model.frame(tt, newdata, xlev = xl, na.action = stats::na.pass)
+  X  <- stats::model.matrix(tt, mf, contrasts.arg = cc)
+  list(X = X, offset = .as_offset(stats::model.offset(mf), nrow(X)))
+}
+
 # Predicted mean for one equation. For models with random coefficients the
 # `sd_prefix` log-SD entries add the closed-form lognormal correction
 # 0.5 * sum_j sd_j^2 * x_j^2; for fixed-coefficient models no such entries exist
-# and this reduces to exp(x'b). Aligns newdata design columns to the fitted
-# coefficients and errors on a factor-level / column mismatch. Internal.
-.bnb_predict_mu <- function(formula, coef, beta_prefix, sd_prefix, newdata) {
-  X <- stats::model.matrix(formula[-2L], newdata)
+# and this reduces to exp(x'b + offset). Aligns newdata design columns to the
+# fitted coefficients and errors on a factor-level / column mismatch. Internal.
+.bnb_predict_mu <- function(coef, beta_prefix, sd_prefix, X, offset) {
   b <- coef[grep(paste0("^", beta_prefix, ":"), names(coef))]
   names(b) <- sub(paste0("^", beta_prefix, ":"), "", names(b))
   b <- b[colnames(X)]                       # align coefficients to design columns
@@ -27,7 +47,7 @@ logLik.bnb_fit <- function(object, ...) {
          paste(colnames(X)[is.na(b)], collapse = ", "),
          ". Ensure factor levels match the training data.", call. = FALSE)
   }
-  lp <- as.vector(X %*% b)
+  lp <- as.vector(X %*% b) + offset
   sd_log <- coef[grep(paste0("^", sd_prefix, ":"), names(coef))]
   if (length(sd_log)) {
     rand_cols <- sub(paste0("^", sd_prefix, ":"), "", names(sd_log))
@@ -42,10 +62,15 @@ logLik.bnb_fit <- function(object, ...) {
 
 #' @export
 predict.bnb_fit <- function(object, newdata = NULL, ...) {
+  # The cached mu1/mu2 already include the training offset (glm.nb / the fitted
+  # linear predictor), so the no-newdata path stays consistent with explicit
+  # newdata = training_data.
   if (is.null(newdata)) return(data.frame(mu1 = object$mu1, mu2 = object$mu2))
+  d1 <- .newdata_design(object, 1, newdata)
+  d2 <- .newdata_design(object, 2, newdata)
   data.frame(
-    mu1 = .bnb_predict_mu(object$formula_1, object$coef, "b1", "log_sd1", newdata),
-    mu2 = .bnb_predict_mu(object$formula_2, object$coef, "b2", "log_sd2", newdata)
+    mu1 = .bnb_predict_mu(object$coef, "b1", "log_sd1", d1$X, d1$offset),
+    mu2 = .bnb_predict_mu(object$coef, "b2", "log_sd2", d2$X, d2$offset)
   )
 }
 
@@ -132,14 +157,25 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     }
   }
 
-  # Dispersion parameters
+  # Dispersion parameters. A Poisson-restricted margin (poisson_1/poisson_2) is
+  # exactly m = 0 by the public contract; its pinned log_m holds only the
+  # numerical POISSON_M display placeholder, which must NOT leak into the
+  # natural-scale table. Report exactly 0 with an NA SE (a fixed parameter).
   if ("log_m1" %in% names(cf)) {
-    m1 <- exp(cf[["log_m1"]])
-    add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"), test = FALSE)
+    if (isTRUE(object$poisson_1)) {
+      add_dispersion("m1 (dispersion)", 0, NA_real_, test = FALSE)
+    } else {
+      m1 <- exp(cf[["log_m1"]])
+      add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"), test = FALSE)
+    }
   }
   if ("log_m2" %in% names(cf)) {
-    m2 <- exp(cf[["log_m2"]])
-    add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"), test = FALSE)
+    if (isTRUE(object$poisson_2)) {
+      add_dispersion("m2 (dispersion)", 0, NA_real_, test = FALSE)
+    } else {
+      m2 <- exp(cf[["log_m2"]])
+      add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"), test = FALSE)
+    }
   }
 
   # Only models with an estimated dependence parameter (z_lambda present, i.e.
@@ -343,8 +379,8 @@ logLik.rpbnb_fit <- function(object, ...) {
 # the linear predictor grow without bound over the mixing density). Those rows
 # are returned as Inf with a warning rather than a finite, cap-dependent average.
 RP_PRED_CAP <- 1e15
-.rp_integrated_mu <- function(X, b, rand_idx, dist, sign, Z, scales) {
-  xb <- as.vector(X %*% b)
+.rp_integrated_mu <- function(X, b, rand_idx, dist, sign, Z, scales, offset = NULL) {
+  xb <- as.vector(X %*% b) + .as_offset(offset, nrow(X))
   if (length(rand_idx) == 0 || is.null(Z) || ncol(Z) == 0) return(exp(xb))
   dev <- rand_realize(Z, dist, sign, b[rand_idx], scales)$dev   # R x q deviations
   XR  <- X[, rand_idx, drop = FALSE]
@@ -372,9 +408,15 @@ RP_PRED_CAP <- 1e15
   mu
 }
 
-# Build the integrated mean for equation `eq` (1 or 2) on design matrix X, using
-# the fit's stored random-distribution metadata and draws.
-.rp_predict_mu <- function(object, eq, X) {
+# Build the integrated mean for equation `eq` (1 or 2) on design matrix X (with
+# newdata offset), using the fit's stored random-distribution metadata and draws.
+#
+# The random-coefficient columns are identified by NAME and remapped against the
+# rebuilt design with match(): the stored rand_idx are positions in the TRAINING
+# design, which need not coincide with newdata column positions (e.g. a factor
+# whose unused level disappears shifts every later column). We recover the random
+# column names from the stored training design and locate them in X by name.
+.rp_predict_mu <- function(object, eq, X, offset = NULL) {
   bpfx <- paste0("b", eq)
   b <- object$coef[grep(paste0("^", bpfx, ":"), names(object$coef))]
   names(b) <- sub(paste0("^", bpfx, ":"), "", names(b))
@@ -384,18 +426,27 @@ RP_PRED_CAP <- 1e15
          paste(colnames(X)[is.na(b)], collapse = ", "),
          ". Ensure factor levels match the training data.", call. = FALSE)
   }
-  meta     <- object$rp_meta
-  rand_idx <- if (eq == 1) object$rand_idx1 else object$rand_idx2
-  if (is.null(meta) || length(rand_idx) == 0) return(exp(as.vector(X %*% b)))
+  meta       <- object$rp_meta
+  train_cn   <- colnames(if (eq == 1) object$X1 else object$X2)
+  train_idx  <- if (eq == 1) object$rand_idx1 else object$rand_idx2
+  rand_names <- train_cn[train_idx]
+  if (is.null(meta) || length(train_idx) == 0) {
+    return(exp(as.vector(X %*% b) + .as_offset(offset, nrow(X))))
+  }
+  rand_idx <- match(rand_names, colnames(X))   # positions in the REBUILT design
+  if (anyNA(rand_idx)) {
+    stop("newdata design is missing random-coefficient column(s): ",
+         paste(rand_names[is.na(rand_idx)], collapse = ", "),
+         ". Ensure factor levels match the training data.", call. = FALSE)
+  }
   dist <- if (eq == 1) meta$dist1 else meta$dist2
   sgn  <- if (eq == 1) meta$sign1 else meta$sign2
   Z    <- if (eq == 1) meta$Z1 else meta$Z2
-  cols <- colnames(X)[rand_idx]
   scales <- vapply(seq_along(rand_idx), function(j) {
     lbl <- rand_dist_registry[[dist[j]]]$scale_label
-    exp(object$coef[[paste0(lbl, eq, ":", cols[j])]])
+    exp(object$coef[[paste0(lbl, eq, ":", rand_names[j])]])
   }, numeric(1))
-  .rp_integrated_mu(X, b, rand_idx, dist, sgn, Z, scales)
+  .rp_integrated_mu(X, b, rand_idx, dist, sgn, Z, scales, offset)
 }
 
 # Assemble the predict() data frame and tag it with the estimand definition and
@@ -414,6 +465,10 @@ RP_PRED_CAP <- 1e15
 
 #' @export
 predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
+  # Training offsets (all-zero when the model has none), used for the no-newdata
+  # path so it matches predict(object, newdata = training_data).
+  off1 <- if (!is.null(object$predict_meta)) object$predict_meta$off1 else NULL
+  off2 <- if (!is.null(object$predict_meta)) object$predict_meta$off2 else NULL
   if (is.null(newdata)) {
     # Recompute from the stored design so the SAME estimand (including the
     # lognormal Inf correction in .rp_integrated_mu) is applied as with an
@@ -424,12 +479,14 @@ predict.rpbnb_fit <- function(object, newdata = NULL, ...) {
       stop("predict() without 'newdata' is unavailable for this fit ",
            "(no fitted means or draws stored); pass newdata.", call. = FALSE)
     }
-    return(.rp_pred_df(.rp_predict_mu(object, 1, object$X1),
-                       .rp_predict_mu(object, 2, object$X2), object))
+    return(.rp_pred_df(.rp_predict_mu(object, 1, object$X1, off1),
+                       .rp_predict_mu(object, 2, object$X2, off2), object))
   }
+  d1 <- .newdata_design(object, 1, newdata)
+  d2 <- .newdata_design(object, 2, newdata)
   .rp_pred_df(
-    .rp_predict_mu(object, 1, stats::model.matrix(object$formula_1[-2L], newdata)),
-    .rp_predict_mu(object, 2, stats::model.matrix(object$formula_2[-2L], newdata)),
+    .rp_predict_mu(object, 1, d1$X, d1$offset),
+    .rp_predict_mu(object, 2, d2$X, d2$offset),
     object
   )
 }

@@ -372,6 +372,10 @@ test_that("rpbnb_fit stores poisson flags and its mixture var/CDF use Poisson fo
                    draws = 60, seed = 1, control = ctrl, poisson_1 = TRUE)
   expect_true(isTRUE(fit$poisson_1))
   expect_false(isTRUE(fit$poisson_2))
+  # The stored natural-scale dispersion is exactly 0 for the Poisson margin, not
+  # the POISSON_M = 1e-6 placeholder.
+  expect_equal(fit$m1, 0)
+  expect_gt(fit$m2, 0)
 
   # Mixture variance: Poisson law of total variance E_r[mu] + Var_r[mu] (no m*mu^2).
   p  <- rpbnb:::.rp_margin_parts(fit, 1L)

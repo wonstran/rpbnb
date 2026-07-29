@@ -24,7 +24,8 @@
 #' placeholder -- the math ignores its value.
 #' @keywords internal
 #' @noRd
-bnb_loglik_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
+bnb_loglik_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE,
+                           off1 = NULL, off2 = NULL) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -34,8 +35,8 @@ bnb_loglik_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
 
   m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
   r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
-  mu1 <- .bound_mu(X1, beta1)
-  mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1)
+  mu2 <- .bound_mu(X2, beta2, off2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   # Data-adaptive bounds and interior logistic map (strictly inside)
@@ -61,7 +62,8 @@ bnb_loglik_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
 #' 0/0 at m = 0 and is dropped from the free-parameter information anyway).
 #' @keywords internal
 #' @noRd
-bnb_score_mat <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
+bnb_score_mat <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE,
+                          off1 = NULL, off2 = NULL) {
   p1 <- ncol(X1); p2 <- ncol(X2)
 
   beta1  <- par[seq_len(p1)]
@@ -72,8 +74,8 @@ bnb_score_mat <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
 
   m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
   r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
-  mu1 <- .bound_mu(X1, beta1)
-  mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1)
+  mu2 <- .bound_mu(X2, beta2, off2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   bnds <- lambda_bounds_vec(c1, c2); lamLo <- bnds[1]; lamHi <- bnds[2]
@@ -127,15 +129,18 @@ bnb_score_mat <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
 #' Summed analytic gradient for BFGS
 #' @keywords internal
 #' @noRd
-bnb_grad_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE) {
-  colSums(bnb_score_mat(par, y1, y2, X1, X2, pois1 = pois1, pois2 = pois2))
+bnb_grad_vec <- function(par, y1, y2, X1, X2, pois1 = FALSE, pois2 = FALSE,
+                         off1 = NULL, off2 = NULL) {
+  colSums(bnb_score_mat(par, y1, y2, X1, X2, pois1 = pois1, pois2 = pois2,
+                        off1 = off1, off2 = off2))
 }
 
 #' Fixed-bounds summed logLik for numeric Hessian (freeze lambda-bounds at optimum)
 #' @keywords internal
 #' @noRd
 bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi,
-                                     tiny = 1e-10, pois1 = FALSE, pois2 = FALSE) {
+                                     tiny = 1e-10, pois1 = FALSE, pois2 = FALSE,
+                                     off1 = NULL, off2 = NULL) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -145,8 +150,8 @@ bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi,
 
   m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
   r1 <- if (pois1) Inf else 1/m1;      r2 <- if (pois2) Inf else 1/m2
-  mu1 <- .bound_mu(X1, beta1)
-  mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1)
+  mu2 <- .bound_mu(X2, beta2, off2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   eps <- 1e-6; sig <- plogis(zlam)
@@ -187,7 +192,8 @@ bnbr_loglik_fixed_bounds <- function(par, Y1, Y2, X1, X2, lamLo, lamHi,
 #' @keywords internal
 #' @noRd
 bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi,
-                                     pois1 = FALSE, pois2 = FALSE) {
+                                     pois1 = FALSE, pois2 = FALSE,
+                                     off1 = NULL, off2 = NULL) {
   p1 <- ncol(X1); p2 <- ncol(X2)
   beta1  <- par[seq_len(p1)]
   beta2  <- par[p1 + seq_len(p2)]
@@ -197,7 +203,7 @@ bnb_hessian_fixed_bounds <- function(par, y1, y2, X1, X2, lamLo, lamHi,
 
   m1 <- if (pois1) 0 else exp(log_m1); m2 <- if (pois2) 0 else exp(log_m2)
   r1 <- if (pois1) Inf else 1 / m1;    r2 <- if (pois2) Inf else 1 / m2
-  mu1 <- .bound_mu(X1, beta1); mu2 <- .bound_mu(X2, beta2)
+  mu1 <- .bound_mu(X1, beta1, off1); mu2 <- .bound_mu(X2, beta2, off2)
   c1  <- c_val(mu1, m1); c2 <- c_val(mu2, m2)
 
   # Frozen logistic-bounds map for lambda, with first/second derivatives in z.

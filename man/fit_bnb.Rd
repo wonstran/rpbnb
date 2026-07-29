@@ -16,7 +16,11 @@ fit_bnb(
 )
 }
 \arguments{
-\item{formula_1, formula_2}{Model formulas for the two count outcomes.}
+\item{formula_1, formula_2}{Model formulas for the two count outcomes. An
+equation-specific \code{offset()} term (e.g. \code{y ~ x + offset(log(exposure))}) is
+supported on every dependence path: the offset enters that margin's linear
+predictor additively (mean \verb{exp(x'beta + offset)}) during estimation, and is
+carried through the stored fitted means and both \code{predict()} methods.}
 
 \item{data}{A data frame.}
 
