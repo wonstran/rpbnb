@@ -1,3 +1,35 @@
+# rpbnb 0.2.3
+
+* Equation-specific `offset()` support on every model path (`fit_bnb()` under
+  independence/Famoye/copula dependence, and `fit_rpbnb()` under Famoye/copula):
+  the offset enters that margin's linear predictor additively
+  (`mu = exp(x'beta + offset)`) during estimation and is carried through the
+  stored fitted means, both `predict()` methods, `residuals()`,
+  `bnb_marginal_effects()`/`rpbnb_marginal_effects()`,
+  `bnb_elasticities()`/`rpbnb_elasticities()`, and the `bnb_gof()` null model
+  (which now keeps the training offset so its log-likelihood, and every
+  pseudo-R^2, stays comparable to the offset-aware full model).
+* `.prepare_bnb_data()`: row selection now derives one common valid-row mask
+  from the *evaluated* responses, design matrices, and offsets of both
+  formulas, not from the raw variables. This closes a desynchronization hole
+  where a transformation (e.g. `log(x)` with `x <= 0`) could produce
+  `NA`/`NaN`/`Inf` after the raw variables were already complete, silently
+  dropping different rows per equation. `predict()` now uses stored
+  terms/factor-levels/contrasts (`predict_meta`) so newdata designs stay
+  column-stable and reuse a stateful term's (`poly()`, `scale()`) training
+  basis.
+* `lr_test()` now errors if either fit is a `bnb_fit`/`rpbnb_fit` that recorded
+  a failed optimization, instead of returning a p-value from an unfinished fit.
+* Natural-scale `summary()` reports a Poisson-restricted margin's dispersion
+  (`poisson_1`/`poisson_2`) as exactly `0` (SE `NA`), rather than leaking the
+  internal `log(1e-6)` display placeholder onto the natural scale.
+* Packaging: `.Rbuildignore` now excludes `packages/`, `data.zip`,
+  `vignettes/*.pdf`, and `tests/results/`, which had been inflating the source
+  tarball to ~8.3 MB (mostly copies of previously built package archives);
+  it is now ~0.25 MB. Fixed an `R CMD check` WARNING (broken `predict.rpbnb_fit`
+  Rd cross-reference) and NOTE (undefined global `x` in a residual histogram
+  plot); `R CMD check` is now clean (0 WARNINGs, 0 NOTEs).
+
 # rpbnb 0.2.2
 
 * `fit_rpbnb()`: fixed a crash (`attempt to set an attribute on NULL`) when a
