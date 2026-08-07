@@ -121,7 +121,11 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   g_logm1 <- 0; g_logm2 <- 0; g_z <- 0
 
   dconst <- d_const()
-  r1v <- r1; r2v <- r2
+  # .r_from_m() floors 1/m where digamma() stops being computable (it is NaN for
+  # any r below ~1e-308): an overflowing exp(log_m) sends r to 0, yet the r^2 * S
+  # term below has the finite limit 0.  Binds only for m > 1e300.
+  r1v <- if (pois1) r1 else .r_from_m(m1)
+  r2v <- if (pois2) r2 else .r_from_m(m2)
   log_m1_v <- log(m1); log_m2_v <- log(m2)
   # S1/S2 feed only the log_m gradient; a Poisson margin's log_m is fixed, so
   # skip the digamma(Inf) 0/0 (the accumulation is guarded below).

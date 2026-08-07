@@ -59,7 +59,12 @@ rpbnb_cpp_available <- function() {
 
   # S1/S2 feed only the (guarded) log_m gradient; a Poisson margin's r = Inf would
   # make digamma(Inf) a 0/0, so pass 0 there -- the C++ core skips its log_m term.
-  r1v <- 1 / m1; r2v <- 1 / m2
+  # .r_from_m() floors 1/m where digamma() stops being computable: a line-search
+  # step that overflows exp(log_m) drives r to 0, and digamma() is NaN ("NaNs
+  # produced") for every r below ~1e-308, even though the gradient term it feeds,
+  # r^2 * S, has the finite limit 0.  The floor reproduces that limit and binds
+  # only for m > 1e300, so no finite result changes.
+  r1v <- .r_from_m(m1); r2v <- .r_from_m(m2)
   S1 <- if (pois1) numeric(length(y1)) else digamma(r1v + y1) - digamma(r1v)
   S2 <- if (pois2) numeric(length(y2)) else digamma(r2v + y2) - digamma(r2v)
 

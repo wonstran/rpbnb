@@ -32,3 +32,4 @@
 ^data\.zip$
 ^vignettes/.*\.pdf$
 ^tests/results$
+^\.posit/assistant$

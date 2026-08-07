@@ -187,3 +187,16 @@ signif_stars <- function(p) {
   if (!is.null(offset)) eta <- eta + offset
   pmin(pmax(exp(eta), 1e-300), 1e15)
 }
+
+#' NB size r = 1/m, floored where digamma() stops being computable. A line
+#' search that overflows exp(log_m) drives r = 1/m to 0, and digamma() returns
+#' NaN with a "NaNs produced" warning for every r below ~1e-308 (its -1/r pole
+#' overflows the double range), not just at r == 0. The sole consumer of that
+#' digamma is the log_m gradient term r^2 * S, and r^2 underflows to 0 long
+#' before the floor binds, so the floored value reproduces the r -> 0 limit of 0
+#' exactly. 1e-300 is the same underflow floor .bound_mu() uses; it is a no-op
+#' for any r a real dispersion can produce (it binds only for m > 1e300), so no
+#' finite likelihood or gradient value changes.
+#' @keywords internal
+#' @noRd
+.r_from_m <- function(m) pmax(1 / m, 1e-300)

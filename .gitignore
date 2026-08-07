@@ -29,3 +29,11 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+.posit/assistant
+
+# Generated fit outputs and test plot artifacts
+results/
+tests/testthat/Rplots.pdf
+
+# Local research data -- deliberately not published to this public repo
+inst/extdata/export_open_all.csv
