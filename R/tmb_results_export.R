@@ -32,8 +32,17 @@
   # overwrote the first report, and the loss was invisible because the caller
   # only ever sees the returned path. Disambiguate rather than clobber: append
   # a counter, so both reports survive and the second one announces itself.
+  #
+  # An exhausted search ERRORS rather than falling through. A `break`-less loop
+  # that simply ends leaves output_path at the unsuffixed base name, and the
+  # write below then silently overwrites the very file the loop was trying to
+  # protect -- reintroducing the original defect in the one case the guard
+  # exists for. Refusing to write is the only safe outcome here: there is no
+  # free name, and the caller only ever sees the returned path.
   if (file.exists(output_path)) {
-    for (i in 2:1000L) {
+    limit <- 1000L
+    found <- FALSE
+    for (i in 2:limit) {
       candidate <- file.path(results_dir,
                              sprintf("results_%s-%d.md", file_stamp, i))
       if (!file.exists(candidate)) {
@@ -41,8 +50,15 @@
                 basename(candidate), " instead of overwriting it.",
                 call. = FALSE)
         output_path <- candidate
+        found <- TRUE
         break
       }
+    }
+    if (!found) {
+      stop("Refusing to write: ", basename(output_path), " and every suffix ",
+           "through -", limit, " already exist in '", results_dir, "'. ",
+           "Clear old reports or pass a different `results_dir`.",
+           call. = FALSE)
     }
   }
 

@@ -352,3 +352,65 @@ test_that("laplace gives the same answer single- and multi-threaded", {
   expect_equal(fit1$logLik, fit4$logLik, tolerance = 1e-6)
   expect_equal(unname(coef(fit1)), unname(coef(fit4)), tolerance = 1e-4)
 })
+
+test_that("the Famoye admissible interval is estimator-specific", {
+  skip_on_cran()
+  # A Laplace fit does not evaluate the Halton grid -- the template integrates
+  # per-observation latent u1/u2 instead -- so validating it against a
+  # finite-draw bound checks a different model, and the finite-draw bound is far
+  # too wide. With one normal random coefficient per margin the latent support
+  # gives exactly [-1, 1] (c1 and c2 each span (0,1), and the two quantities
+  # bounded by lambda_bounds_vec() are pointwise maxima of bilinear functions,
+  # so their suprema sit at corners of the c-rectangle). The Halton grid on the
+  # same model admits |lambda| well above 1.
+  sim <- simulate_rpbnb_tmb(
+    n = 200,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.2)),
+    random_2 = list(x1 = list(sd = 0.2)),
+    dispersion = c(m1 = 0.5, m2 = 0.5),
+    dependence = "famoye", lambda = 0.1, seed = 31
+  )
+  common <- list(formula_1 = y1 ~ x1, formula_2 = y2 ~ x1, data = sim$data,
+                 random_1 = "x1", random_2 = "x1", dependence = "famoye",
+                 draws = 50, seed = 5, inference = "none",
+                 control = rpbnb_tmb_control(iterlim = 30L))
+
+  lap <- do.call(fit_rpbnb_tmb, c(common, list(method = "laplace")))
+  sml <- do.call(fit_rpbnb_tmb, c(common, list(method = "sml")))
+
+  expect_equal(unname(lap$lambda_bounds), c(-1, 1))
+  # Parameter-independent when both margins vary, so the frozen-versus-current
+  # gap cannot arise on this path at all.
+  expect_equal(unname(lap$lambda_bounds_at_optimum), c(-1, 1))
+  expect_true(lap$lambda_admissible)
+
+  # The SML path keeps the finite-draw notion, which is the correct one there
+  # and is strictly wider than the latent bound.
+  expect_lt(sml$lambda_bounds[["lower"]], -1)
+  expect_gt(sml$lambda_bounds[["upper"]], 1)
+  expect_true(sml$lambda_admissible)
+})
+
+test_that("a single varying margin gives a parameter-dependent latent bound", {
+  skip_on_cran()
+  skip_slow()
+  # With only equation 1 random, c2 stays at its parameter-dependent point
+  # value, so the bound is 1/max(c2, 1 - c2) > 1 rather than the flat [-1, 1].
+  sim <- simulate_rpbnb_tmb(
+    n = 200,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.2)),
+    dispersion = c(m1 = 0.5, m2 = 0.5),
+    dependence = "famoye", lambda = 0.1, seed = 31
+  )
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                       dependence = "famoye", draws = 50, seed = 5,
+                       method = "laplace", inference = "none",
+                       control = rpbnb_tmb_control(iterlim = 30L))
+  expect_gt(fit$lambda_bounds[["upper"]], 1)
+  expect_lt(fit$lambda_bounds[["lower"]], -1)
+  expect_true(all(is.finite(fit$lambda_bounds)))
+})

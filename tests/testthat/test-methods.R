@@ -144,3 +144,43 @@ test_that("rpbnb_fit methods work, incl. NA vcov under compute_se=FALSE", {
   p <- predict(fit)
   expect_equal(nrow(p), fit$nobs)
 })
+
+test_that("TMB summary labels random-coefficient scales by distribution", {
+  skip_on_cran()
+  # Only `sd` is a standard deviation. `w` is a uniform/triangular half-width
+  # and `s` is a lognormal log-scale, so heading the block "Random-coefficient
+  # SDs" and rewriting every row to `sd1:` reported a quantity the model does
+  # not estimate. The label is derived from the parameter name (itself built
+  # from rand_dist_registry's scale_label), so it tracks the distribution.
+  sim <- simulate_rpbnb_tmb(
+    n = 200,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(dist = "uniform", scale = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.5), dependence = "famoye", seed = 7
+  )
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                       random_1 = list(x1 = list(dist = "uniform")),
+                       dependence = "famoye", draws = 30, seed = 2,
+                       control = rpbnb_tmb_control(iterlim = 20L))
+  out <- capture.output(summary(fit))
+
+  expect_true(any(grepl("Random-coefficient scales", out, fixed = TRUE)))
+  expect_false(any(grepl("Random-coefficient SDs", out, fixed = TRUE)))
+  # The uniform coefficient keeps its own label rather than being renamed sd1:.
+  expect_true(any(grepl("^w1:x1", out)))
+  expect_false(any(grepl("^sd1:x1", out)))
+  # And the note says what each label means.
+  expect_true(any(grepl("half-width", out, fixed = TRUE)))
+
+  # No invalid Wald test on a boundary null -- scoped to the SCALE block, not to
+  # the whole printout. The equation-1 and equation-2 coefficient tables do
+  # legitimately carry Signif columns; asserting over all of `out` would test
+  # the wrong thing and fail for the right reason.
+  start <- grep("Random-coefficient scales", out, fixed = TRUE)[1]
+  ends <- grep("^--- ", out)
+  stop_at <- ends[ends > start]
+  block <- out[start:(if (length(stop_at)) stop_at[1] - 1L else length(out))]
+  expect_false(any(grepl("Signif", block, fixed = TRUE)))
+  expect_false(any(grepl("Pr(>|z|)", block, fixed = TRUE)))
+})

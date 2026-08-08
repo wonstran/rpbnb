@@ -3,6 +3,44 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 response review)
+
+See `comments/response_2026-08-08-07-36-52.md`.
+
+* **The Famoye admissible interval is now estimator-specific** (model-validity
+  fix). The interval was always derived from the finite Halton grid, which is
+  the right notion for `method = "sml"` — whose likelihood really is an average
+  over those draws — and the wrong one for `method = "laplace"`, which never
+  evaluates that grid and instead integrates per-observation latent `u1`/`u2`.
+  The grid bound is far too wide there: with one normal random coefficient per
+  margin, `sd = 0.2`, `m = 0.5`, 400 draws give `[-2.142, 2.753]` while the
+  latent support admits only `[-1, 1]`.
+
+  A new latent-support bound is computed exactly rather than sampled: both
+  quantities bounded by `lambda_bounds_vec()` are pointwise maxima of bilinear
+  functions of `(c1, c2)`, so their suprema over the attainable rectangle sit at
+  its corners. It is used for **both** the frozen bounds handed to the template
+  and the post-fit re-check, so a Laplace Famoye fit is judged against the
+  constraint it was optimized under — previously the objective itself was
+  constrained by the too-wide grid bound.
+
+  Consequence: when both margins carry a varying random coefficient the Laplace
+  bound is `[-1, 1]` and parameter-independent, so the frozen-versus-current gap
+  does not arise on that path at all. It remains for a single varying margin,
+  where the other margin's `c` depends on the parameters, and for all SML fits.
+  **Laplace Famoye estimates will differ from 0.4.0** on models where the
+  previous bound was wider: `z_dep` maps through `[lamLo, lamHi]`.
+* **Random-coefficient scales are no longer all labelled as SDs**: only `sd` is
+  a standard deviation — `w` is a uniform/triangular half-width and `s` is a
+  lognormal log-scale — so `summary.rpbnb_tmb_fit()` now heads the block
+  "Random-coefficient scales" and keeps each row's own label (derived from the
+  parameter name, itself built from `rand_dist_registry`'s `scale_label`), with
+  a note stating what each means.
+* `.write_truck_results_markdown()` **errors instead of overwriting** when the
+  base timestamp and every suffix through `-1000` are taken. The bounded search
+  previously fell through with the path still at the unsuffixed base name, so
+  the write replaced the very file the guard exists to protect.
+
 ## Review fixes (2026-08-07 project review)
 
 See `comments/response_2026-08-07-23-25-15.md` for the full response.

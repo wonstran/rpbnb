@@ -121,9 +121,17 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   # Both scales are shown side by side and labelled, rather than pairing a
   # natural-scale estimate with a log-scale SE in unlabelled columns. The
   # natural-scale SE is the delta-method transform, scale * SE(log_scale).
-  scale_block <- function(idx, eq, prefix_pat, label) {
+  #
+  # The heading says "scales", not "SDs", and each row keeps its
+  # distribution-specific name. Only `sd` IS a standard deviation: `w` is the
+  # half-width of a uniform or triangular coefficient and `s` is the log-scale
+  # of a lognormal one, so calling exp() of either an "SD" reports a quantity
+  # the model does not estimate. The label comes from stripping `log_` off the
+  # parameter name, which is itself built from rand_dist_registry's
+  # `scale_label`, so a new distribution's label follows automatically.
+  scale_block <- function(idx, eq) {
     if (!length(idx)) return(invisible(NULL))
-    cat("--- Random-coefficient SDs (equation ", eq, ") ---\n", sep = "")
+    cat("--- Random-coefficient scales (equation ", eq, ") ---\n", sep = "")
     log_est <- object$coef[idx]
     log_se  <- object$se[idx]
     nat_est <- exp(log_est)
@@ -132,18 +140,19 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
       `Std. Error (log)` = log_se,
       Estimate           = nat_est,
       `Std. Error`       = nat_est * log_se,   # delta method
-      row.names = gsub(prefix_pat, label, nm[idx]),
+      row.names = sub("^log_", "", nm[idx]),
       check.names = FALSE
     )
     .print_tbl(tbl, digits)
-    cat("Note: no Wald z/p for positive scale parameters; their null (scale = 0)\n",
-        "      is a boundary. Use lr_test() to test these.\n", sep = "")
+    cat("Note: sd = standard deviation, w = half-width (uniform/triangular),\n",
+        "      s = lognormal log-scale. These are the distributions' own scale\n",
+        "      parameters, not all standard deviations.\n",
+        "      No Wald z/p: the null (scale = 0) is a boundary. Use lr_test().\n",
+        sep = "")
     cat("\n")
   }
-  scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L,
-              "^log_sd1:|^log_s1:|^log_w1:", "sd1:")
-  scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L,
-              "^log_sd2:|^log_s2:|^log_w2:", "sd2:")
+  scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L)
+  scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L)
 
   # ---- Dispersion parameters (natural scale from fit object) ----
   cat("--- Dispersion (m1, m2) ---\n")

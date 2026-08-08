@@ -382,10 +382,72 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     c(lower = lo, upper = hi)
   }
 
+  # Famoye admissible lambda interval over the LAPLACE latent support.
+  #
+  # .lambda_bounds_at() above is the right notion for method = "sml", whose
+  # likelihood really is an average over those finitely many Halton draws: the
+  # joint pmf only has to be non-negative at each of them. It is the WRONG
+  # notion for method = "laplace", which never evaluates that grid -- the
+  # template integrates per-observation latent u1/u2 instead. Applying the
+  # Halton bound there validates a different model and yields an interval far
+  # too wide: with one normal random coefficient per margin, sd = 0.2, m = 0.5,
+  # the grid gives [-2.142, 2.753] at 400 draws while the latent support admits
+  # only [-1, 1], so lambda = 2 passes a check it should fail.
+  #
+  # Derivation. Under Laplace the latent is unbounded, so for any margin
+  # carrying a random coefficient with a non-zero loading and a positive scale,
+  # eta spans the reals, mu = exp(eta) spans (0, Inf), and
+  # c = (1 + d*m*mu)^(-1/m) spans (0, 1). Both quantities bounded by
+  # lambda_bounds_vec() are pointwise maxima of bilinear functions of (c1, c2),
+  # and a bilinear function on a box attains its extremum at a vertex, so the
+  # supremum over the closure is attained among the corners of the attainable
+  # c-rectangle. Evaluating those corners is therefore exact, not a sample.
+  #
+  # A margin with no varying random coefficient keeps its parameter-dependent
+  # point value. Treating a varying margin as spanning the full (0, 1) is exact
+  # for normal random coefficients and conservative for lognormal (whose
+  # deviation is unbounded on one side only) -- conservative in the safe
+  # direction, since a wider c-range yields a NARROWER lambda interval.
+  .lambda_bounds_latent <- function(par) {
+    i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
+    s1 <- if (q1 > 0) exp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
+    s2 <- if (q2 > 0) exp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)]) else numeric(0)
+    idx_end <- k1 + k2 + q1 + q2
+    m1_v <- if (poisson_1) 0 else exp(par[idx_end + 1])
+    m2_v <- if (poisson_2) 0 else exp(par[idx_end + 2])
+    mu1 <- pmin(pmax(exp(as.vector(X1 %*% par[i1])), 1e-300), 1e15)
+    mu2 <- pmin(pmax(exp(as.vector(X2 %*% par[i2])), 1e-300), 1e15)
+    c1_fix <- c_val(mu1, m1_v); c2_fix <- c_val(mu2, m2_v)
+
+    varies <- function(X, idx, s) {
+      if (!length(idx) || !length(s)) return(rep(FALSE, nrow(X)))
+      as.vector(abs(X[, idx, drop = FALSE]) %*% as.numeric(s > 0)) > 0
+    }
+    v1 <- varies(X1, rand_idx1, s1)
+    v2 <- varies(X2, rand_idx2, s2)
+
+    c1lo <- ifelse(v1, 0, c1_fix); c1hi <- ifelse(v1, 1, c1_fix)
+    c2lo <- ifelse(v2, 0, c2_fix); c2hi <- ifelse(v2, 1, c2_fix)
+    # All corners of the attainable rectangle, per observation, at once.
+    b <- lambda_bounds_vec(c(c1lo, c1lo, c1hi, c1hi),
+                           c(c2lo, c2hi, c2lo, c2hi))
+    c(lower = b[1], upper = b[2])
+  }
+
+  # The bound notion is chosen by estimator, and the SAME one is used for the
+  # frozen bounds handed to the template and for the post-fit re-check, so the
+  # constraint the objective was optimized under is the constraint it is judged
+  # against.
+  .lambda_bounds_for_method <- if (identical(method, "laplace")) {
+    .lambda_bounds_latent
+  } else {
+    .lambda_bounds_at
+  }
+
   # Famoye: compute frozen lambda bounds at start
   lamLo <- 0; lamHi <- 0
   if (family_code == 0L) {
-    b0 <- .lambda_bounds_at(start)
+    b0 <- .lambda_bounds_for_method(start)
     lamLo <- b0[["lower"]]; lamHi <- b0[["upper"]]
     if (!(lamLo < lamHi)) {
       stop("Invalid lambda bounds at starting values.")
@@ -568,10 +630,18 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # The optimized objective cannot be repaired after the fact, so this does not
   # claim to fix the estimate; it refuses to let an inadmissible fit be returned
   # silently. See NEWS 0.4.0 "Review fixes (2026-08-07)" for the full-fix plan.
+  #
+  # The re-check uses the estimator's own bound notion (see
+  # .lambda_bounds_for_method above). Under Laplace the latent bound is
+  # parameter-independent whenever both margins carry a varying random
+  # coefficient -- it is [-1, 1] -- so on that path this check is exact and the
+  # frozen-versus-current gap does not arise at all. It reappears when only one
+  # margin varies, because the other margin's c is then a function of the
+  # parameters.
   lambda_admissible <- NA
   lambda_bounds_at_opt <- NULL
   if (family_code == 0L) {
-    lambda_bounds_at_opt <- tryCatch(.lambda_bounds_at(coef_vec),
+    lambda_bounds_at_opt <- tryCatch(.lambda_bounds_for_method(coef_vec),
                                      error = function(e) NULL)
     lam_hat <- suppressWarnings(as.numeric(inference_result$report["lam"]))
     if (!is.null(lambda_bounds_at_opt) && length(lam_hat) == 1L &&

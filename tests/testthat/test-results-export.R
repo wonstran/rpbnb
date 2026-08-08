@@ -128,3 +128,55 @@ test_that("dependence labels stay readable for every structure", {
   expect_identical(label("famoye"), "Famoye/Sarmanov")
   expect_identical(label("independence"), "independence")
 })
+
+test_that("an exhausted suffix search refuses to write rather than overwrite", {
+  # The collision guard appends -2, -3, ... to a second-precision stamp. If the
+  # bounded search ran out, an earlier version fell through with output_path
+  # still at the unsuffixed base name and writeLines() then overwrote the very
+  # file the guard exists to protect -- silently, since the caller only sees the
+  # returned path. Refusing is the only safe outcome: there is no free name.
+  dir <- file.path(tempdir(), "results-exhausted")
+  unlink(dir, recursive = TRUE)
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+
+  ts <- as.POSIXct("2026-01-01 00:00:00", tz = "")
+  stamp <- format(ts, "%Y-%m-%d-%H%M%S")
+  base <- file.path(dir, sprintf("results_%s.md", stamp))
+  writeLines("SENTINEL", base)
+  for (i in 2:1000L) {
+    writeLines("x", file.path(dir, sprintf("results_%s-%d.md", stamp, i)))
+  }
+
+  # The content arguments are supplied even though the call cannot reach the
+  # write: without them this would error on a missing argument instead, and
+  # expect_error() would pass for the wrong reason.
+  expect_error(
+    rpbnb:::.write_truck_results_markdown(
+      model_summary = "Summary", marginal_effects = "x 1", elasticities = "x 2",
+      results_dir = dir, timestamp = ts),
+    "Refusing to write"
+  )
+  # The guard must not have consumed the file it was protecting.
+  expect_identical(readLines(base)[1], "SENTINEL")
+})
+
+test_that("a same-second collision is suffixed, not overwritten", {
+  dir <- file.path(tempdir(), "results-collide-one")
+  unlink(dir, recursive = TRUE)
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+
+  ts <- as.POSIXct("2026-01-01 00:00:00", tz = "")
+  stamp <- format(ts, "%Y-%m-%d-%H%M%S")
+  base <- file.path(dir, sprintf("results_%s.md", stamp))
+  writeLines("SENTINEL", base)
+
+  expect_warning(
+    out <- rpbnb:::.write_truck_results_markdown(
+      model_summary = "Summary", marginal_effects = "x 1", elasticities = "x 2",
+      results_dir = dir, timestamp = ts),
+    "already exists"
+  )
+  expect_identical(basename(out), sprintf("results_%s-2.md", stamp))
+  expect_true(file.exists(out))
+  expect_identical(readLines(base)[1], "SENTINEL")
+})
