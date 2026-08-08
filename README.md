@@ -145,19 +145,24 @@ disables the guard.
 
 ### Known issue: multithreaded Gaussian copula
 
-Building a Gaussian-copula TMB object with more than one thread and evaluating
-it segfaults. Frank is unaffected at any thread count, and Gaussian is fine at
-`n_cores = 1`. This predates the merge — it reproduces identically in
-`rpbnb.tmb` 0.3.5 — and is not fixed here. Use `n_cores = 1L` for Gaussian
-copula fits until it is resolved; see the comment in
-`tests/testthat/test-parallel.R`.
+Evaluating a Gaussian-copula TMB object built with more than one thread
+segfaults the R process. Frank and Clayton are unaffected at any thread count,
+and Gaussian is fine serially. This predates the 0.4.0 merge — it reproduces
+identically in `rpbnb.tmb` 0.3.5 — and the underlying defect, in the registered
+Gaussian atomic under OpenMP, is not yet fixed.
+
+**`fit_rpbnb_tmb()` enforces `n_cores = 1L` for the Gaussian family**, with a
+warning, so the crash is not reachable from a public call; `parallel_tape` is
+forced off for the same reason. Gaussian fits are therefore slower than the
+other families until this is repaired. `fit$parallel` records both the
+`requested` and `realized` thread counts.
 
 See `vignette("rpbnb-intro")` for a worked example.
 
 ## Scope
 
 This project ports the mature Famoye BNB MLE and random-parameter BNB SIML
-implementations into an installable, tested package (see `docs/scope_rpnbn.md`).
+implementations into an installable, tested package.
 Implemented: Famoye/Sarmanov and discrete-copula (Frank / Gaussian / Clayton)
 dependence for both the fixed and random-parameter models, additional
 random-coefficient distributions (normal, lognormal, uniform, triangular), and a

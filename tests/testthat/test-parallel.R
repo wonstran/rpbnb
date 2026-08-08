@@ -560,6 +560,48 @@ test_that("serial and parallel copula objectives and gradients agree", {
   skip("multithreaded Gaussian copula segfaults (pre-existing; see comment)")
 })
 
+test_that("Gaussian copula fits are capped at one thread", {
+  skip_on_cran()
+  # Regression guard for the SIGSEGV documented above. Asserting the CAP rather
+  # than the crash is the point: this must run in-process safely, so it checks
+  # that the fitter refuses to realize >1 thread for family_code 2 instead of
+  # attempting the call that would terminate the process.
+  d <- parallel_fit_data()
+
+  expect_warning(
+    fit <- fit_rpbnb_tmb(
+      y1 ~ x, y2 ~ x, data = d,
+      dependence = copula("normal"),
+      draws = 5L, inference = "none",
+      control = rpbnb_tmb_control(iterlim = 2L, n_cores = 4L,
+                                  max_threads = 4L, max_workload = Inf)
+    ),
+    "restricted to one thread"
+  )
+  # The user's request is preserved for transparency; only the realization caps.
+  expect_identical(fit$parallel$realized, 1L)
+  expect_identical(fit$parallel$requested, 4L)
+})
+
+test_that("non-Gaussian copulas are not capped", {
+  skip_on_cran()
+  skip_slow()
+  supported <- as.integer(TMB::openmp(max = TRUE, DLL = "rpbnb")[[1L]])
+  if (supported < 2L) skip("TMB runtime supports only one thread")
+  previous <- TMB::openmp(DLL = "rpbnb")
+  on.exit(TMB::openmp(n = previous, DLL = "rpbnb"), add = TRUE)
+
+  d <- parallel_fit_data()
+  # Frank is unaffected by the Gaussian defect; the cap must not leak to it.
+  fit <- expect_no_warning(fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d, dependence = copula("frank"),
+    draws = 5L, inference = "none",
+    control = rpbnb_tmb_control(iterlim = 2L, n_cores = 2L,
+                                max_threads = 2L, max_workload = Inf)
+  ))
+  expect_identical(fit$parallel$realized, 2L)
+})
+
 test_that("Frank and NB kernels stay finite at extreme working parameters", {
   frank <- copula_parallel_fixture(1L)
   frank_obj <- .make_rpbnb_tmb_object(

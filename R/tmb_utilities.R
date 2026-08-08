@@ -436,7 +436,29 @@ rpbnb_tmb_control <- function(iterlim = 500L,
     stop("restarts must be one whole number greater than or equal to 0.",
          call. = FALSE)
   }
-  structure(list(iterlim = as.integer(iterlim), reltol = reltol,
+  # iterlim / reltol / print_level / halton_burn were previously coerced without
+  # validation, so reltol = -1, print_level = NA, iterlim = "many" and
+  # halton_burn = -1 were all accepted. The last one silently broke the draw
+  # contract: .tmb_halton_uniform() indexes (burn + 1):(burn + n_draws), so a
+  # negative burn returned FEWER rows than requested (10 draws -> 9 rows) and
+  # the likelihood was then averaged over a grid of the wrong size. Validate
+  # before coercion, since as.integer() is what turns a bad value into a silent
+  # NA in the first place.
+  .whole_scalar <- function(x, nm, min) {
+    if (length(x) != 1L || !is.numeric(x) || is.na(x) || !is.finite(x) ||
+        x < min || x != floor(x) || x > .Machine$integer.max) {
+      stop(nm, " must be one whole number greater than or equal to ", min, ".",
+           call. = FALSE)
+    }
+  }
+  .whole_scalar(iterlim, "iterlim", 1)
+  .whole_scalar(print_level, "print_level", 0)
+  .whole_scalar(halton_burn, "halton_burn", 0)
+  if (length(reltol) != 1L || !is.numeric(reltol) || is.na(reltol) ||
+      !is.finite(reltol) || reltol <= 0) {
+    stop("reltol must be one positive finite number.", call. = FALSE)
+  }
+  structure(list(iterlim = as.integer(iterlim), reltol = as.numeric(reltol),
                   gradtol = as.numeric(gradtol),
                   restarts = as.integer(restarts),
                   print_level = as.integer(print_level),

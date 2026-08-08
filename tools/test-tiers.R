@@ -30,11 +30,19 @@ suppressMessages({
 })
 
 run_files <- function(files) {
-  tot <- c(pass = 0L, fail = 0L, warn = 0L, skip = 0L)
+  # `error` is counted separately from `failed`. as.data.frame() on a testthat
+  # result puts expectation FAILURES in numeric `failed` and test-level ERRORS
+  # in logical `error`. Summing only `failed` made the "CI-friendly" exit-status
+  # contract false: a test that errored out (a missing fixture, an unavailable
+  # dependency, a segfault-adjacent abort) was omitted from the totals AND left
+  # the exit status at zero. testthat's own all_passed() requires
+  # sum(failed) == 0 && !any(error); this mirrors that.
+  tot <- c(pass = 0L, fail = 0L, err = 0L, warn = 0L, skip = 0L)
   for (f in files) {
     r  <- testthat::test_file(file.path("tests/testthat", f), reporter = "silent")
     df <- as.data.frame(r)
-    tot <- tot + c(sum(df$passed), sum(df$failed), sum(df$warning), sum(df$skipped))
+    tot <- tot + c(sum(df$passed), sum(df$failed), sum(df$error),
+                   sum(df$warning), sum(df$skipped))
   }
   tot
 }
@@ -46,27 +54,30 @@ all_files  <- list.files("tests/testthat", pattern = "^test-.*\\.R$")
 tmb_slow_files <- c("test-dependence-profile.R", "test-inference-memory.R")
 fast_files <- setdiff(all_files, c("test-rpbnb-copula.R", tmb_slow_files))
 report <- function(label, t) {
-  cat(sprintf("[%-13s] pass=%d fail=%d warn=%d skip=%d\n",
-              label, t[["pass"]], t[["fail"]], t[["warn"]], t[["skip"]]))
+  cat(sprintf("[%-13s] pass=%d fail=%d err=%d warn=%d skip=%d\n",
+              label, t[["pass"]], t[["fail"]], t[["err"]],
+              t[["warn"]], t[["skip"]]))
   t
 }
+# Both conditions are fatal; see run_files().
+bad <- function(t) t[["fail"]] + t[["err"]]
 
 failures <- 0L
 if (tier %in% c("fast", "all")) {
   Sys.unsetenv("RPBNB_RUN_SLOW")                    # ensure slow gates skip
-  t <- report("fast", run_files(fast_files));        failures <- failures + t[["fail"]]
+  t <- report("fast", run_files(fast_files));        failures <- failures + bad(t)
 }
 if (tier %in% c("slow-predict", "all")) {
   Sys.setenv(RPBNB_RUN_SLOW = "1")
-  t <- report("slow-predict", run_files("test-predict-dist.R")); failures <- failures + t[["fail"]]
+  t <- report("slow-predict", run_files("test-predict-dist.R")); failures <- failures + bad(t)
   Sys.unsetenv("RPBNB_RUN_SLOW")
 }
 if (tier %in% c("slow-copula", "all")) {
-  t <- report("slow-copula", run_files("test-rpbnb-copula.R"));  failures <- failures + t[["fail"]]
+  t <- report("slow-copula", run_files("test-rpbnb-copula.R"));  failures <- failures + bad(t)
 }
 if (tier %in% c("slow-tmb", "all")) {
   Sys.setenv(RPBNB_RUN_SLOW = "1")
-  t <- report("slow-tmb", run_files(tmb_slow_files));            failures <- failures + t[["fail"]]
+  t <- report("slow-tmb", run_files(tmb_slow_files));            failures <- failures + bad(t)
   Sys.unsetenv("RPBNB_RUN_SLOW")
 }
 

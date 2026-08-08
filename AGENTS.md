@@ -98,7 +98,9 @@ Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `rpbnb_control()`, `copula()`,
 
 ## References
 
-- `docs/superpowers/specs/` — design specs for implemented features
+- `dev-docs/superpowers/specs/` — design specs for implemented features (the
+  TMB-engine specs moved here from `docs/` in the 0.4.0 merge; `docs/` is
+  pkgdown output that `build_site()` cleans)
 - `docs/llms.txt` — machine-readable package index (subset of README)
 - `inst/legacy/` — original reference scripts (preserved for comparison, not used by the package)
 - `NEWS.md` — changelog

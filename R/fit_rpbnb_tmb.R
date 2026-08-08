@@ -135,6 +135,16 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   inference <- match.arg(inference)
   keep <- match.arg(keep)
   method <- match.arg(method)
+  # rpbnb() type-checks this before dispatching, but a direct call bypasses the
+  # wrapper. Without the check, an rpbnb_control() object reaches here and its
+  # missing fields read as NULL: control$gradtol NULL makes the restart loop's
+  # comparison logical(0), control$n_cores NULL breaks thread configuration.
+  if (!inherits(control, "rpbnb_tmb_control")) {
+    stop("`control` must be an `rpbnb_tmb_control` object from ",
+         "rpbnb_tmb_control(); got `", class(control)[1L], "`. The Rcpp ",
+         "engine's rpbnb_control() is not interchangeable with it.",
+         call. = FALSE)
+  }
   .chk_poisson_flag(poisson_1, "poisson_1")
   .chk_poisson_flag(poisson_2, "poisson_2")
   if (length(draws) != 1L || !is.numeric(draws) || is.na(draws) ||
@@ -250,10 +260,41 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   } else {
     1L
   }
+  # Gaussian copula is capped at one thread, unconditionally.
+  #
+  # Evaluating a Gaussian-copula (family_code 2) TMB object built with more than
+  # one thread terminates the R process with a SIGSEGV on the first objective
+  # call. The trigger is REGISTER_ATOMIC(gauss_cell_vec) under OpenMP; the
+  # `#pragma omp critical(gauss_cell_vec_init)` force-init in src/rpbnb_tmb.cpp
+  # does not make it safe. Frank and Clayton are unaffected at any thread count.
+  #
+  # This is a hard cap rather than a documentation note because the failure mode
+  # is memory corruption and process termination: a user who passes a perfectly
+  # ordinary-looking `n_cores = 2L` loses their session and any unsaved work. A
+  # slow correct fit is strictly better than that. Remove the cap only once the
+  # atomic is genuinely re-entrant and the parallel Gaussian assertions in
+  # tests/testthat/test-parallel.R are restored.
+  gaussian_serial <- (family_code == 2L)
+  requested_cores <- control$n_cores
+  effective_cores <- requested_cores
+  effective_max_threads <- control$max_threads
+  effective_parallel_tape <- control$parallel_tape
+  if (gaussian_serial) {
+    if (requested_cores > 1L || isTRUE(control$parallel_tape)) {
+      warning("Gaussian copula fits are restricted to one thread: ",
+              "multithreaded evaluation of this family crashes the R process ",
+              "(a known defect in the registered Gaussian atomic). Continuing ",
+              "with n_cores = 1 and parallel_tape = FALSE; requested n_cores = ",
+              requested_cores, ".", call. = FALSE)
+    }
+    effective_cores <- 1L
+    effective_max_threads <- 1L
+    effective_parallel_tape <- FALSE
+  }
   configured_threads <- .configure_tmb_threads(
-    control$n_cores,
-    max_threads = control$max_threads,
-    parallel_tape = control$parallel_tape
+    effective_cores,
+    max_threads = effective_max_threads,
+    parallel_tape = effective_parallel_tape
   )
   .check_tmb_workload(
     n = n,
@@ -261,7 +302,7 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     family_code = family_code,
     max_workload = control$max_workload,
     n_threads = configured_threads,
-    parallel_tape = control$parallel_tape
+    parallel_tape = effective_parallel_tape
   )
 
   # Generate Halton draws
@@ -308,29 +349,44 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   free <- !(par_names %in% fixed_names)
   npar <- sum(free)
 
-  # Famoye: compute frozen lambda bounds at start
-  lamLo <- 0; lamHi <- 0
-  if (family_code == 0L) {
-    # Extract beta/sd/dispersion from start
+  # Famoye admissible lambda interval at an arbitrary parameter vector.
+  #
+  # Factored out so it can be evaluated twice: once at the starting values (to
+  # produce the frozen lamLo/lamHi the template receives as DATA_SCALARs) and
+  # again at the optimum, to check whether the fitted lambda is still admissible
+  # for the parameters actually reached. The template cannot do this itself --
+  # the bounds enter it as data, not as functions of the parameters -- so a fit
+  # can drift into a region where the frozen box is wider than the true one and
+  # the joint pmf goes negative in the count tails, while the objective stays
+  # finite at the observed cells. See the post-fit check below.
+  .lambda_bounds_at <- function(par) {
     i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
-    s1 <- if (q1 > 0) exp(start[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
-    s2 <- if (q2 > 0) exp(start[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)]) else numeric(0)
+    s1 <- if (q1 > 0) exp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
+    s2 <- if (q2 > 0) exp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)]) else numeric(0)
     idx_end <- k1 + k2 + q1 + q2
-    m1_start <- if (poisson_1) 0 else exp(start[idx_end + 1])
-    m2_start <- if (poisson_2) 0 else exp(start[idx_end + 2])
-    xb1 <- as.vector(X1 %*% start[i1]); xb2 <- as.vector(X2 %*% start[i2])
+    m1_v <- if (poisson_1) 0 else exp(par[idx_end + 1])
+    m2_v <- if (poisson_2) 0 else exp(par[idx_end + 2])
+    xb1 <- as.vector(X1 %*% par[i1]); xb2 <- as.vector(X2 %*% par[i2])
     Rloc <- if (total_rand > 0) draws else 1L
-    lamLo <- -Inf; lamHi <- Inf
+    lo <- -Inf; hi <- Inf
     for (r in seq_len(Rloc)) {
-      dev1 <- if (q1 > 0) rand_realize(matrix(Z1[r, ], 1, q1), spec1$dist, sign1, start[i1][rand_idx1], s1)$dev[1, ] else numeric(0)
-      dev2 <- if (q2 > 0) rand_realize(matrix(Z2[r, ], 1, q2), spec2$dist, sign2, start[i2][rand_idx2], s2)$dev[1, ] else numeric(0)
+      dev1 <- if (q1 > 0) rand_realize(matrix(Z1[r, ], 1, q1), spec1$dist, sign1, par[i1][rand_idx1], s1)$dev[1, ] else numeric(0)
+      dev2 <- if (q2 > 0) rand_realize(matrix(Z2[r, ], 1, q2), spec2$dist, sign2, par[i2][rand_idx2], s2)$dev[1, ] else numeric(0)
       eta1 <- if (q1 > 0) xb1 + as.vector(X1[, rand_idx1, drop = FALSE] %*% dev1) else xb1
       eta2 <- if (q2 > 0) xb2 + as.vector(X2[, rand_idx2, drop = FALSE] %*% dev2) else xb2
       mu1_r <- pmin(pmax(exp(eta1), 1e-300), 1e15)
       mu2_r <- pmin(pmax(exp(eta2), 1e-300), 1e15)
-      b <- lambda_bounds_vec(c_val(mu1_r, m1_start), c_val(mu2_r, m2_start))
-      lamLo <- max(lamLo, b[1]); lamHi <- min(lamHi, b[2])
+      b <- lambda_bounds_vec(c_val(mu1_r, m1_v), c_val(mu2_r, m2_v))
+      lo <- max(lo, b[1]); hi <- min(hi, b[2])
     }
+    c(lower = lo, upper = hi)
+  }
+
+  # Famoye: compute frozen lambda bounds at start
+  lamLo <- 0; lamHi <- 0
+  if (family_code == 0L) {
+    b0 <- .lambda_bounds_at(start)
+    lamLo <- b0[["lower"]]; lamHi <- b0[["upper"]]
     if (!(lamLo < lamHi)) {
       stop("Invalid lambda bounds at starting values.")
     }
@@ -391,7 +447,7 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     silent = control$print_level == 0L,
     n_cores = configured_threads,
     max_threads = configured_threads,
-    parallel_tape = control$parallel_tape
+    parallel_tape = effective_parallel_tape
   )
   obj <- configured$obj
 
@@ -501,6 +557,43 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   )
   m1_hat <- as.numeric(inference_result$report["m1"])
   m2_hat <- as.numeric(inference_result$report["m2"])
+
+  # Famoye admissibility at the OPTIMUM, not just at the starting values.
+  #
+  # lamLo/lamHi entered the template as data computed from `start`. If the fit
+  # moved the means or dispersions enough, the interval admissible at the
+  # optimum can be strictly narrower than that frozen box, and a lambda inside
+  # the box can put the joint pmf negative in the count tails -- while the
+  # objective stays finite because the observed cells never probe those tails.
+  # The optimized objective cannot be repaired after the fact, so this does not
+  # claim to fix the estimate; it refuses to let an inadmissible fit be returned
+  # silently. See NEWS 0.4.0 "Review fixes (2026-08-07)" for the full-fix plan.
+  lambda_admissible <- NA
+  lambda_bounds_at_opt <- NULL
+  if (family_code == 0L) {
+    lambda_bounds_at_opt <- tryCatch(.lambda_bounds_at(coef_vec),
+                                     error = function(e) NULL)
+    lam_hat <- suppressWarnings(as.numeric(inference_result$report["lam"]))
+    if (!is.null(lambda_bounds_at_opt) && length(lam_hat) == 1L &&
+        is.finite(lam_hat)) {
+      lo <- lambda_bounds_at_opt[["lower"]]; hi <- lambda_bounds_at_opt[["upper"]]
+      lambda_admissible <- isTRUE(lo <= lam_hat && lam_hat <= hi)
+      if (!lambda_admissible) {
+        warning(
+          "The fitted Famoye lambda (", signif(lam_hat, 6), ") lies outside ",
+          "the admissible interval recomputed at the fitted parameters [",
+          signif(lo, 6), ", ", signif(hi, 6), "]. The bounds passed to the ",
+          "likelihood were frozen at the starting values ([", signif(lamLo, 6),
+          ", ", signif(lamHi, 6), "]), so the optimizer was free to leave the ",
+          "valid region: the joint pmf is negative somewhere in the count ",
+          "tails and this fit should not be interpreted. Refit from starting ",
+          "values closer to the optimum (so the frozen box is tighter), or ",
+          "use a different dependence structure. See fit$lambda_admissible ",
+          "and fit$lambda_bounds_at_optimum.", call. = FALSE
+        )
+      }
+    }
+  }
   .warn_boundary_report(
     inference_result$boundary_report, family_code,
     sides = inference_result$boundary_sides
@@ -582,6 +675,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     # Famoye lambda estimate can be pinned by a bound the data never implied.
     # Retained so that artefact is inspectable rather than invisible.
     lambda_bounds = if (family_code == 0L) c(lower = lamLo, upper = lamHi),
+    lambda_bounds_at_optimum = lambda_bounds_at_opt,
+    lambda_admissible = lambda_admissible,
     keep = keep,
     parallel = list(requested = control$n_cores,
                     realized = configured$n_cores),

@@ -100,37 +100,50 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
     cat("\n")
   }
 
-  # ---- Random-coefficient scales (displayed as sd1/sd2) ----
-  s1 <- grep("^(log_sd1|log_s1|log_w1):", nm)
-  if (length(s1)) {
-    cat("--- Random-coefficient SDs (equation 1) ---\n")
-    p_s1 <- 2 * pnorm(-abs(object$coef[s1] / object$se[s1]))
-    tbl_s1 <- data.frame(Estimate_log = object$coef[s1],
-                         Estimate = exp(object$coef[s1]),
-                         `Std. Error` = object$se[s1],
-                         `Pr(>|z|)` = p_s1,
-                         Signif = .signif_stars(p_s1),
-                         row.names = gsub("^log_sd1:|^log_s1:|^log_w1:", "sd1:", nm[s1]),
-                         check.names = FALSE)
-    .print_tbl(tbl_s1, digits)
+  # ---- Random-coefficient scales ----
+  #
+  # No p-values and no significance stars on these rows, deliberately.
+  #
+  # The natural-scale quantity is a positive scale, and the interesting null is
+  # "this random coefficient has no variance", i.e. scale = 0. On the working
+  # (log) scale that null sits at -Inf, which is not a point an ordinary
+  # two-sided Wald test can address. A test of `log_scale / SE(log_scale)` is a
+  # test of log_scale = 0, i.e. natural scale = 1 -- an arbitrary value with no
+  # modelling meaning, which is nonetheless what a starred row under a heading
+  # reading "Random-coefficient SDs" will be read as.
+  #
+  # This is the same conclusion already reached for the Rcpp engine (NEWS,
+  # "Review fixes (2026-07-15 model review)"; see .print_natural_scale_footnote()
+  # in R/methods.R) and it is deliberately mirrored here so the two engines do
+  # not disagree about what they will assert. Use lr_test() or
+  # rpbnb_boundary_tests() for a boundary-aware test.
+  #
+  # Both scales are shown side by side and labelled, rather than pairing a
+  # natural-scale estimate with a log-scale SE in unlabelled columns. The
+  # natural-scale SE is the delta-method transform, scale * SE(log_scale).
+  scale_block <- function(idx, eq, prefix_pat, label) {
+    if (!length(idx)) return(invisible(NULL))
+    cat("--- Random-coefficient SDs (equation ", eq, ") ---\n", sep = "")
+    log_est <- object$coef[idx]
+    log_se  <- object$se[idx]
+    nat_est <- exp(log_est)
+    tbl <- data.frame(
+      `Estimate (log)`   = log_est,
+      `Std. Error (log)` = log_se,
+      Estimate           = nat_est,
+      `Std. Error`       = nat_est * log_se,   # delta method
+      row.names = gsub(prefix_pat, label, nm[idx]),
+      check.names = FALSE
+    )
+    .print_tbl(tbl, digits)
+    cat("Note: no Wald z/p for positive scale parameters; their null (scale = 0)\n",
+        "      is a boundary. Use lr_test() to test these.\n", sep = "")
     cat("\n")
   }
-
-  # ---- Random-coefficient scales (displayed as sd1/sd2) ----
-  s2 <- grep("^(log_sd2|log_s2|log_w2):", nm)
-  if (length(s2)) {
-    cat("--- Random-coefficient SDs (equation 2) ---\n")
-    p_s2 <- 2 * pnorm(-abs(object$coef[s2] / object$se[s2]))
-    tbl_s2 <- data.frame(Estimate_log = object$coef[s2],
-                         Estimate = exp(object$coef[s2]),
-                         `Std. Error` = object$se[s2],
-                         `Pr(>|z|)` = p_s2,
-                         Signif = .signif_stars(p_s2),
-                         row.names = gsub("^log_sd2:|^log_s2:|^log_w2:", "sd2:", nm[s2]),
-                         check.names = FALSE)
-    .print_tbl(tbl_s2, digits)
-    cat("\n")
-  }
+  scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L,
+              "^log_sd1:|^log_s1:|^log_w1:", "sd1:")
+  scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L,
+              "^log_sd2:|^log_s2:|^log_w2:", "sd2:")
 
   # ---- Dispersion parameters (natural scale from fit object) ----
   cat("--- Dispersion (m1, m2) ---\n")

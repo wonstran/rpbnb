@@ -27,6 +27,24 @@
     results_dir,
     sprintf("results_%s.md", file_stamp)
   )
+  # Second-precision stamps collide. Two fits finishing inside the same second
+  # -- routine when a script loops over dependence structures -- silently
+  # overwrote the first report, and the loss was invisible because the caller
+  # only ever sees the returned path. Disambiguate rather than clobber: append
+  # a counter, so both reports survive and the second one announces itself.
+  if (file.exists(output_path)) {
+    for (i in 2:1000L) {
+      candidate <- file.path(results_dir,
+                             sprintf("results_%s-%d.md", file_stamp, i))
+      if (!file.exists(candidate)) {
+        warning("A results file for ", file_stamp, " already exists; writing ",
+                basename(candidate), " instead of overwriting it.",
+                call. = FALSE)
+        output_path <- candidate
+        break
+      }
+    }
+  }
 
   model_information <- character(0)
   if (!is.null(dependence) || !is.null(method)) {

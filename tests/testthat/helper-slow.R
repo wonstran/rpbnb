@@ -47,3 +47,25 @@ make_rp_fixture <- function(dist1 = "uniform", sign1 = 1, R = 64L) {
     xtrain = xtrain
   ), class = "rpbnb_fit")
 }
+
+# Path to the dense truck fixture, or a skip.
+#
+# inst/extdata/export_dense_all.csv is local research data: 9.96 MB, gitignored
+# and build-ignored, so it exists in a developer checkout but is in neither the
+# commit nor the source tarball. Three heavy-tail copula tests are built on it.
+#
+# They previously called system.file(..., mustWork = TRUE), which ERRORS rather
+# than skips when the file is absent -- and because tools/test-tiers.R sets
+# NOT_CRAN=true, their skip_on_cran() guards did not fire either. A clean
+# checkout therefore errored, and (before the runner counted `error`) still
+# exited zero. Skipping explicitly is the honest behaviour: the assertions are
+# genuinely unavailable without the data, and saying so beats erroring or
+# silently passing.
+dense_truck_fixture <- function() {
+  path <- system.file("extdata", "export_dense_all.csv", package = "rpbnb")
+  testthat::skip_if(
+    !nzchar(path) || !file.exists(path),
+    "inst/extdata/export_dense_all.csv not available (local research data, not distributed)"
+  )
+  path
+}

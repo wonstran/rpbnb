@@ -3,6 +3,64 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-07 project review)
+
+See `comments/response_2026-08-07-23-25-15.md` for the full response.
+
+* **Gaussian copula fits are capped at one thread** (safety fix): evaluating a
+  Gaussian-copula TMB object built with more than one thread terminates the R
+  process. `fit_rpbnb_tmb()` now forces `n_cores = 1` and `parallel_tape =
+  FALSE` for that family with a warning, before any TMB object is built, so the
+  crash is not reachable from a public call. `fit$parallel` records both the
+  requested and realized thread counts. The underlying defect in the registered
+  Gaussian atomic is **not** fixed.
+* **Famoye fits are checked for admissibility at the optimum** (model-validity
+  fix): `lamLo`/`lamHi` are computed from the starting values and passed to the
+  template as data, so the optimizer can leave the region actually admissible
+  at the fitted parameters — making the joint pmf negative in the count tails
+  while the objective stays finite at the observed cells. The bounds are now
+  recomputed at the fitted parameters and a warning is raised when the fitted
+  `lam` falls outside them; `fit$lambda_admissible` and
+  `fit$lambda_bounds_at_optimum` carry the result. This detects invalid fits;
+  it does not repair the optimized objective. A parameter-dependent constraint
+  inside the template remains outstanding.
+* **No Wald p-values or significance stars on random-coefficient scales**:
+  `summary.rpbnb_tmb_fit()` was testing `log_scale = 0` (natural scale = 1) and
+  labelling it under "Random-coefficient SDs". The interesting null, scale = 0,
+  is a boundary at `log_scale = -Inf` where two-sided Wald inference is invalid.
+  Both scales are now labelled explicitly, the natural-scale standard error is
+  the delta-method transform `scale * SE(log_scale)`, and the same boundary
+  footnote the Rcpp engine prints (see "Review fixes (2026-07-15 model
+  review)") is shown. Use `lr_test()` for these.
+* **`tools/test-tiers.R` no longer exits 0 when tests error**: it summed only
+  expectation failures (`df$failed`) and ignored test-level errors
+  (`df$error`), so its CI-friendly contract was false. Both are now counted,
+  reported, and drive exit status.
+* **Tests depending on `inst/extdata/export_dense_all.csv` now skip instead of
+  erroring**: that file is local research data, gitignored and build-ignored, so
+  three `test-fit-copula.R` tests errored on a clean checkout via
+  `mustWork = TRUE` (their `skip_on_cran()` guards do not fire under the tier
+  runner's `NOT_CRAN=true`). They now use a `dense_truck_fixture()` helper that
+  skips with a reason.
+* **`rpbnb_tmb_control()` validates every field**: `iterlim`, `reltol`,
+  `print_level` and `halton_burn` were coerced without validation, so
+  `reltol = -1`, `print_level = NA`, `iterlim = "many"` and `halton_burn = -1`
+  were accepted. The last silently broke the draw contract —
+  `.tmb_halton_uniform()` returned 9 rows for 10 requested draws.
+  `fit_rpbnb_tmb()` also now checks that `control` inherits from
+  `rpbnb_tmb_control`, since a direct call bypasses `rpbnb()`'s type check.
+* `.write_truck_results_markdown()` no longer overwrites a same-second report;
+  it suffixes and warns.
+* Removed a dead `README.md` link to `docs/scope_rpnbn.md`; corrected the
+  `AGENTS.md` specs pointer to `dev-docs/superpowers/specs/`.
+
+Still open after this pass: the Gaussian atomic is not thread-safe (only made
+unreachable); the Famoye constraint is still frozen at the starting values
+(invalid optima are detected, not prevented); and Gaussian tail cells whose
+NB2 CDF endpoints both reach the `safe_qnorm()` clamp still collapse to the
+`1e-300` probability floor (245 of 3,487 cells on the truck fixture at its
+documented starting point).
+
 ## Two engines, one package
 
 * New `rpbnb()` front end dispatching to either engine via `engine = "cpp"`

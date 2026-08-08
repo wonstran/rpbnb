@@ -194,8 +194,7 @@ test_that("Clayton cell probabilities stay positive in the far tail", {
   # inner Hessian and TMB's inner Newton fails outright. The closed form is
   # positive by construction, so the objective must be finite and far below
   # the value the 1e-300 floor would produce.
-  path <- system.file("extdata", "export_dense_all.csv",
-                      package = "rpbnb", mustWork = TRUE)
+  path <- dense_truck_fixture()
   d <- utils::read.csv(path)
   dat <- data.frame(y1 = d$ALL_3, y2 = d$C_DISTR)
   expect_gt(max(dat$y1), 200)  # not vacuous: the tail must actually be long
@@ -292,8 +291,7 @@ test_that("Gaussian cell probabilities stay non-negative in the far tail", {
   # contribute 245 * -log(1e-300) = 169,240 nats, putting the strip integral at
   # 196,000-203,000, while the four-corner form lands at 334,000-432,000. Any
   # value under 2.5e5 could only come from the strip form.
-  path <- system.file("extdata", "export_dense_all.csv",
-                      package = "rpbnb", mustWork = TRUE)
+  path <- dense_truck_fixture()
   d <- utils::read.csv(path)
   dat <- data.frame(y1 = d$ALL_3, y2 = d$C_DISTR)
   expect_gt(max(dat$y1), 200)  # not vacuous: the tail must actually be long
@@ -430,8 +428,7 @@ test_that("Gaussian resolves phi's own scale at near-comonotone rho", {
   # template, so it cannot hide a template failure -- and the guards below
   # assert that what survives is still a long tail and still large enough to
   # separate the two panel layouts.
-  path <- system.file("extdata", "export_dense_all.csv",
-                      package = "rpbnb", mustWork = TRUE)
+  path <- dense_truck_fixture()
   d <- utils::read.csv(path)
   cells <- unique(data.frame(y1 = d$ALL_3, y2 = d$C_DISTR))
 
