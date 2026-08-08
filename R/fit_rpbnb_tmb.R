@@ -349,100 +349,117 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   free <- !(par_names %in% fixed_names)
   npar <- sum(free)
 
-  # Famoye admissible lambda interval at an arbitrary parameter vector.
+  # Famoye admissible lambda interval over the random coefficients' SUPPORT.
   #
-  # Factored out so it can be evaluated twice: once at the starting values (to
-  # produce the frozen lamLo/lamHi the template receives as DATA_SCALARs) and
-  # again at the optimum, to check whether the fitted lambda is still admissible
-  # for the parameters actually reached. The template cannot do this itself --
-  # the bounds enter it as data, not as functions of the parameters -- so a fit
-  # can drift into a region where the frozen box is wider than the true one and
-  # the joint pmf goes negative in the count tails, while the objective stays
-  # finite at the observed cells. See the post-fit check below.
-  .lambda_bounds_at <- function(par) {
-    i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
-    s1 <- if (q1 > 0) exp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
-    s2 <- if (q2 > 0) exp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)]) else numeric(0)
-    idx_end <- k1 + k2 + q1 + q2
-    m1_v <- if (poisson_1) 0 else exp(par[idx_end + 1])
-    m2_v <- if (poisson_2) 0 else exp(par[idx_end + 2])
-    xb1 <- as.vector(X1 %*% par[i1]); xb2 <- as.vector(X2 %*% par[i2])
-    Rloc <- if (total_rand > 0) draws else 1L
-    lo <- -Inf; hi <- Inf
-    for (r in seq_len(Rloc)) {
-      dev1 <- if (q1 > 0) rand_realize(matrix(Z1[r, ], 1, q1), spec1$dist, sign1, par[i1][rand_idx1], s1)$dev[1, ] else numeric(0)
-      dev2 <- if (q2 > 0) rand_realize(matrix(Z2[r, ], 1, q2), spec2$dist, sign2, par[i2][rand_idx2], s2)$dev[1, ] else numeric(0)
-      eta1 <- if (q1 > 0) xb1 + as.vector(X1[, rand_idx1, drop = FALSE] %*% dev1) else xb1
-      eta2 <- if (q2 > 0) xb2 + as.vector(X2[, rand_idx2, drop = FALSE] %*% dev2) else xb2
-      mu1_r <- pmin(pmax(exp(eta1), 1e-300), 1e15)
-      mu2_r <- pmin(pmax(exp(eta2), 1e-300), 1e15)
-      b <- lambda_bounds_vec(c_val(mu1_r, m1_v), c_val(mu2_r, m2_v))
-      lo <- max(lo, b[1]); hi <- min(hi, b[2])
+  # One notion for both estimators, deliberately. An earlier version used the
+  # finite Halton grid for method = "sml" on the reasoning that the simulated
+  # objective only ever evaluates those nodes. That was wrong: it confuses a
+  # quadrature rule with the support of the model being approximated. The two
+  # estimators are documented as "different approximations to the same
+  # integral", the mixing distributions stay continuous under both, and the set
+  # of lambda values that define a valid probability model cannot depend on how
+  # many draws were requested. Measured, the grid bound shrinks monotonically
+  # toward the support bound -- with one normal coefficient per margin,
+  # sd = 0.2, m = 0.5, it runs [-2.550, 3.131] at 5 draws, [-2.142, 2.753] at
+  # 400 and [-1.914, 2.261] at 50,000, against a support bound of [-1, 1] --
+  # so a grid-based constraint set is a property of the rule, not the model,
+  # and admits lambda values whose conditional pmf is negative on latent
+  # neighbourhoods of positive probability that the draws happened to miss.
+  #
+  # Construction. For margin t and observation i the linear predictor is
+  # eta_ti = xb_ti + sum_j X_tij * dev_tj, where dev_tj ranges over the
+  # deviation support of its distribution (below). The dev_tj are independent,
+  # so the attainable eta interval is the fixed part plus the sum of the
+  # per-column intervals; the template's own clamps then bound it, and
+  # mu = exp(eta) with c = (1 + d*m*mu)^(-1/m) decreasing in mu turns that into
+  # a c-interval. Both quantities bounded by lambda_bounds_vec() are pointwise
+  # maxima of bilinear functions of (c1, c2), and a bilinear function on a box
+  # attains its extremum at a vertex, so the supremum over the attainable
+  # c-rectangle sits at one of its corners: enumerating the corners is exact,
+  # not a sample.
+  #
+  # Deviation supports, read off rand_dist_registry's `dev`:
+  #   normal      dev = s*base,                    base unbounded -> (-Inf, Inf)
+  #   triangular  dev = s*base,                    base in (-1,1) -> (-s, s)
+  #   uniform     dev = s*(2*base - 1),            base in (0,1)  -> (-s, s)
+  #   lognormal   dev = sign*exp(b + s*base) - b,  base unbounded ->
+  #                 (-b, Inf) for sign = +1, (-Inf, -b) for sign = -1
+  # Uniform and triangular are genuinely BOUNDED, so treating every varying
+  # margin as spanning (0, 1) would be over-strict for them rather than merely
+  # conservative -- it would reject admissible fits. Their real ranges are
+  # propagated instead.
+  #
+  # Scales and dispersions use the template's clamps, not raw exp(). The R side
+  # and the objective must share one parameterization at every accepted start:
+  # exp(-1000) underflows to 0 in R, which would drop a random effect the
+  # template keeps strictly positive at exp(-20) = 2.06e-9, and a dropped
+  # effect widens the interval instead of narrowing it.
+  .clamp <- function(x, lo, hi) pmin(pmax(x, lo), hi)
+  .ETA_CEIL <- 34.538776394910684          # log(1e15), as in the template
+
+  .dev_support <- function(dist, sgn, b, s) {
+    # Returns a two-column matrix of (lower, upper) deviation limits.
+    n <- length(dist)
+    lo <- numeric(n); hi <- numeric(n)
+    for (j in seq_len(n)) {
+      if (dist[j] %in% c("uniform", "triangular")) {
+        lo[j] <- -s[j]; hi[j] <- s[j]
+      } else if (identical(dist[j], "lognormal")) {
+        if (sgn[j] >= 0) { lo[j] <- -b[j]; hi[j] <- Inf }
+        else             { lo[j] <- -Inf;  hi[j] <- -b[j] }
+      } else {                              # normal
+        lo[j] <- -Inf; hi[j] <- Inf
+      }
     }
-    c(lower = lo, upper = hi)
+    cbind(lo, hi)
   }
 
-  # Famoye admissible lambda interval over the LAPLACE latent support.
-  #
-  # .lambda_bounds_at() above is the right notion for method = "sml", whose
-  # likelihood really is an average over those finitely many Halton draws: the
-  # joint pmf only has to be non-negative at each of them. It is the WRONG
-  # notion for method = "laplace", which never evaluates that grid -- the
-  # template integrates per-observation latent u1/u2 instead. Applying the
-  # Halton bound there validates a different model and yields an interval far
-  # too wide: with one normal random coefficient per margin, sd = 0.2, m = 0.5,
-  # the grid gives [-2.142, 2.753] at 400 draws while the latent support admits
-  # only [-1, 1], so lambda = 2 passes a check it should fail.
-  #
-  # Derivation. Under Laplace the latent is unbounded, so for any margin
-  # carrying a random coefficient with a non-zero loading and a positive scale,
-  # eta spans the reals, mu = exp(eta) spans (0, Inf), and
-  # c = (1 + d*m*mu)^(-1/m) spans (0, 1). Both quantities bounded by
-  # lambda_bounds_vec() are pointwise maxima of bilinear functions of (c1, c2),
-  # and a bilinear function on a box attains its extremum at a vertex, so the
-  # supremum over the closure is attained among the corners of the attainable
-  # c-rectangle. Evaluating those corners is therefore exact, not a sample.
-  #
-  # A margin with no varying random coefficient keeps its parameter-dependent
-  # point value. Treating a varying margin as spanning the full (0, 1) is exact
-  # for normal random coefficients and conservative for lognormal (whose
-  # deviation is unbounded on one side only) -- conservative in the safe
-  # direction, since a wider c-range yields a NARROWER lambda interval.
-  .lambda_bounds_latent <- function(par) {
-    i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
-    s1 <- if (q1 > 0) exp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
-    s2 <- if (q2 > 0) exp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)]) else numeric(0)
-    idx_end <- k1 + k2 + q1 + q2
-    m1_v <- if (poisson_1) 0 else exp(par[idx_end + 1])
-    m2_v <- if (poisson_2) 0 else exp(par[idx_end + 2])
-    mu1 <- pmin(pmax(exp(as.vector(X1 %*% par[i1])), 1e-300), 1e15)
-    mu2 <- pmin(pmax(exp(as.vector(X2 %*% par[i2])), 1e-300), 1e15)
-    c1_fix <- c_val(mu1, m1_v); c2_fix <- c_val(mu2, m2_v)
-
-    varies <- function(X, idx, s) {
-      if (!length(idx) || !length(s)) return(rep(FALSE, nrow(X)))
-      as.vector(abs(X[, idx, drop = FALSE]) %*% as.numeric(s > 0)) > 0
+  # Attainable c-interval per observation for one margin.
+  .c_range <- function(X, beta, rand_idx, dist, sgn, s, m_v, pois) {
+    xb <- as.vector(X %*% beta)
+    add_lo <- rep(0, length(xb)); add_hi <- rep(0, length(xb))
+    if (length(rand_idx)) {
+      lim <- .dev_support(dist, sgn, beta[rand_idx], s)
+      for (j in seq_along(rand_idx)) {
+        xj <- X[, rand_idx[j]]
+        a <- xj * lim[j, 1]; b2 <- xj * lim[j, 2]
+        # x == 0 contributes nothing; without this guard 0 * Inf is NaN.
+        a[xj == 0] <- 0; b2[xj == 0] <- 0
+        add_lo <- add_lo + pmin(a, b2)
+        add_hi <- add_hi + pmax(a, b2)
+      }
     }
-    v1 <- varies(X1, rand_idx1, s1)
-    v2 <- varies(X2, rand_idx2, s2)
+    eta_floor <- if (pois) -35 else -35 - min(log(m_v), 0)
+    eta_lo <- .clamp(xb + add_lo, eta_floor, .ETA_CEIL)
+    eta_hi <- .clamp(xb + add_hi, eta_floor, .ETA_CEIL)
+    mu_lo <- exp(eta_lo); mu_hi <- exp(eta_hi)
+    # c is decreasing in mu, so the mu-interval reverses.
+    cbind(lower = c_val(mu_hi, m_v), upper = c_val(mu_lo, m_v))
+  }
 
-    c1lo <- ifelse(v1, 0, c1_fix); c1hi <- ifelse(v1, 1, c1_fix)
-    c2lo <- ifelse(v2, 0, c2_fix); c2hi <- ifelse(v2, 1, c2_fix)
-    # All corners of the attainable rectangle, per observation, at once.
-    b <- lambda_bounds_vec(c(c1lo, c1lo, c1hi, c1hi),
-                           c(c2lo, c2hi, c2lo, c2hi))
+  .lambda_bounds_support <- function(par) {
+    i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
+    s1 <- if (q1 > 0) exp(.clamp(par[(k1 + k2 + 1):(k1 + k2 + q1)], -20, 20)) else numeric(0)
+    s2 <- if (q2 > 0) exp(.clamp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)], -20, 20)) else numeric(0)
+    idx_end <- k1 + k2 + q1 + q2
+    m1_v <- if (poisson_1) 0 else exp(.clamp(par[idx_end + 1], -20, 20))
+    m2_v <- if (poisson_2) 0 else exp(.clamp(par[idx_end + 2], -20, 20))
+
+    r1 <- .c_range(X1, par[i1], rand_idx1, spec1$dist, sign1, s1, m1_v, poisson_1)
+    r2 <- .c_range(X2, par[i2], rand_idx2, spec2$dist, sign2, s2, m2_v, poisson_2)
+
+    # All four corners of each observation's attainable c-rectangle at once.
+    b <- lambda_bounds_vec(
+      c(r1[, "lower"], r1[, "lower"], r1[, "upper"], r1[, "upper"]),
+      c(r2[, "lower"], r2[, "upper"], r2[, "lower"], r2[, "upper"])
+    )
     c(lower = b[1], upper = b[2])
   }
 
-  # The bound notion is chosen by estimator, and the SAME one is used for the
-  # frozen bounds handed to the template and for the post-fit re-check, so the
-  # constraint the objective was optimized under is the constraint it is judged
-  # against.
-  .lambda_bounds_for_method <- if (identical(method, "laplace")) {
-    .lambda_bounds_latent
-  } else {
-    .lambda_bounds_at
-  }
+  # The same bound serves the frozen value handed to the template and the
+  # post-fit re-check, so a fit is judged against the constraint it was
+  # optimized under.
+  .lambda_bounds_for_method <- .lambda_bounds_support
 
   # Famoye: compute frozen lambda bounds at start
   lamLo <- 0; lamHi <- 0
@@ -631,13 +648,16 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # claim to fix the estimate; it refuses to let an inadmissible fit be returned
   # silently. See NEWS 0.4.0 "Review fixes (2026-08-07)" for the full-fix plan.
   #
-  # The re-check uses the estimator's own bound notion (see
-  # .lambda_bounds_for_method above). Under Laplace the latent bound is
-  # parameter-independent whenever both margins carry a varying random
-  # coefficient -- it is [-1, 1] -- so on that path this check is exact and the
-  # frozen-versus-current gap does not arise at all. It reappears when only one
-  # margin varies, because the other margin's c is then a function of the
-  # parameters.
+  # The re-check uses the same support bound the frozen value came from (see
+  # .lambda_bounds_support above), for either estimator.
+  #
+  # When every random coefficient in play is normal (or lognormal) with a
+  # non-zero loading in BOTH margins, that bound is parameter-independent --
+  # [-1, 1] -- so the frozen-versus-current gap does not arise at all and this
+  # check is trivially satisfied. It still binds in the cases where the bound
+  # does depend on the parameters: a single varying margin (the other margin's c
+  # is then a function of beta and m), and uniform or triangular coefficients,
+  # whose deviation support is bounded by s and so moves with the scale.
   lambda_admissible <- NA
   lambda_bounds_at_opt <- NULL
   if (family_code == 0L) {

@@ -3,7 +3,43 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
-## Review fixes (2026-08-08 response review)
+## Review fixes (2026-08-08 07:55 response review)
+
+See `comments/response_2026-08-08-08-07-17.md`.
+
+* **The Famoye admissible interval is now the random coefficients' support bound
+  for BOTH estimators** (model-validity fix), superseding the estimator-specific
+  split introduced earlier the same day. Deriving it from the finite Halton grid
+  for `method = "sml"` confused a quadrature rule with the model's support: the
+  mixing distributions stay continuous under both estimators, `?fit_rpbnb_tmb`
+  documents them as different approximations to the *same* integral, and the
+  grid bound is monotone in the draw count — `[-2.550, 3.131]` at 5 draws,
+  `[-2.142, 2.753]` at 400, `[-1.914, 2.261]` at 50,000, converging on the
+  support bound `[-1, 1]`. A constraint set that depends on the number of draws
+  is not a parameter space, and the latent neighbourhoods a finite grid misses
+  carry positive probability.
+* **Bounded random-coefficient supports are propagated rather than approximated
+  by `(0, 1)`.** Uniform and triangular deviations live in `(-s, s)`, so forcing
+  `(0, 1)` on them would be *over-strict* — rejecting admissible fits — not
+  merely conservative. Per-distribution deviation supports are now used:
+  unbounded for normal, one-sided for lognormal, `(-s, s)` for uniform and
+  triangular.
+* **The R-side constraint and the TMB objective now share one parameterization.**
+  Variation is determined from the declared random coefficient and its design
+  loading rather than from `exp(log_scale) > 0`: `exp(-1000)` underflows to `0`
+  in R while the template clamps `log_sd` to `-20` and keeps
+  `exp(-20) = 2.06e-9`, so a legal start dropped a random effect the objective
+  retained — and a dropped effect *widens* the interval, admitting
+  `lambda = 2`. Scales, dispersions and the `eta` clamp now mirror
+  `src/rpbnb_tmb.cpp` exactly.
+* **`BASELINE_SML_LOGLIK` re-captured**, from `-949.6478422037` to
+  `-949.6478374514` (4.75e-06 nats). `lamLo`/`lamHi` are inputs to the tape, so
+  changing the bound notion moves the objective; the tape itself is unchanged.
+  `lambda_bounds` is now pinned separately in the same test, so a tape
+  regression (log-likelihood moves, bounds do not) stays distinguishable from a
+  deliberate bound change (both move).
+
+## Review fixes (2026-08-08 07:36 response review)
 
 See `comments/response_2026-08-08-07-36-52.md`.
 

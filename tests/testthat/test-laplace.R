@@ -1,6 +1,23 @@
 # The SML path must be bit-identical before and after the Laplace feature.
 # BASELINE was captured from the pre-change code; see the implementation plan.
-BASELINE_SML_LOGLIK <- -949.6478422037
+#
+# RE-CAPTURED once, deliberately, in the 2026-08-08 review fixes. The previous
+# value was -949.6478422037; the current one differs by 4.75e-06 nats. What
+# changed is the Famoye admissible interval fed to the template: it was derived
+# from the finite Halton grid and is now derived from the random coefficients'
+# support, so lamLo/lamHi -- DATA_SCALARs, not tape structure -- moved, and
+# z_dep's map with them. On this fixture the bound went from a grid box to
+# [-1.732, 1.732] and the fitted lam is 0.43, nowhere near either end, which is
+# why the shift is microscopic rather than structural.
+#
+# The file's own warning against re-pinning still stands and is not being
+# waived: that warning is about absorbing an OPTIMIZER-SCHEDULE change, which
+# would destroy what the guard measures. To keep the guard's meaning across a
+# change in the tape's input DATA, the bounds are now pinned separately below.
+# A tape change moves the log-likelihood while leaving the bounds alone; a bound
+# change moves both. The two are therefore still distinguishable.
+BASELINE_SML_LOGLIK <- -949.6478374514
+BASELINE_SML_BOUNDS <- c(lower = -1.73201465905, upper = 1.73201465905)
 
 sml_baseline_fit <- function() {
   set.seed(1)
@@ -31,6 +48,10 @@ test_that("adding latent parameters leaves the SML tape unchanged", {
   skip_on_cran()
   fit <- sml_baseline_fit()
   expect_equal(fit$logLik, BASELINE_SML_LOGLIK, tolerance = 1e-10)
+  # Pinned separately so a tape regression and a deliberate change to the
+  # admissible interval cannot be confused for one another: this assertion is
+  # the one that moves when the bound notion changes.
+  expect_equal(fit$lambda_bounds, BASELINE_SML_BOUNDS, tolerance = 1e-10)
 })
 
 test_that("laplace rejects unsupported random-coefficient distributions", {
@@ -353,16 +374,16 @@ test_that("laplace gives the same answer single- and multi-threaded", {
   expect_equal(unname(coef(fit1)), unname(coef(fit4)), tolerance = 1e-4)
 })
 
-test_that("the Famoye admissible interval is estimator-specific", {
+test_that("the Famoye admissible interval is the support bound for both estimators", {
   skip_on_cran()
-  # A Laplace fit does not evaluate the Halton grid -- the template integrates
-  # per-observation latent u1/u2 instead -- so validating it against a
-  # finite-draw bound checks a different model, and the finite-draw bound is far
-  # too wide. With one normal random coefficient per margin the latent support
-  # gives exactly [-1, 1] (c1 and c2 each span (0,1), and the two quantities
-  # bounded by lambda_bounds_vec() are pointwise maxima of bilinear functions,
-  # so their suprema sit at corners of the c-rectangle). The Halton grid on the
-  # same model admits |lambda| well above 1.
+  # The admissible set is a property of the MODEL, not of the quadrature rule.
+  # An earlier version derived it from the finite Halton grid for SML, which
+  # made the constraint set shrink as draws were added -- measured, it runs
+  # [-2.550, 3.131] at 5 draws and [-1.914, 2.261] at 50,000, converging on the
+  # support bound of [-1, 1] -- and admitted lambda values whose conditional pmf
+  # is negative on latent neighbourhoods of positive probability that the draws
+  # happened to miss. SML and Laplace are documented as different
+  # approximations to the SAME integral, so they must agree here.
   sim <- simulate_rpbnb_tmb(
     n = 200,
     beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
@@ -374,26 +395,85 @@ test_that("the Famoye admissible interval is estimator-specific", {
   )
   common <- list(formula_1 = y1 ~ x1, formula_2 = y2 ~ x1, data = sim$data,
                  random_1 = "x1", random_2 = "x1", dependence = "famoye",
-                 draws = 50, seed = 5, inference = "none",
-                 control = rpbnb_tmb_control(iterlim = 30L))
+                 seed = 5, inference = "none",
+                 control = rpbnb_tmb_control(iterlim = 25L))
 
-  lap <- do.call(fit_rpbnb_tmb, c(common, list(method = "laplace")))
-  sml <- do.call(fit_rpbnb_tmb, c(common, list(method = "sml")))
+  lap    <- do.call(fit_rpbnb_tmb, c(common, list(draws = 50L,  method = "laplace")))
+  sml5   <- do.call(fit_rpbnb_tmb, c(common, list(draws = 5L,   method = "sml")))
+  sml400 <- do.call(fit_rpbnb_tmb, c(common, list(draws = 400L, method = "sml")))
 
+  # Normal coefficients with a non-zero loading in both margins: c1 and c2 each
+  # span (0,1), so the support bound is exactly [-1, 1] and does not depend on
+  # the parameters.
   expect_equal(unname(lap$lambda_bounds), c(-1, 1))
-  # Parameter-independent when both margins vary, so the frozen-versus-current
-  # gap cannot arise on this path at all.
   expect_equal(unname(lap$lambda_bounds_at_optimum), c(-1, 1))
-  expect_true(lap$lambda_admissible)
 
-  # The SML path keeps the finite-draw notion, which is the correct one there
-  # and is strictly wider than the latent bound.
-  expect_lt(sml$lambda_bounds[["lower"]], -1)
-  expect_gt(sml$lambda_bounds[["upper"]], 1)
-  expect_true(sml$lambda_admissible)
+  # The SML bound must not move with the draw count, and must agree with Laplace.
+  expect_equal(unname(sml5$lambda_bounds), c(-1, 1))
+  expect_equal(sml400$lambda_bounds, sml5$lambda_bounds)
+  expect_equal(sml5$lambda_bounds, lap$lambda_bounds)
+
+  expect_true(lap$lambda_admissible)
+  expect_true(sml400$lambda_admissible)
 })
 
-test_that("a single varying margin gives a parameter-dependent latent bound", {
+test_that("a tiny log-scale does not drop a random effect from the bound", {
+  skip_on_cran()
+  # exp(-1000) underflows to 0 in R while the template clamps log_sd to -20 and
+  # keeps a strictly positive 2.06e-9. Deciding "this margin varies" from the
+  # floating-point scale therefore dropped an effect the objective retained, and
+  # a dropped effect WIDENS the interval: the helper returned [-2.9999, 4.0981]
+  # and would have called lambda = 2 admissible. Variation is now read from the
+  # declared coefficient and its design loading, and every scale/dispersion uses
+  # the template's clamps.
+  sim <- simulate_rpbnb_tmb(
+    n = 200,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.2)),
+    random_2 = list(x1 = list(sd = 0.2)),
+    dispersion = c(m1 = 0.5, m2 = 0.5),
+    dependence = "famoye", lambda = 0.1, seed = 31
+  )
+  st <- c(0.2, 0.4, 0.1, -0.3, -1000, -1000, log(0.5), log(0.5), 0)
+  names(st) <- c("b1:(Intercept)", "b1:x1", "b2:(Intercept)", "b2:x1",
+                 "log_sd1:x1", "log_sd2:x1", "log_m1", "log_m2", "z_dep")
+
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                       random_1 = "x1", random_2 = "x1",
+                       dependence = "famoye", draws = 20L, seed = 5,
+                       start = st, inference = "none",
+                       control = rpbnb_tmb_control(iterlim = 2L))
+
+  expect_equal(unname(fit$lambda_bounds), c(-1, 1))
+  expect_lt(fit$lambda_bounds[["upper"]], 2)
+})
+
+test_that("bounded random-coefficient supports are not treated as (0, 1)", {
+  skip_on_cran()
+  skip_slow()
+  # A uniform coefficient's deviation lives in (-s, s), so its attainable c
+  # range is a strict sub-interval of (0, 1) and the admissible lambda interval
+  # is WIDER than the normal case. Forcing (0,1) on it would be over-strict --
+  # rejecting admissible fits -- not merely conservative.
+  sim <- simulate_rpbnb_tmb(
+    n = 200,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(dist = "uniform", scale = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.5),
+    dependence = "famoye", lambda = 0.1, seed = 31
+  )
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                       random_1 = list(x1 = list(dist = "uniform")),
+                       dependence = "famoye", draws = 30L, seed = 2,
+                       inference = "none",
+                       control = rpbnb_tmb_control(iterlim = 10L))
+  expect_gt(fit$lambda_bounds[["upper"]], 1)
+  expect_true(all(is.finite(fit$lambda_bounds)))
+})
+
+test_that("a single varying margin gives a parameter-dependent support bound", {
   skip_on_cran()
   skip_slow()
   # With only equation 1 random, c2 stays at its parameter-dependent point
