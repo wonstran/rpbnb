@@ -76,21 +76,40 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     get_dscale2 <- function(r) if (q2 > 0) Z2sd[r, ] else numeric(0)
   }
 
-  # ---- Pass 1: mu, c, bounds per draw ----
+  # ---- Pass 1: mu and c per draw ----
+  # No per-draw lambda_bounds_vec() here any more: the admissible interval comes
+  # from the coefficients' support (below), so reducing bounds over draws was
+  # both wrong and, once unused, pure cost inside this loop.
   pass1_fun <- function(r) {
     eta1 <- if (q1 > 0) xb1 + as.vector(XR1 %*% get_dev1(r)) else xb1
     eta2 <- if (q2 > 0) xb2 + as.vector(XR2 %*% get_dev2(r)) else xb2
     mu1_r <- pmin(exp(eta1), 1e15); mu2_r <- pmin(exp(eta2), 1e15)
-    c1_r <- c_val(mu1_r, m1); c2_r <- c_val(mu2_r, m2)
-    b <- lambda_bounds_vec(c1_r, c2_r)
-    list(mu1 = mu1_r, mu2 = mu2_r, c1 = c1_r, c2 = c2_r,
-         lamLo_r = b[1], lamHi_r = b[2])
+    list(mu1 = mu1_r, mu2 = mu2_r,
+         c1 = c_val(mu1_r, m1), c2 = c_val(mu2_r, m2))
   }
   pass1 <- if (!is.null(cl)) parallel::parLapply(cl, seq_len(R), pass1_fun)
            else lapply(seq_len(R), pass1_fun)
 
-  lamLo <- max(vapply(pass1, `[[`, numeric(1), "lamLo_r"))
-  lamHi <- min(vapply(pass1, `[[`, numeric(1), "lamHi_r"))
+  # The admissible interval comes from the random coefficients' SUPPORT, not
+  # from a reduction over the draws that happen to be in play. Reducing over
+  # draws makes the parameter space a function of `draws` -- measured, this
+  # model's interval runs [-1.4242, 1.0995] at 50 draws and [-1.0796, 1.0668] at
+  # 800, converging on the support bound [-1, 1] -- and admits lambda values
+  # whose conditional pmf is negative on latent neighbourhoods the grid missed.
+  # See famoye_support_bounds() in R/famoye_core.R.
+  # Scales are floored the same way the TMB side floors them. A declared random
+  # coefficient whose scale underflows to 0 in R still varies in the model, and
+  # calling it fixed would WIDEN the interval; flooring keeps the safe, narrower
+  # bound. This engine's likelihood uses the raw exp(), which is unaffected --
+  # the floor applies only to the admissibility calculation.
+  sb <- famoye_support_bounds(
+    X1, X2, off1, off2, rand_idx1, rand_idx2,
+    dist1, dist2, sign1, sign2, beta1, beta2,
+    if (q1 > 0) exp(pmin(pmax(log_sd1, -20), 20)) else numeric(0),
+    if (q2 > 0) exp(pmin(pmax(log_sd2, -20), 20)) else numeric(0),
+    m1, m2
+  )
+  lamLo <- sb[["lower"]]; lamHi <- sb[["upper"]]
   if (!(lamLo < lamHi && is.finite(lamLo) && is.finite(lamHi))) {
     val <- -1e50; attr(val, "gradient") <- rep(0, length(par)); return(val)
   }

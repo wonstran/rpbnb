@@ -17,24 +17,15 @@ make_case <- function(dist, sign = 1, seed = 4) {
 
 # Compute frozen lambda bounds at a given par (mirrors approach in test-fit-rpbnb.R).
 frozen_bounds <- function(cs, par) {
-  k1 <- ncol(cs$X1); k2 <- ncol(cs$X2)
-  q1 <- length(cs$rand_idx1); q2 <- length(cs$rand_idx2)
-  beta1 <- par[seq_len(k1)]; beta2 <- par[(k1+1):(k1+k2)]
-  idx_end <- k1 + k2 + q1 + q2
-  sd1 <- if (q1 > 0) exp(par[(k1+k2+1):(k1+k2+q1)]) else numeric(0)
-  m1 <- exp(par[idx_end+1]); m2 <- exp(par[idx_end+2])
-  xb1 <- as.vector(cs$X1 %*% beta1); xb2 <- as.vector(cs$X2 %*% beta2)
-  real1 <- if (q1 > 0) rand_realize(cs$U1, cs$dist1, cs$sign1,
-                                    b = beta1[cs$rand_idx1], s = sd1)
-           else list(dev = matrix(0, nrow(cs$U1), 0))
-  R <- nrow(cs$U1); lo <- -Inf; hi <- Inf
-  for (r in seq_len(R)) {
-    mu1 <- pmin(exp(xb1 + if (q1 > 0) as.vector(cs$XR1 %*% real1$dev[r, ]) else 0), 1e15)
-    mu2 <- pmin(exp(xb2), 1e15)
-    b <- lambda_bounds_vec(c_val(mu1, m1), c_val(mu2, m2))
-    lo <- max(lo, b[1]); hi <- min(hi, b[2])
-  }
-  c(lo, hi)
+  # Delegates to the SAME support bound the objective uses. This used to
+  # reimplement the old per-draw reduction, which quietly turned the comparison
+  # below into analytic-gradient-of-one-objective versus numeric-gradient-of-
+  # another once the engines moved to support bounds. The point of the test is
+  # that the two gradients of ONE objective agree.
+  unname(rpbnb:::.rp_support_bounds(
+    par, cs$X1, cs$X2, cs$rand_idx1, cs$rand_idx2,
+    cs$dist1, cs$dist2, cs$sign1, cs$sign2
+  ))
 }
 
 check_grad <- function(dist, sign = 1) {
@@ -81,22 +72,10 @@ test_that("analytic gradient matches numeric gradient for mixed cross-equation r
   # par: b1(2), b2(2), scale1(1), scale2(1), log_m1, log_m2, z_lambda
   par <- c(0.1, -0.3, 0.05, -0.1, log(0.3), log(0.4), log(0.5), log(0.6), 0.2)
 
-  k1 <- ncol(X1); k2 <- ncol(X2); q1 <- 1L; q2 <- 1L
-  beta1 <- par[seq_len(k1)]; beta2 <- par[(k1+1):(k1+k2)]
-  idx_end <- k1 + k2 + q1 + q2
-  sd1 <- exp(par[k1+k2+1]); sd2 <- exp(par[k1+k2+q1+1])
-  m1 <- exp(par[idx_end+1]); m2 <- exp(par[idx_end+2])
-  xb1 <- as.vector(X1 %*% beta1); xb2 <- as.vector(X2 %*% beta2)
-  real1 <- rand_realize(U1, dist1, sign1, b = beta1[rand_idx1], s = sd1)
-  real2 <- rand_realize(U2, dist2, sign2, b = beta2[rand_idx2], s = sd2)
-  R <- nrow(U1); lo <- -Inf; hi <- Inf
-  for (r in seq_len(R)) {
-    mu1 <- pmin(exp(xb1 + as.vector(XR1 %*% real1$dev[r, ])), 1e15)
-    mu2 <- pmin(exp(xb2 + as.vector(XR2 %*% real2$dev[r, ])), 1e15)
-    b <- lambda_bounds_vec(c_val(mu1, m1), c_val(mu2, m2))
-    lo <- max(lo, b[1]); hi <- min(hi, b[2])
-  }
-  bnds <- c(lo, hi)
+  # Same support bound the objective uses; see frozen_bounds() above for why
+  # this must not reimplement a reduction over draws.
+  bnds <- rpbnb:::.rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                                     dist1, dist2, sign1, sign2)
 
   f <- function(p) {
     bnbr_rp_ll_fixed_bounds(p, y1, y2, X1, X2, XR1, XR2,

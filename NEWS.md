@@ -3,6 +3,32 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 08:38 response review)
+
+See `comments/response_2026-08-08-11-31-05.md`.
+
+* **The Rcpp engine now uses the same support bound as the TMB engine**
+  (model-validity fix). The previous round replaced the finite-draw bound only
+  inside `fit_rpbnb_tmb()`, leaving `rpbnb()`'s default `engine = "cpp"` with a
+  parameter space that moved with `draws` — measured, `[-1.4242, 1.0995]` at 50
+  draws against `[-1.0796, 1.0668]` at 800. `famoye_support_bounds()` now lives
+  in `R/famoye_core.R` and is used by the Rcpp objective (R and C++ kernels),
+  the post-fit bound reconstruction, the analytic Hessian, and the TMB fitter.
+  Fitted log-likelihoods are unchanged; `lambda` moves by about `1e-3` from the
+  reparameterization of `z_dep` through a narrower interval.
+  `bnbr_rp_scores_cpp()` uses the same bound, without which `colSums(scores)`
+  would no longer equal the analytic gradient and every OPG standard error would
+  be quietly wrong.
+* **Admissibility is derived from the unclipped mean support.** Applying the
+  template's `eta` clamp before mapping to `c` capped the attainable mean, which
+  stopped `c` reaching 0 at large dispersion and *widened* the interval: at
+  `log_m = 20` the bound was `[-1, 8.97e6]` instead of `[-1, 1]`, admitting
+  `lambda = 2`. The scale clamp is retained — it cannot widen the admissible
+  set, only decide whether a coefficient varies — but the mean clamp is not part
+  of the model and no longer enters the constraint.
+* The per-draw `lambda_bounds_vec()` reduction is removed from the Rcpp
+  objective's pass-1 loop, where it had become dead work.
+
 ## Review fixes (2026-08-08 07:55 response review)
 
 See `comments/response_2026-08-08-08-07-17.md`.

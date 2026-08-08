@@ -389,53 +389,18 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # conservative -- it would reject admissible fits. Their real ranges are
   # propagated instead.
   #
-  # Scales and dispersions use the template's clamps, not raw exp(). The R side
+  # SCALES and DISPERSIONS use the template's clamps, not raw exp(); the eta
+  # range deliberately does not (see .c_range()). The distinction is which side
+  # of the model/approximation line each sits on. A scale clamp cannot widen the
+  # admissible set -- it only decides whether a coefficient varies at all, and
+  # the template's floor keeps it varying -- whereas clipping eta caps the
+  # attainable mean and so caps c away from 0, which widens the interval and
+  # admits invalid lambda. The R side
   # and the objective must share one parameterization at every accepted start:
   # exp(-1000) underflows to 0 in R, which would drop a random effect the
   # template keeps strictly positive at exp(-20) = 2.06e-9, and a dropped
   # effect widens the interval instead of narrowing it.
   .clamp <- function(x, lo, hi) pmin(pmax(x, lo), hi)
-  .ETA_CEIL <- 34.538776394910684          # log(1e15), as in the template
-
-  .dev_support <- function(dist, sgn, b, s) {
-    # Returns a two-column matrix of (lower, upper) deviation limits.
-    n <- length(dist)
-    lo <- numeric(n); hi <- numeric(n)
-    for (j in seq_len(n)) {
-      if (dist[j] %in% c("uniform", "triangular")) {
-        lo[j] <- -s[j]; hi[j] <- s[j]
-      } else if (identical(dist[j], "lognormal")) {
-        if (sgn[j] >= 0) { lo[j] <- -b[j]; hi[j] <- Inf }
-        else             { lo[j] <- -Inf;  hi[j] <- -b[j] }
-      } else {                              # normal
-        lo[j] <- -Inf; hi[j] <- Inf
-      }
-    }
-    cbind(lo, hi)
-  }
-
-  # Attainable c-interval per observation for one margin.
-  .c_range <- function(X, beta, rand_idx, dist, sgn, s, m_v, pois) {
-    xb <- as.vector(X %*% beta)
-    add_lo <- rep(0, length(xb)); add_hi <- rep(0, length(xb))
-    if (length(rand_idx)) {
-      lim <- .dev_support(dist, sgn, beta[rand_idx], s)
-      for (j in seq_along(rand_idx)) {
-        xj <- X[, rand_idx[j]]
-        a <- xj * lim[j, 1]; b2 <- xj * lim[j, 2]
-        # x == 0 contributes nothing; without this guard 0 * Inf is NaN.
-        a[xj == 0] <- 0; b2[xj == 0] <- 0
-        add_lo <- add_lo + pmin(a, b2)
-        add_hi <- add_hi + pmax(a, b2)
-      }
-    }
-    eta_floor <- if (pois) -35 else -35 - min(log(m_v), 0)
-    eta_lo <- .clamp(xb + add_lo, eta_floor, .ETA_CEIL)
-    eta_hi <- .clamp(xb + add_hi, eta_floor, .ETA_CEIL)
-    mu_lo <- exp(eta_lo); mu_hi <- exp(eta_hi)
-    # c is decreasing in mu, so the mu-interval reverses.
-    cbind(lower = c_val(mu_hi, m_v), upper = c_val(mu_lo, m_v))
-  }
 
   .lambda_bounds_support <- function(par) {
     i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
@@ -444,16 +409,12 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     idx_end <- k1 + k2 + q1 + q2
     m1_v <- if (poisson_1) 0 else exp(.clamp(par[idx_end + 1], -20, 20))
     m2_v <- if (poisson_2) 0 else exp(.clamp(par[idx_end + 2], -20, 20))
-
-    r1 <- .c_range(X1, par[i1], rand_idx1, spec1$dist, sign1, s1, m1_v, poisson_1)
-    r2 <- .c_range(X2, par[i2], rand_idx2, spec2$dist, sign2, s2, m2_v, poisson_2)
-
-    # All four corners of each observation's attainable c-rectangle at once.
-    b <- lambda_bounds_vec(
-      c(r1[, "lower"], r1[, "lower"], r1[, "upper"], r1[, "upper"]),
-      c(r2[, "lower"], r2[, "upper"], r2[, "lower"], r2[, "upper"])
+    # The TMB engine rejects offset() terms, so there is no offset to pass.
+    famoye_support_bounds(
+      X1, X2, NULL, NULL, rand_idx1, rand_idx2,
+      spec1$dist, spec2$dist, sign1, sign2,
+      par[i1], par[i2], s1, s2, m1_v, m2_v
     )
-    c(lower = b[1], upper = b[2])
   }
 
   # The same bound serves the frozen value handed to the template and the

@@ -95,16 +95,58 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
                    pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
+  # The admissible interval is the support bound, computed in R from the current
+  # parameters and handed to the kernel through its existing use_fixed path,
+  # rather than reduced over the draws inside the loop. `want_grad` and
+  # `use_fixed` are independent flags, so the gradient is still produced and is
+  # consistent with the supplied interval (the kernel builds lam and dlam_dz
+  # from lamLo/lamHi either way). See famoye_support_bounds().
+  sb <- .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                           dist1, dist2, sign1, sign2,
+                           pois1 = pois1, pois2 = pois2,
+                           off1 = off1, off2 = off2)
+  if (!(sb[["lower"]] < sb[["upper"]] &&
+        is.finite(sb[["lower"]]) && is.finite(sb[["upper"]]))) {
+    val <- -1e50
+    attr(val, "gradient") <- rep(0, length(par))
+    return(val)
+  }
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
     d$xb1, d$xb2, d$S1, d$S2, d$m1, d$m2, d$zlam,
-    want_grad = 1L, use_fixed = 0L, lamLo_in = 0, lamHi_in = 0,
+    want_grad = 1L, use_fixed = 1L,
+    lamLo_in = sb[["lower"]], lamHi_in = sb[["upper"]],
     want_scores = 0L, num_threads = as.integer(n_threads)
   )
   val <- res$value
   attr(val, "gradient") <- res$gradient
   val
+}
+
+#' Support bound from a packed rpbnb parameter vector
+#'
+#' Thin adapter so the Rcpp wrappers, which receive `par` rather than unpacked
+#' pieces, can call the shared famoye_support_bounds().
+#' @keywords internal
+#' @noRd
+.rp_support_bounds <- function(par, X1, X2, rand_idx1, rand_idx2,
+                               dist1, dist2, sign1, sign2,
+                               pois1 = FALSE, pois2 = FALSE,
+                               off1 = NULL, off2 = NULL) {
+  k1 <- ncol(X1); k2 <- ncol(X2)
+  q1 <- length(rand_idx1); q2 <- length(rand_idx2)
+  i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
+  idx_end <- k1 + k2 + q1 + q2
+  clamp <- function(x) exp(pmin(pmax(x, -20), 20))
+  s1 <- if (q1 > 0) clamp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
+  s2 <- if (q2 > 0) clamp(par[(k1 + k2 + q1 + 1):idx_end]) else numeric(0)
+  m1 <- if (pois1) 0 else exp(pmin(pmax(par[idx_end + 1], -20), 20))
+  m2 <- if (pois2) 0 else exp(pmin(pmax(par[idx_end + 2], -20), 20))
+  famoye_support_bounds(X1, X2,
+                        .as_offset(off1, nrow(X1)), .as_offset(off2, nrow(X2)),
+                        rand_idx1, rand_idx2, dist1, dist2, sign1, sign2,
+                        par[i1], par[i2], s1, s2, m1, m2)
 }
 
 #' Per-observation score matrix (n x npar) at a parameter vector, for OPG/BHHH
@@ -125,11 +167,21 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
                    pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
+  # The SAME support bound the objective and gradient use. These scores are the
+  # OPG covariance's ingredient and must sum to the analytic gradient; computing
+  # them under a draw-reduced bound while the gradient used the support bound
+  # would make colSums(scores) != gradient and silently corrupt every OPG
+  # standard error. tests/testthat/test-cpp-likelihood.R asserts the identity.
+  sb <- .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                           dist1, dist2, sign1, sign2,
+                           pois1 = pois1, pois2 = pois2,
+                           off1 = off1, off2 = off2)
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,
     d$xb1, d$xb2, d$S1, d$S2, d$m1, d$m2, d$zlam,
-    want_grad = 0L, use_fixed = 0L, lamLo_in = 0, lamHi_in = 0,
+    want_grad = 0L, use_fixed = 1L,
+    lamLo_in = sb[["lower"]], lamHi_in = sb[["upper"]],
     want_scores = 1L, num_threads = as.integer(n_threads)
   )
   res$scores

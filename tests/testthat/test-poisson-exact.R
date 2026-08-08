@@ -200,21 +200,14 @@ test_that("C++ RP matches R RP with pois1=TRUE at large means (value + gradient)
 # unfrozen objective's extra bounds-position derivative is a known analytic-vs-
 # numeric gap unrelated to the Poisson branch).
 .rp_frozen_bounds <- function(cs, par, pois1 = FALSE, pois2 = FALSE) {
-  k1 <- ncol(cs$X1); k2 <- ncol(cs$X2)
-  beta1 <- par[1:k1]; beta2 <- par[(k1 + 1):(k1 + k2)]
-  m1 <- if (pois1) 0 else exp(par[k1 + k2 + 3]); m2 <- if (pois2) 0 else exp(par[k1 + k2 + 4])
-  sd1 <- exp(par[k1 + k2 + 1]); sd2 <- exp(par[k1 + k2 + 2])
-  dev1 <- rpbnb:::rand_realize(cs$Z1, cs$dist1, cs$sign1, beta1[cs$rand_idx1], sd1)$dev
-  dev2 <- rpbnb:::rand_realize(cs$Z2, cs$dist2, cs$sign2, beta2[cs$rand_idx2], sd2)$dev
-  xb1 <- as.vector(cs$X1 %*% beta1); xb2 <- as.vector(cs$X2 %*% beta2)
-  lamLo <- -Inf; lamHi <- Inf
-  for (r in seq_len(nrow(cs$Z1))) {
-    mu1 <- pmin(exp(xb1 + as.vector(cs$XR1 %*% dev1[r, ])), 1e15)
-    mu2 <- pmin(exp(xb2 + as.vector(cs$XR2 %*% dev2[r, ])), 1e15)
-    b <- rpbnb:::lambda_bounds_vec(rpbnb:::c_val(mu1, m1), rpbnb:::c_val(mu2, m2))
-    lamLo <- max(lamLo, b[1]); lamHi <- min(lamHi, b[2])
-  }
-  c(lamLo, lamHi)
+  # The support bound the objective actually uses; see frozen_bounds() in
+  # test-rpbnb-likelihood-dist.R for why this must not reimplement a reduction
+  # over draws.
+  unname(rpbnb:::.rp_support_bounds(
+    par, cs$X1, cs$X2, cs$rand_idx1, cs$rand_idx2,
+    cs$dist1, cs$dist2, cs$sign1, cs$sign2,
+    pois1 = pois1, pois2 = pois2
+  ))
 }
 
 test_that("RP analytic gradient with pois1=TRUE matches numeric gradient of the frozen-bounds objective", {

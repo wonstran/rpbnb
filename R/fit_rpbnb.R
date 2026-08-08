@@ -334,20 +334,18 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     m2 <- if (isTRUE(poisson_2)) 0 else exp(p[idx_end+2])
     sd1 <- if (q1 > 0) exp(p[(k1+k2+1):(k1+k2+q1)]) else numeric(0)
     sd2 <- if (q2 > 0) exp(p[(k1+k2+q1+1):(k1+k2+q1+q2)]) else numeric(0)
-    xb1 <- as.vector(X1 %*% beta1) + off1; xb2 <- as.vector(X2 %*% beta2) + off2
-    dev1 <- if (q1>0) rand_realize(Z1_opt, dist1, sign1, beta1[rand_idx1], sd1)$dev
-            else matrix(0, n_draws, 0)
-    dev2 <- if (q2>0) rand_realize(Z2_opt, dist2, sign2, beta2[rand_idx2], sd2)$dev
-            else matrix(0, n_draws, 0)
-    lamLo <- -Inf; lamHi <- Inf
-    Rloc <- if (q1 + q2 > 0) n_draws else 1L
-    for (r in 1:Rloc) {
-      mu1_r <- if (q1 > 0) pmin(exp(xb1 + as.vector(XR1 %*% dev1[r, ])), 1e15) else exp(xb1)
-      mu2_r <- if (q2 > 0) pmin(exp(xb2 + as.vector(XR2 %*% dev2[r, ])), 1e15) else exp(xb2)
-      b <- lambda_bounds_vec(c_val(mu1_r, m1), c_val(mu2_r, m2))
-      lamLo <- max(lamLo, b[1]); lamHi <- min(lamHi, b[2])
-    }
-    c(lamLo, lamHi)
+    # The support bound, matching the objective. This used to reduce
+    # lambda_bounds_vec() over the optimization draws, which made the
+    # reconstructed interval -- and so the frozen-bounds Hessian built from it --
+    # a function of `draws` rather than of the model.
+    sb <- famoye_support_bounds(
+      X1, X2, off1, off2, rand_idx1, rand_idx2,
+      dist1, dist2, sign1, sign2, beta1, beta2,
+      if (q1 > 0) exp(pmin(pmax(p[(k1+k2+1):(k1+k2+q1)], -20), 20)) else numeric(0),
+      if (q2 > 0) exp(pmin(pmax(p[(k1+k2+q1+1):(k1+k2+q1+q2)], -20), 20)) else numeric(0),
+      m1, m2
+    )
+    c(sb[["lower"]], sb[["upper"]])
   }
   lam_b   <- rebuild_bounds(par_hat)
   lamLo_h <- as.numeric(lam_b[1]); lamHi_h <- as.numeric(lam_b[2])

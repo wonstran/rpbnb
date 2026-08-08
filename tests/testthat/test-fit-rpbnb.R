@@ -9,27 +9,19 @@ test_that("RP-BNB simulated-LL analytic gradient matches numDeriv", {
   Z1 <- Z[, 1, drop = FALSE]; Z2 <- Z[, 2, drop = FALSE]
   par <- c(0.2, 0.1, 0.15, -0.1, log(0.3), log(0.3), log(0.4), log(0.4), 0.1)
 
-  # The analytic gradient treats the global lambda bounds (max/min of the
-  # per-draw Sarmanov bounds) as FROZEN -- exactly as the legacy estimator and
-  # the frozen-bounds Hessian objective do. Differentiating the moving-bounds
-  # objective therefore differs by the omitted d(bound)/d(theta) term. The
-  # correct reference for this gradient is the frozen-bounds objective, with
-  # bounds pinned at `par`.
-  bnds <- local({
-    m1 <- exp(par[7]); m2 <- exp(par[8])
-    sd1 <- exp(par[5]); sd2 <- exp(par[6])
-    xb1 <- as.vector(X1 %*% par[1:2]); xb2 <- as.vector(X2 %*% par[3:4])
-    Z1sd <- sweep(Z1, 2, sd1, `*`); Z2sd <- sweep(Z2, 2, sd2, `*`)
-    lo <- -Inf; hi <- Inf
-    for (r in seq_len(nrow(Z1))) {
-      mu1 <- exp(xb1 + as.vector(XR1 %*% Z1sd[r, ]))
-      mu2 <- exp(xb2 + as.vector(XR2 %*% Z2sd[r, ]))
-      b <- rpbnb:::lambda_bounds_vec(rpbnb:::c_val(mu1, m1),
-                                     rpbnb:::c_val(mu2, m2))
-      lo <- max(lo, b[1]); hi <- min(hi, b[2])
-    }
-    c(lo, hi)
-  })
+  # The analytic gradient treats the lambda bounds as FROZEN -- exactly as the
+  # frozen-bounds Hessian objective does. Differentiating an objective whose
+  # bounds move with the parameters would differ by the omitted
+  # d(bound)/d(theta) term, so the correct reference is the frozen-bounds
+  # objective with bounds pinned at `par`.
+  #
+  # Those bounds are the coefficients' SUPPORT bound, taken from the package so
+  # this cannot drift from what the objective uses. (For two unbounded normal
+  # margins it is the constant [-1, 1], so the omitted term is exactly zero
+  # there and the comparison is sharper than it used to be.)
+  bnds <- rpbnb:::.rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                                     NULL, NULL, NULL, NULL)
+
 
   obj <- function(p) rpbnb:::bnbr_rp_ll_fixed_bounds(
     p, y1, y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2, Z1, Z2, bnds[1], bnds[2])

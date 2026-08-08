@@ -81,7 +81,6 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
   mu1M <- matrix(0, n, R); mu2M <- matrix(0, n, R)
   c1M  <- matrix(0, n, R); c2M  <- matrix(0, n, R)
   LL   <- matrix(0, n, R)
-  lamLo_r <- numeric(R); lamHi_r <- numeric(R)
   ey1 <- exp(-y1); ey2 <- exp(-y2)
   for (r in seq_len(R)) {
     eta1 <- xb1 + if (q1 > 0) as.vector(XR1m %*% real1$dev[r, ]) else 0
@@ -89,11 +88,19 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
     mu1 <- pmin(exp(eta1), 1e15); mu2 <- pmin(exp(eta2), 1e15)
     cc1 <- c_val(mu1, m1); cc2 <- c_val(mu2, m2)
     mu1M[, r] <- mu1; mu2M[, r] <- mu2; c1M[, r] <- cc1; c2M[, r] <- cc2
-    b <- lambda_bounds_vec(cc1, cc2)
-    lamLo_r[r] <- b[1]; lamHi_r[r] <- b[2]
   }
   if (is.null(lamLo) || is.null(lamHi)) {
-    lamLo <- max(lamLo_r); lamHi <- min(lamHi_r)
+    # Support bound, matching the objective and the reconstructed bounds. The
+    # per-draw reduction this replaced made the analytic Hessian's dependence
+    # block a function of `draws`.
+    sb <- famoye_support_bounds(
+      X1, X2, off1, off2, rand_idx1, rand_idx2,
+      dist1, dist2, sign1, sign2, beta1, beta2,
+      if (q1 > 0) exp(pmin(pmax(par[lg1], -20), 20)) else numeric(0),
+      if (q2 > 0) exp(pmin(pmax(par[lg2], -20), 20)) else numeric(0),
+      m1, m2
+    )
+    lamLo <- sb[["lower"]]; lamHi <- sb[["upper"]]
   }
   eps <- 1e-6; sig <- plogis(zlam)
   lam       <- lamLo + (lamHi - lamLo) * (eps + (1 - 2 * eps) * sig)

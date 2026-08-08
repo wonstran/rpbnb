@@ -77,3 +77,43 @@ test_that("both random-parameter engines agree on the same model", {
   expect_gt(length(shared), 0L)
   expect_lt(max(abs(coef(fit_cpp)[shared] - coef(fit_tmb)[shared])), 0.2)
 })
+
+test_that("the Famoye admissible interval is one model property across engines", {
+  skip_on_cran()
+  skip_slow()
+  # The admissible lambda set belongs to the model, not to whatever rule
+  # approximates its random-coefficient integral. Both engines must therefore
+  # agree, and neither may move with the draw count. Before this was shared, the
+  # Rcpp engine reduced bounds over its optimization draws and returned
+  # [-1.4242, 1.0995] at 50 draws against [-1.0796, 1.0668] at 800, while the
+  # TMB engine had already switched to the support bound -- so the DEFAULT
+  # engine still had a draw-dependent parameter space.
+  sim <- simulate_rpbnb(
+    n = 300,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.3)),
+    random_2 = list(x1 = list(sd = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.5), seed = 77
+  )
+  ctl <- rpbnb_control(compute_se = FALSE, print_level = 0)
+
+  cpp_50  <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                       random_2 = "x1", draws = 50,  seed = 3, control = ctl)
+  cpp_400 <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                       random_2 = "x1", draws = 400, seed = 3, control = ctl)
+  tmb_50  <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                           random_2 = "x1", dependence = "famoye",
+                           draws = 50L, seed = 3, inference = "none",
+                           control = rpbnb_tmb_control(iterlim = 20L))
+
+  # Two normal coefficients with non-zero loadings: c1 and c2 each span (0,1),
+  # so the support bound is exactly [-1, 1] and parameter-independent.
+  expect_equal(unname(cpp_50$bounds), c(-1, 1))
+  expect_equal(unname(cpp_400$bounds), c(-1, 1))
+  expect_equal(unname(tmb_50$lambda_bounds), c(-1, 1))
+
+  # Draw-independence within an engine, and agreement across engines.
+  expect_equal(cpp_50$bounds, cpp_400$bounds)
+  expect_equal(unname(cpp_50$bounds), unname(tmb_50$lambda_bounds))
+})
