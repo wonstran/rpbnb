@@ -194,3 +194,63 @@ test_that("fit_rpbnb parallel path matches sequential and respects workers", {
   # Same draws + seed => statistically identical estimates (parallel only splits the draw loop)
   expect_equal(unname(coef(seq_fit)), unname(coef(par_fit)), tolerance = 1e-6)
 })
+
+test_that("the post-fit admissibility guard uses the objective's own lambda", {
+  # The guard must map z_lambda through the FROZEN interval -- the one the
+  # optimized objective used -- and test that value against the interval
+  # admissible at the optimum.
+  #
+  # Mapping z through the optimum interval and asking whether the result lies in
+  # THAT interval is a tautology: eps + (1-2eps)*plogis(z) is in (0,1) for every
+  # finite z, so lo + (hi-lo)*that is always strictly inside [lo, hi]. Written
+  # that way the guard can never fire. With frozen [-2, 2], optimum [-0.5, 0.5]
+  # and z = 2 the objective used lambda = 1.523185266 (inadmissible) while the
+  # remapping gave 0.3807963164 and called it admissible.
+  eps <- 1e-6
+  map <- function(lo, hi, z) lo + (hi - lo) * (eps + (1 - 2 * eps) * plogis(z))
+  lam_obj <- map(-2, 2, 2)
+  expect_equal(lam_obj, 1.523185266, tolerance = 1e-8)
+  expect_false(lam_obj >= -0.5 && lam_obj <= 0.5)      # truly inadmissible
+  expect_true(map(-0.5, 0.5, 2) >= -0.5 &&             # the tautology
+              map(-0.5, 0.5, 2) <= 0.5)
+})
+
+test_that("a fit reports the lambda its own objective used, plus both intervals", {
+  skip_on_cran()
+  skip_slow()
+  # A uniform random coefficient makes the support bound parameter-dependent, so
+  # the interval frozen at the starting values and the one recomputed at the
+  # optimum genuinely differ -- which is the case the guard exists for.
+  sim <- simulate_rpbnb(
+    n = 300,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(dist = "uniform", scale = 0.3)),
+    dispersion = c(m1 = 0.5, m2 = 0.5), seed = 5
+  )
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   random_1 = list(x1 = list(dist = "uniform")),
+                   draws = 60, seed = 2,
+                   control = rpbnb_control(compute_se = FALSE, print_level = 0))
+
+  # Both intervals are retained, and the flag is present.
+  expect_true(all(is.finite(fit$bounds)))
+  expect_true(all(is.finite(fit$bounds_at_optimum)))
+  expect_true(is.logical(fit$lambda_admissible))
+
+  # fit$lambda must be z mapped through the interval the objective used
+  # (fit$bounds), not through the recomputed one.
+  z <- coef(fit)[["z_lambda"]]
+  expect_equal(fit$lambda,
+               fit$bounds[1] + diff(fit$bounds) *
+                 (1e-6 + (1 - 2e-6) * plogis(z)),
+               tolerance = 1e-10)
+
+  # And the flag must be the honest test of that value against the optimum
+  # interval -- not automatically TRUE.
+  expect_identical(
+    fit$lambda_admissible,
+    isTRUE(fit$lambda >= fit$bounds_at_optimum[["lower"]] &&
+           fit$lambda <= fit$bounds_at_optimum[["upper"]])
+  )
+})

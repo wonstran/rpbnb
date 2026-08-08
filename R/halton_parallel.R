@@ -179,7 +179,8 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                sign1 = NULL, sign2 = NULL,
                                n_threads = 0L,
                                pois1 = FALSE, pois2 = FALSE,
-                               off1 = NULL, off2 = NULL) {
+                               off1 = NULL, off2 = NULL,
+                               lam_bounds = NULL) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
                    pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
@@ -188,10 +189,18 @@ bnbr_rp_scores_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   # them under a draw-reduced bound while the gradient used the support bound
   # would make colSums(scores) != gradient and silently corrupt every OPG
   # standard error. tests/testthat/test-cpp-likelihood.R asserts the identity.
-  sb <- .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
-                           dist1, dist2, sign1, sign2,
-                           pois1 = pois1, pois2 = pois2,
-                           off1 = off1, off2 = off2)
+  # `lam_bounds` must be the interval the OPTIMIZED objective used. OPG scores
+  # are the covariance's ingredient and have to be scores OF THAT objective; a
+  # bound recomputed from par_hat gives scores of a different function whenever
+  # the support bound moved during the fit.
+  sb <- if (is.null(lam_bounds)) {
+    .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                       dist1, dist2, sign1, sign2,
+                       pois1 = pois1, pois2 = pois2,
+                       off1 = off1, off2 = off2)
+  } else {
+    c(lower = lam_bounds[[1]], upper = lam_bounds[[2]])
+  }
   res <- rpbnb_ll_grad_cpp(
     d$y1, d$y2, d$X1, d$X2, d$XR1, d$XR2, d$ri1, d$ri2,
     d$dev1, d$dev2, d$dloc1, d$dloc2, d$dscale1, d$dscale2,

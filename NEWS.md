@@ -3,6 +3,34 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 13:15 response review)
+
+See `comments/response_2026-08-08-15-26-11.md`.
+
+* **The Rcpp post-fit admissibility guard actually works now.** It mapped
+  `z_lambda` through the interval recomputed at the optimum and then asked
+  whether the result lay inside that same interval — true by construction, since
+  `eps + (1-2eps)*plogis(z)` is in `(0,1)`, so the warning could never fire. It
+  now maps `z_lambda` through the *frozen* interval the objective actually used
+  and tests that value against the interval admissible at the optimum. With
+  frozen `[-2, 2]`, optimum `[-0.5, 0.5]` and `z = 2`, the objective used
+  `lambda = 1.523185266` (inadmissible) while the old code reported
+  `0.3807963164` as admissible.
+* **`fit$lambda` is the lambda that produced `fit$logLik`.** It was previously
+  `z_lambda` remapped through the recomputed interval, so it need not have been
+  the value the likelihood used.
+* **New fields on `rpbnb_fit`**: `bounds` is the frozen interval the objective
+  used (and the width `summary()`'s delta method needs), `bounds_at_optimum` is
+  the interval admissible at the fitted parameters, and `lambda_admissible`
+  records the comparison. `lambda_admissible` was previously computed but never
+  reached the constructor.
+* **Every covariance path now uses the objective's interval.**
+  `bnbr_rp_scores_cpp()` gained a `lam_bounds` argument and the analytic and
+  numeric Hessian paths receive the frozen interval, instead of the one
+  recomputed at the optimum. Standard errors previously described a
+  reparameterized likelihood that had not been optimized whenever the support
+  bound moved during the fit.
+
 ## Review fixes (2026-08-08 12:12 response review)
 
 See `comments/response_2026-08-08-13-01-57.md`.

@@ -8,6 +8,7 @@
 #' @noRd
 new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           m1, m2, lambda, bounds, mu1, mu2, X1, X2, Y1, Y2,
+                          bounds_at_optimum = NULL, lambda_admissible = NA,
                           rand_idx1, rand_idx2, formula_1, formula_2,
                           draws, draw_type, seed, ll_trace, convergence,
                           cop_family = NULL, call, hessian_diag = NULL,
@@ -16,7 +17,15 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
-         bounds = bounds, mu1 = mu1, mu2 = mu2,
+         # `bounds` is the interval the OPTIMIZED objective used (frozen at the
+         # starting values); summary()'s delta method needs that width, not the
+         # one recomputed afterwards. `bounds_at_optimum` is the interval
+         # admissible at the fitted parameters, and `lambda_admissible` records
+         # whether `lambda` -- mapped through `bounds` -- lies inside it.
+         bounds = bounds,
+         bounds_at_optimum = bounds_at_optimum,
+         lambda_admissible = lambda_admissible,
+         mu1 = mu1, mu2 = mu2,
          X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
          rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
          formula_1 = formula_1, formula_2 = formula_2,
@@ -393,15 +402,30 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # admissible one, leaving the joint pmf negative in the count tails while the
   # objective stays finite at the observed cells. Detect and report; the
   # optimized objective cannot be repaired after the fact.
+  # z_lambda must be mapped through the FROZEN interval -- the one the optimized
+  # objective used -- and the resulting lambda then tested against the interval
+  # admissible at the optimum.
+  #
+  # Mapping z through the optimum interval and asking whether the result lies in
+  # that same interval is a tautology: eps + (1-2eps)*plogis(z) is in (0,1) for
+  # every finite z, so lo + (hi-lo)*that is always strictly inside [lo, hi]. A
+  # guard written that way can never fire, and it also reports a lambda that is
+  # not the one that produced the log-likelihood. Concretely, with frozen
+  # [-2, 2], optimum [-0.5, 0.5] and z = 2, the objective used
+  # lambda = 1.523185266 (inadmissible), while remapping gives 0.3807963164 and
+  # calls it admissible.
+  eps_lam <- 1e-6
+  sig_lam <- stats::plogis(par_hat[[length(par_hat)]])
+  lam_hat_used <- lam_frozen[["lower"]] +
+    (lam_frozen[["upper"]] - lam_frozen[["lower"]]) *
+    (eps_lam + (1 - 2 * eps_lam) * sig_lam)
   lambda_admissible <- NA
-  lam_hat_chk <- lamLo_h + (lamHi_h - lamLo_h) *
-    (1e-6 + (1 - 2e-6) * stats::plogis(par_hat[[length(par_hat)]]))
-  if (is.finite(lam_hat_chk) && lamLo_h < lamHi_h) {
-    lambda_admissible <- isTRUE(lam_hat_chk >= lamLo_h && lam_hat_chk <= lamHi_h)
+  if (is.finite(lam_hat_used) && lamLo_h < lamHi_h) {
+    lambda_admissible <- isTRUE(lam_hat_used >= lamLo_h && lam_hat_used <= lamHi_h)
   }
   if (isTRUE(!lambda_admissible)) {
     warning(
-      "The fitted Famoye lambda (", signif(lam_hat_chk, 6), ") lies outside ",
+      "The fitted Famoye lambda (", signif(lam_hat_used, 6), ") lies outside ",
       "the admissible interval recomputed at the fitted parameters [",
       signif(lamLo_h, 6), ", ", signif(lamHi_h, 6), "]. The interval used by ",
       "the likelihood was frozen at the starting values ([",
@@ -430,7 +454,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                             rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                             dist1, dist2, sign1, sign2, n_threads = cpp_threads,
                             pois1 = poisson_1, pois2 = poisson_2,
-                            off1 = off1, off2 = off2)
+                            off1 = off1, off2 = off2,
+                            lam_bounds = lam_frozen)
     inv <- .free_index_vcov(crossprod(S), par_names, free, label = "OPG (BHHH)")
     vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
   } else if (use_analytic) {
@@ -441,7 +466,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     H <- bnbr_rp_hessian(par_hat, Y1, Y2, X1, X2, XR1, XR2,
                          rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                          dist1, dist2, sign1, sign2,
-                         lamLo = lamLo_h, lamHi = lamHi_h,
+                         lamLo = lam_frozen[["lower"]],
+                         lamHi = lam_frozen[["upper"]],
                          pois1 = poisson_1, pois2 = poisson_2,
                          off1 = off1, off2 = off2)
     info <- -H
@@ -469,7 +495,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     ll_fb <- if (use_cpp)
       function(p) bnbr_rp_ll_fixed_bounds_cpp(p, Y1, Y2, X1, X2, XR1, XR2,
                                               rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                                              lamLo_h, lamHi_h,
+                                              lam_frozen[["lower"]],
+                                              lam_frozen[["upper"]],
                                               dist1, dist2, sign1, sign2,
                                               n_threads = cpp_threads,
                                               pois1 = poisson_1, pois2 = poisson_2,
@@ -477,7 +504,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     else
       function(p) bnbr_rp_ll_fixed_bounds(p, Y1, Y2, X1, X2, XR1, XR2,
                                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
-                                          lamLo_h, lamHi_h,
+                                          lam_frozen[["lower"]],
+                                          lam_frozen[["upper"]],
                                           dist1, dist2, sign1, sign2,
                                           cl = cl_h,
                                           pois1 = poisson_1, pois2 = poisson_2,
@@ -512,7 +540,10 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   m2_hat     <- if (isTRUE(poisson_2)) 0 else unname(exp(par_hat[idx_end + 2]))
   z_hat      <- unname(par_hat[idx_end + 3])
   eps        <- 1e-6; sig <- plogis(z_hat)
-  lambda_hat <- lamLo_h + (lamHi_h - lamLo_h) * (eps + (1 - 2*eps) * sig)
+  # The lambda the OPTIMIZED objective used: z mapped through the frozen
+  # interval. Mapping through the optimum interval would report a number that
+  # did not produce fit$logLik.
+  lambda_hat <- lam_hat_used
 
   # --- Fitted draw-averaged unconditional means ---
   beta1_hat <- par_hat[1:k1]; beta2_hat <- par_hat[(k1+1):(k1+k2)]
@@ -548,7 +579,10 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
     nobs = length(Y1), npar = npar,
     m1 = m1_hat, m2 = m2_hat, lambda = lambda_hat,
-    bounds = c(lamLo_h, lamHi_h), mu1 = mu1_hat, mu2 = mu2_hat,
+    bounds = c(lam_frozen[["lower"]], lam_frozen[["upper"]]),
+    bounds_at_optimum = c(lower = lamLo_h, upper = lamHi_h),
+    lambda_admissible = lambda_admissible,
+    mu1 = mu1_hat, mu2 = mu2_hat,
     X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
     rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
     formula_1 = formula_1, formula_2 = formula_2,
