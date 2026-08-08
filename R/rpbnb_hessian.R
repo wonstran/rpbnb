@@ -96,8 +96,8 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
     sb <- famoye_support_bounds(
       X1, X2, off1, off2, rand_idx1, rand_idx2,
       dist1, dist2, sign1, sign2, beta1, beta2,
-      if (q1 > 0) exp(pmin(pmax(par[lg1], -20), 20)) else numeric(0),
-      if (q2 > 0) exp(pmin(pmax(par[lg2], -20), 20)) else numeric(0),
+      if (q1 > 0) exp(pmax(par[lg1], -20)) else numeric(0),
+      if (q2 > 0) exp(pmax(par[lg2], -20)) else numeric(0),
       m1, m2
     )
     lamLo <- sb[["lower"]]; lamHi <- sb[["upper"]]

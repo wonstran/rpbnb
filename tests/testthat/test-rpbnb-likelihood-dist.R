@@ -102,3 +102,65 @@ test_that("fixed-bounds LL is finite and matches the free LL bounds at z=0", {
                                 -5, 5, cs$dist1, cs$dist2, cs$sign1, cs$sign2)
   expect_true(is.finite(vf))
 })
+
+test_that("the support bound uses the true scale for bounded distributions", {
+  # An UPPER cap on the scale is not safe. Uniform and triangular deviations are
+  # supported on (-s, s), so shrinking s shrinks the attainable mean range and
+  # WIDENS the admissible lambda interval. With one uniform coefficient per
+  # margin, log_w = 30, loading 1e-9 and m = 0.5, capping at exp(20) returned
+  # [-2.0362897, 2.5327946] -- admitting lambda = 2 against a model whose pmf is
+  # negative there -- where the true support gives [-1, 1].
+  X <- cbind(`(Intercept)` = 1, x = rep(1e-9, 5L))
+  par <- c(0, 0, 0, 0, 30, 30, log(0.5), log(0.5), 0)
+  b <- rpbnb:::.rp_support_bounds(par, X, X, 2L, 2L, "uniform", "uniform", 1, 1)
+  expect_equal(unname(b), c(-1, 1))
+  expect_lt(b[["upper"]], 2)
+
+  # The lower floor is retained and is conservative: it only decides that an
+  # underflowing scale still counts as varying, which NARROWS the interval.
+  set.seed(4)
+  Xn <- cbind(1, rnorm(20))
+  parn <- c(0, 0, 0, 0, -1000, -1000, log(0.5), log(0.5), 0)
+  bn <- rpbnb:::.rp_support_bounds(parn, Xn, Xn, 2L, 2L, "normal", "normal", 1, 1)
+  expect_equal(unname(bn), c(-1, 1))
+})
+
+test_that("the objective the optimizer sees has an exact analytic gradient", {
+  # This differentiates the SAME wrapper the optimizer calls, with the interval
+  # frozen exactly as fit_rpbnb() freezes it -- not a separate fixed-bounds
+  # reference. Uniform coefficients are the point: their support bound depends
+  # on beta, m AND s, so a bound recomputed per call would leave d(bound)/d(par)
+  # out of the gradient. Measured before freezing, that gap was 2.05, on every
+  # coordinate except z_lambda (the only one the bounds do not involve).
+  set.seed(21)
+  N <- 20L
+  X1 <- cbind(1, rnorm(N)); X2 <- cbind(1, rnorm(N))
+  y1 <- rpois(N, 2); y2 <- rpois(N, 2)
+  XR1 <- X1[, 2, drop = FALSE]; XR2 <- X2[, 2, drop = FALSE]
+  U1 <- halton_uniform(40, 1, burn = 50); U2 <- halton_uniform(40, 1, burn = 50)
+  p0 <- c(0.2, 0.1, 0.15, -0.1, log(0.3), log(0.3), log(0.4), log(0.4), 0.1)
+  frozen <- rpbnb:::.rp_support_bounds(p0, X1, X2, 2L, 2L,
+                                       "uniform", "uniform", 1, 1)
+  # Genuinely parameter-dependent, or this test would be vacuous.
+  moved <- rpbnb:::.rp_support_bounds(p0 + 0.25, X1, X2, 2L, 2L,
+                                      "uniform", "uniform", 1, 1)
+  expect_false(isTRUE(all.equal(unname(frozen), unname(moved))))
+
+  f <- function(p) as.numeric(bnbr_rp_ll_and_grad(
+    p, y1, y2, X1, X2, XR1, XR2, 2L, 2L, U1, U2,
+    "uniform", "uniform", 1, 1, lam_bounds = frozen))
+  v <- bnbr_rp_ll_and_grad(p0, y1, y2, X1, X2, XR1, XR2, 2L, 2L, U1, U2,
+                           "uniform", "uniform", 1, 1, lam_bounds = frozen)
+  expect_equal(unname(attr(v, "gradient")), numDeriv::grad(f, p0),
+               tolerance = 1e-5)
+
+  skip_if_not(rpbnb:::rpbnb_cpp_available(), "C++ core unavailable")
+  fc <- function(p) as.numeric(bnbr_rp_ll_and_grad_cpp(
+    p, y1, y2, X1, X2, XR1, XR2, 2L, 2L, U1, U2,
+    "uniform", "uniform", n_threads = 1L, lam_bounds = frozen))
+  vc <- bnbr_rp_ll_and_grad_cpp(p0, y1, y2, X1, X2, XR1, XR2, 2L, 2L, U1, U2,
+                                "uniform", "uniform", n_threads = 1L,
+                                lam_bounds = frozen)
+  expect_equal(unname(attr(vc, "gradient")), numDeriv::grad(fc, p0),
+               tolerance = 1e-5)
+})

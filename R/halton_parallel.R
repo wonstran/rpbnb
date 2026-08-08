@@ -91,7 +91,8 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
                                     sign1 = NULL, sign2 = NULL,
                                     n_threads = 0L,
                                     pois1 = FALSE, pois2 = FALSE,
-                                    off1 = NULL, off2 = NULL) {
+                                    off1 = NULL, off2 = NULL,
+                                    lam_bounds = NULL) {
   d <- .rp_prepare(par, y1, y2, X1, X2, XR1, XR2,
                    rand_idx1, rand_idx2, Z1, Z2, dist1, dist2, sign1, sign2,
                    pois1 = pois1, pois2 = pois2, off1 = off1, off2 = off2)
@@ -101,10 +102,25 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   # `use_fixed` are independent flags, so the gradient is still produced and is
   # consistent with the supplied interval (the kernel builds lam and dlam_dz
   # from lamLo/lamHi either way). See famoye_support_bounds().
-  sb <- .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
-                           dist1, dist2, sign1, sign2,
-                           pois1 = pois1, pois2 = pois2,
-                           off1 = off1, off2 = off2)
+  # `lam_bounds`, when supplied, FREEZES the interval. fit_rpbnb() supplies it so
+  # that the function the optimizer evaluates is genuinely a fixed-bound
+  # objective, which is the only way the analytic gradient below can be its
+  # derivative: the kernel differentiates lam through lamLo/lamHi treating them
+  # as constants, so an interval recomputed from `par` on every call would leave
+  # out d(lamLo)/d(par) and d(lamHi)/d(par). Those terms are non-zero whenever
+  # the support bound depends on the parameters -- a single varying margin, or a
+  # uniform/triangular coefficient -- and the mismatch is large: measured at
+  # 2.05 on a one-margin uniform fixture, with only the z_lambda coordinate
+  # agreeing (the bounds do not depend on z). Left NULL the interval is computed
+  # from `par`, which is right for one-off evaluation and post-fit work.
+  sb <- if (is.null(lam_bounds)) {
+    .rp_support_bounds(par, X1, X2, rand_idx1, rand_idx2,
+                       dist1, dist2, sign1, sign2,
+                       pois1 = pois1, pois2 = pois2,
+                       off1 = off1, off2 = off2)
+  } else {
+    c(lower = lam_bounds[[1]], upper = lam_bounds[[2]])
+  }
   if (!(sb[["lower"]] < sb[["upper"]] &&
         is.finite(sb[["lower"]]) && is.finite(sb[["upper"]]))) {
     val <- -1e50
@@ -138,11 +154,11 @@ bnbr_rp_ll_and_grad_cpp <- function(par, y1, y2, X1, X2, XR1, XR2,
   q1 <- length(rand_idx1); q2 <- length(rand_idx2)
   i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
   idx_end <- k1 + k2 + q1 + q2
-  clamp <- function(x) exp(pmin(pmax(x, -20), 20))
+  clamp <- function(x) exp(pmax(x, -20))   # floor only; see famoye_core.R
   s1 <- if (q1 > 0) clamp(par[(k1 + k2 + 1):(k1 + k2 + q1)]) else numeric(0)
   s2 <- if (q2 > 0) clamp(par[(k1 + k2 + q1 + 1):idx_end]) else numeric(0)
-  m1 <- if (pois1) 0 else exp(pmin(pmax(par[idx_end + 1], -20), 20))
-  m2 <- if (pois2) 0 else exp(pmin(pmax(par[idx_end + 2], -20), 20))
+  m1 <- if (pois1) 0 else exp(pmax(par[idx_end + 1], -20))
+  m2 <- if (pois2) 0 else exp(pmax(par[idx_end + 2], -20))
   famoye_support_bounds(X1, X2,
                         .as_offset(off1, nrow(X1)), .as_offset(off2, nrow(X2)),
                         rand_idx1, rand_idx2, dist1, dist2, sign1, sign2,

@@ -285,6 +285,34 @@ fit_rpbnb <- function(formula_1, formula_2, data,
 
   # LL trace (one total logLik per function evaluation)
   ll_trace <- numeric(0)
+  # The admissible interval is FROZEN at the starting values for the whole
+  # optimization, and the objective is handed that fixed interval.
+  #
+  # This is what makes the analytic gradient the actual derivative of the
+  # function being optimized. The kernels differentiate lam through lamLo/lamHi
+  # treating them as constants; recomputing the interval from the current
+  # parameters on every call would silently add d(lamLo)/d(par) and
+  # d(lamHi)/d(par) terms to the objective that the gradient omits. Those terms
+  # are zero only when the bound happens not to depend on the parameters (normal
+  # or lognormal coefficients loaded in both margins, where it is the constant
+  # [-1, 1]); with a single varying margin or a uniform/triangular coefficient
+  # they are not, and the discrepancy was measured at 2.05 on a one-margin
+  # uniform fixture -- every coordinate except z_lambda, which is the only one
+  # the bounds do not involve.
+  #
+  # Freezing matches what the TMB engine already does, so the two engines now
+  # agree on semantics as well as on the interval, and the post-fit
+  # admissibility check below is the same guard TMB applies.
+  lam_frozen <- .rp_support_bounds(start, X1, X2, rand_idx1, rand_idx2,
+                                   dist1, dist2, sign1, sign2,
+                                   pois1 = poisson_1, pois2 = poisson_2,
+                                   off1 = off1, off2 = off2)
+  if (!(lam_frozen[["lower"]] < lam_frozen[["upper"]] &&
+        all(is.finite(lam_frozen)))) {
+    stop("Invalid Famoye lambda bounds at the starting values: [",
+         signif(lam_frozen[["lower"]], 6), ", ",
+         signif(lam_frozen[["upper"]], 6), "].", call. = FALSE)
+  }
   # A poisson_* margin uses the exact m = 0 (Poisson) branch; the pinned log_m is
   # only a display placeholder, so the fit nests inside the NB model for the
   # overdispersion LR test while the likelihood/CDF stay exactly Poisson.
@@ -294,13 +322,15 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                               rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                               dist1, dist2, sign1, sign2, n_threads = cpp_threads,
                               pois1 = poisson_1, pois2 = poisson_2,
-                              off1 = off1, off2 = off2)
+                              off1 = off1, off2 = off2,
+                              lam_bounds = lam_frozen)
     else
       bnbr_rp_ll_and_grad(p, Y1, Y2, X1, X2, XR1, XR2,
                           rand_idx1, rand_idx2, Z1_opt, Z2_opt,
                           dist1, dist2, sign1, sign2, cl = cl,
                           pois1 = poisson_1, pois2 = poisson_2,
-                          off1 = off1, off2 = off2)
+                          off1 = off1, off2 = off2,
+                          lam_bounds = lam_frozen)
     ll_trace <<- c(ll_trace, as.numeric(v))
     v
   }
@@ -341,8 +371,8 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     sb <- famoye_support_bounds(
       X1, X2, off1, off2, rand_idx1, rand_idx2,
       dist1, dist2, sign1, sign2, beta1, beta2,
-      if (q1 > 0) exp(pmin(pmax(p[(k1+k2+1):(k1+k2+q1)], -20), 20)) else numeric(0),
-      if (q2 > 0) exp(pmin(pmax(p[(k1+k2+q1+1):(k1+k2+q1+q2)], -20), 20)) else numeric(0),
+      if (q1 > 0) exp(pmax(p[(k1+k2+1):(k1+k2+q1)], -20)) else numeric(0),
+      if (q2 > 0) exp(pmax(p[(k1+k2+q1+1):(k1+k2+q1+q2)], -20)) else numeric(0),
       m1, m2
     )
     c(sb[["lower"]], sb[["upper"]])
@@ -351,6 +381,36 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   lamLo_h <- as.numeric(lam_b[1]); lamHi_h <- as.numeric(lam_b[2])
   if (!(lamLo_h < lamHi_h)) {
     warning("Frozen bounds invalid at optimum; SEs may be unstable.", call. = FALSE)
+  }
+
+  # Admissibility at the OPTIMUM, the same guard the TMB engine applies.
+  #
+  # The interval handed to the objective was frozen at the starting values so
+  # that the analytic gradient is genuinely the derivative of the optimized
+  # function. The price is the one TMB already pays: where the bound depends on
+  # the parameters (a single varying margin, or uniform/triangular
+  # coefficients), the fit can move somewhere the frozen box is wider than the
+  # admissible one, leaving the joint pmf negative in the count tails while the
+  # objective stays finite at the observed cells. Detect and report; the
+  # optimized objective cannot be repaired after the fact.
+  lambda_admissible <- NA
+  lam_hat_chk <- lamLo_h + (lamHi_h - lamLo_h) *
+    (1e-6 + (1 - 2e-6) * stats::plogis(par_hat[[length(par_hat)]]))
+  if (is.finite(lam_hat_chk) && lamLo_h < lamHi_h) {
+    lambda_admissible <- isTRUE(lam_hat_chk >= lamLo_h && lam_hat_chk <= lamHi_h)
+  }
+  if (isTRUE(!lambda_admissible)) {
+    warning(
+      "The fitted Famoye lambda (", signif(lam_hat_chk, 6), ") lies outside ",
+      "the admissible interval recomputed at the fitted parameters [",
+      signif(lamLo_h, 6), ", ", signif(lamHi_h, 6), "]. The interval used by ",
+      "the likelihood was frozen at the starting values ([",
+      signif(lam_frozen[["lower"]], 6), ", ",
+      signif(lam_frozen[["upper"]], 6), "]), so the optimizer was free to ",
+      "leave the valid region: the joint pmf is negative somewhere in the ",
+      "count tails and this fit should not be interpreted. Refit from ",
+      "starting values closer to the optimum.", call. = FALSE
+    )
   }
 
   # --- Standard errors ---

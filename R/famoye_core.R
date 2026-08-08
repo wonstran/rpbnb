@@ -140,9 +140,24 @@ d2ct_dmdbeta_factor <- function(mu, m, c) {
 #' branch too. A narrower theoretical interval is also safe for a clamped
 #' objective, whose means are a subset of the model's.
 #'
-#' Scales must already be on the natural scale and strictly positive; callers
-#' pass exp(clamp(log_scale, -20, 20)) so that a scale which underflows in R
-#' still counts as varying, matching the template.
+#' Scales must already be on the natural scale and strictly positive. Callers
+#' pass `exp(pmax(log_scale, -20))` -- a FLOOR ONLY, never an upper cap, and the
+#' asymmetry is load-bearing:
+#'
+#'   * The floor is conservative. It matters only for unbounded (normal,
+#'     lognormal) coefficients, where any strictly positive scale gives the same
+#'     unbounded support: it stops a scale that underflows to 0 in R from being
+#'     read as "this margin is fixed", which would give the wider fixed-margin
+#'     interval. Flooring can only narrow.
+#'   * An upper cap is NOT safe. For uniform and triangular coefficients the
+#'     deviation support IS (-s, s), so capping s shrinks the attainable mean
+#'     range, shrinks the c range, and WIDENS the lambda interval. Measured with
+#'     one uniform coefficient per margin, log_w = 30, loading 1e-9 and m = 0.5:
+#'     capping at exp(20) gives [-2.0362897, 2.5327946] where the true support
+#'     gives [-1, 1], so lambda = 2 is admitted against a model whose pmf is
+#'     negative there.
+#'
+#' Dispersions are likewise passed unclipped above the floor.
 #'
 #' @keywords internal
 #' @noRd

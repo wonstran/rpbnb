@@ -404,11 +404,11 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
 
   .lambda_bounds_support <- function(par) {
     i1 <- 1:k1; i2 <- (k1 + 1):(k1 + k2)
-    s1 <- if (q1 > 0) exp(.clamp(par[(k1 + k2 + 1):(k1 + k2 + q1)], -20, 20)) else numeric(0)
-    s2 <- if (q2 > 0) exp(.clamp(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)], -20, 20)) else numeric(0)
+    s1 <- if (q1 > 0) exp(pmax(par[(k1 + k2 + 1):(k1 + k2 + q1)], -20)) else numeric(0)
+    s2 <- if (q2 > 0) exp(pmax(par[(k1 + k2 + q1 + 1):(k1 + k2 + q1 + q2)], -20)) else numeric(0)
     idx_end <- k1 + k2 + q1 + q2
-    m1_v <- if (poisson_1) 0 else exp(.clamp(par[idx_end + 1], -20, 20))
-    m2_v <- if (poisson_2) 0 else exp(.clamp(par[idx_end + 2], -20, 20))
+    m1_v <- if (poisson_1) 0 else exp(pmax(par[idx_end + 1], -20))
+    m2_v <- if (poisson_2) 0 else exp(pmax(par[idx_end + 2], -20))
     # The TMB engine rejects offset() terms, so there is no offset to pass.
     famoye_support_bounds(
       X1, X2, NULL, NULL, rand_idx1, rand_idx2,

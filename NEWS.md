@@ -3,6 +3,34 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 12:12 response review)
+
+See `comments/response_2026-08-08-13-01-57.md`.
+
+* **The support bound uses the true scale for bounded distributions.** Scales
+  and dispersions on the bound side were `exp(clamp(x, -20, 20))`. The floor is
+  conservative, but the *upper cap* is not: uniform and triangular deviations
+  are supported on `(-s, s)`, so capping `s` shrinks the attainable mean range
+  and *widens* the admissible interval. With one uniform coefficient per margin,
+  `log_w = 30`, loading `1e-9` and `m = 0.5`, the cap gave
+  `[-2.0362897, 2.5327946]` — admitting `lambda = 2` — where the true support
+  gives `[-1, 1]`. Now `exp(pmax(x, -20))`: floor only, never a cap.
+* **The Rcpp optimizer's objective is now genuinely fixed-bound**, so its
+  analytic gradient is its actual derivative. The interval was recomputed from
+  the current parameters on every objective call while the kernels differentiate
+  `lam` treating `lamLo`/`lamHi` as constants, so the optimized function carried
+  `d(bound)/d(par)` terms the gradient omitted. Measured on a one-margin uniform
+  fixture the gap was `2.048`, on every coordinate except `z_lambda` (the only
+  one the bounds do not involve); it is now `5.7e-09` in R and `2.6e-08` in C++.
+  `fit_rpbnb()` freezes the bound at the starting values and passes it via a new
+  `lam_bounds` argument, matching what the TMB engine does.
+* **`fit_rpbnb()` gained the TMB engine's post-fit admissibility check**: the
+  interval is recomputed at the fitted parameters and a warning is raised when
+  the fitted `lambda` has left it. The two engines now agree on semantics as
+  well as on the interval — both freeze, both check afterwards. Where the bound
+  is parameter-independent (normal or lognormal loaded in both margins) freezing
+  is exact and the check is trivially satisfied.
+
 ## Review fixes (2026-08-08 08:38 response review)
 
 See `comments/response_2026-08-08-11-31-05.md`.

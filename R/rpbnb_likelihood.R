@@ -19,7 +19,8 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
                                                  sign1 = NULL, sign2 = NULL,
                                                  cl = NULL,
                                                  pois1 = FALSE, pois2 = FALSE,
-                                                 off1 = NULL, off2 = NULL) {
+                                                 off1 = NULL, off2 = NULL,
+                                                 lam_bounds = NULL) {
   n   <- length(y1)
   k1  <- ncol(X1); k2 <- ncol(X2)
   q1  <- length(rand_idx1); q2 <- length(rand_idx2)
@@ -102,13 +103,20 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
   # calling it fixed would WIDEN the interval; flooring keeps the safe, narrower
   # bound. This engine's likelihood uses the raw exp(), which is unaffected --
   # the floor applies only to the admissibility calculation.
-  sb <- famoye_support_bounds(
-    X1, X2, off1, off2, rand_idx1, rand_idx2,
-    dist1, dist2, sign1, sign2, beta1, beta2,
-    if (q1 > 0) exp(pmin(pmax(log_sd1, -20), 20)) else numeric(0),
-    if (q2 > 0) exp(pmin(pmax(log_sd2, -20), 20)) else numeric(0),
-    m1, m2
-  )
+  # `lam_bounds` freezes the interval; see bnbr_rp_ll_and_grad_cpp() for why the
+  # optimizer must be given a fixed-bound objective rather than one whose
+  # constraint moves with the parameters it is differentiating.
+  sb <- if (is.null(lam_bounds)) {
+    famoye_support_bounds(
+      X1, X2, off1, off2, rand_idx1, rand_idx2,
+      dist1, dist2, sign1, sign2, beta1, beta2,
+      if (q1 > 0) exp(pmax(log_sd1, -20)) else numeric(0),
+      if (q2 > 0) exp(pmax(log_sd2, -20)) else numeric(0),
+      m1, m2
+    )
+  } else {
+    c(lower = lam_bounds[[1]], upper = lam_bounds[[2]])
+  }
   lamLo <- sb[["lower"]]; lamHi <- sb[["upper"]]
   if (!(lamLo < lamHi && is.finite(lamLo) && is.finite(lamHi))) {
     val <- -1e50; attr(val, "gradient") <- rep(0, length(par)); return(val)
