@@ -1,7 +1,7 @@
 Package: rpbnb
 Type: Package
 Title: Random-Parameter Bivariate Negative Binomial Regression
-Version: 0.2.3
+Version: 0.4.0
 Authors@R: person("Zhenyu", "Wang", email = "wonstran@hotmail.com", role = c("aut", "cre"))
 Author: Zhenyu Wang [aut, cre]
 Maintainer: Zhenyu Wang <wonstran@hotmail.com>
@@ -10,7 +10,10 @@ Description: Maximum-likelihood estimation of bivariate negative binomial
     (Frank, Gaussian, or Clayton) dependence, and maximum-simulated-likelihood
     estimation of a bivariate random-parameter negative binomial model under
     either dependence structure, with a random-coefficient data simulator,
-    diagnostics, and standard model methods.
+    diagnostics, and standard model methods. Two estimation engines are
+    provided: an OpenMP/Rcpp maximum-simulated-likelihood engine and a TMB
+    automatic-differentiation engine that additionally offers a Laplace
+    approximation, with a common front end.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1)
@@ -24,14 +27,18 @@ Imports:
     pbivnorm,
     Rcpp,
     parallel,
-    graphics
+    graphics,
+    TMB
 LinkingTo:
-    Rcpp
+    Rcpp,
+    TMB,
+    RcppEigen
 Suggests:
-    testthat (>= 3.0.0),
+    testthat (>= 3.1.5),
     knitr,
     rmarkdown,
     pkgload
+SystemRequirements: GNU make
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)

@@ -4,11 +4,20 @@
 #' Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
 #' (see [fit_bnb()], [copula()]), and maximum-simulated-likelihood estimation
 #' of a bivariate random-parameter negative binomial model under either
-#' dependence structure (see [fit_rpbnb()]).
+#' dependence structure.
+#'
+#' Two estimation engines are available for the random-parameter model:
+#' [fit_rpbnb()] (Rcpp/OpenMP simulated likelihood, `maxLik` BFGS, supports
+#' `offset()`) and [fit_rpbnb_tmb()] (TMB automatic differentiation, `nlminb`,
+#' adds a Laplace approximation and dependence profiling). [rpbnb()] is a common
+#' front end that dispatches to either.
 #'
 #' @keywords internal
+#' @aliases rpbnb-package
 #' @useDynLib rpbnb, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
+#' @importFrom TMB MakeADFun
+#' @importFrom numDeriv jacobian
 "_PACKAGE"
 
 #' @importFrom stats model.frame
@@ -36,5 +45,7 @@
 #' @importFrom stats var
 #' @importFrom stats sd
 #' @importFrom stats setNames
+#' @importFrom stats confint
+#' @importFrom stats nlminb
 #' @importFrom compiler cmpfun
 NULL

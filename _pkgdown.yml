@@ -15,10 +15,24 @@ reference:
   - title: "Model fitting"
     desc: "Functions for fitting bivariate NB regression models"
     contents:
+      - rpbnb
       - fit_bnb
       - copula
       - rpbnb_control
       - fit_rpbnb
+  - title: "TMB engine"
+    desc: >
+      The automatic-differentiation engine, reachable either directly or via
+      rpbnb(engine = "tmb"). Adds a Laplace approximation and dependence
+      profiling.
+    contents:
+      - fit_rpbnb_tmb
+      - rpbnb_tmb_control
+      - rpbnb_tmb_dependence_profile
+      - rpbnb_tmb_marginal_effects
+      - rpbnb_tmb_elasticities
+      - rpbnb_tmb_max_workload
+      - simulate_rpbnb_tmb
   - title: "Post-estimation"
     desc: "Marginal effects, goodness-of-fit, and elasticities"
     contents:

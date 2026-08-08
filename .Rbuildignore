@@ -33,3 +33,10 @@
 ^vignettes/.*\.pdf$
 ^tests/results$
 ^\.posit/assistant$
+# Hand-written design docs and the TMB reference manual, carried over from the
+# rpbnb.tmb merge. NOT under docs/, which is pkgdown output that build_site()
+# cleans.
+^dev-docs$
+# Local research data -- large and deliberately not published. Both are also
+# gitignored; keeping them out of the tarball as well.
+^inst/extdata/export_.*_all\.csv$

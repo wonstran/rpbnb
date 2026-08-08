@@ -2,7 +2,6 @@
 % Please edit documentation in R/rpbnb-package.R
 \docType{package}
 \name{rpbnb-package}
-\alias{rpbnb}
 \alias{rpbnb-package}
 \title{rpbnb: Random-Parameter Bivariate Negative Binomial Regression}
 \description{
@@ -10,7 +9,14 @@ Maximum-likelihood estimation of bivariate negative binomial models with
 Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
 (see \code{\link[=fit_bnb]{fit_bnb()}}, \code{\link[=copula]{copula()}}), and maximum-simulated-likelihood estimation
 of a bivariate random-parameter negative binomial model under either
-dependence structure (see \code{\link[=fit_rpbnb]{fit_rpbnb()}}).
+dependence structure.
+}
+\details{
+Two estimation engines are available for the random-parameter model:
+\code{\link[=fit_rpbnb]{fit_rpbnb()}} (Rcpp/OpenMP simulated likelihood, \code{maxLik} BFGS, supports
+\code{offset()}) and \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (TMB automatic differentiation, \code{nlminb},
+adds a Laplace approximation and dependence profiling). \code{\link[=rpbnb]{rpbnb()}} is a common
+front end that dispatches to either.
 }
 \author{
 \strong{Maintainer}: Zhenyu Wang \email{wonstran@hotmail.com}

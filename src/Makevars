@@ -1,7 +1,18 @@
-# Makevars for rpbnb - Enable OpenMP for multithreading (Unix/Linux/Mac).
+# Makevars for rpbnb (Unix/Linux/Mac). One DLL, two engines.
+#
+# OpenMP is used by BOTH the Rcpp kernels (halton_parallel.cpp,
+# copula_parallel.cpp) and TMB's parallel_accumulator in rpbnb_tmb.cpp.
 # Use SHLIB_OPENMP_CXXFLAGS for both compile and link so -fopenmp is present at
 # link time and the compiler's own OpenMP runtime is pulled in. Do not hard-code
 # -fopenmp/-lomp (wrong on clang/Mac, where these variables expand differently).
+#
+# CXX17 is required by TMB (CppAD / TMBad).
+#
+# $(TMB_CXXFLAGS) and $(TMB_LIBS) are deliberately NOT used: they are undefined
+# make variables for a LinkingTo: TMB package (only TMB::compile() sets those,
+# for standalone models) and a stray -DTMB_LIB_INIT reaching this compile would
+# resurrect a second R_init_rpbnb and break the link. See src/rpbnb_tmb.cpp.
 
+CXX_STD = CXX17
 PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS)

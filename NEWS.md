@@ -1,3 +1,79 @@
+# rpbnb 0.4.0
+
+The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
+That source tree is now superseded; everything it provided is available here.
+
+## Two engines, one package
+
+* New `rpbnb()` front end dispatching to either engine via `engine = "cpp"`
+  (the existing `fit_rpbnb()`, Rcpp/OpenMP simulated likelihood, `maxLik` BFGS)
+  or `engine = "tmb"` (the new `fit_rpbnb_tmb()`, TMB automatic differentiation,
+  `nlminb` with restart polish). Both fitters remain exported with unchanged
+  signatures, and `rpbnb()` returns the engine-native object unaltered — no
+  wrapper class, so every S3 method and post-estimation function works as
+  before.
+* `rpbnb()` validates every extra argument by name against the selected
+  fitter's own formals. Passing a tmb-only argument (`inference`, `keep`,
+  `method`) under `engine = "cpp"`, a cpp-only one (`draw_type`, `.fixed`,
+  `.opt_draws`) under `engine = "tmb"`, or a misspelled name is an error rather
+  than a silently ignored `...` entry. The two control objects are engine-typed
+  and are never translated into one another: fields sharing a name mean
+  different things.
+* New from the TMB engine: a Laplace approximation (`method = "laplace"`),
+  `rpbnb_tmb_dependence_profile()`, `rpbnb_tmb_max_workload()`, memory-aware
+  workload sizing, and `scaling`/`log_vars` support in
+  `rpbnb_tmb_marginal_effects()`/`rpbnb_tmb_elasticities()`.
+
+## Native code
+
+* One shared library now hosts both engines. `R_init_rpbnb` is hand-written at
+  the bottom of `src/rpbnb_tmb.cpp` and registers TMB's `TMB_CALLDEFS`
+  alongside the six Rcpp entry points; `Rcpp::compileAttributes()` detects it
+  and no longer emits its own. `tests/testthat/test-native-registration.R`
+  fails loudly if that table drifts out of sync with the `[[Rcpp::export]]`
+  set.
+* `src/Makevars*` now set `CXX_STD = CXX17` (required by TMB) and, on Windows,
+  `-Wa,-mbig-obj`. `$(TMB_CXXFLAGS)`/`$(TMB_LIBS)` are deliberately not used —
+  they are undefined make variables for a `LinkingTo: TMB` package, and a
+  stray `-DTMB_LIB_INIT` would resurrect a second init and break the link.
+
+## Shared code and behaviour changes
+
+* `copula()` is now a single definition (the former `rpbnb` version, which
+  validates `par` more strictly). `.prepare_bnb_data()`, `parse_rand_spec()`,
+  `chk_rand_spec()`, `chk_dispersion()`, `.resolve_start()`, `.check_counts()`,
+  `.chk_poisson_flag()`, `rand_dist_registry` and the Famoye math helpers are
+  likewise shared rather than duplicated. Some error messages seen from the TMB
+  engine are now the (more verbose) `rpbnb` wording.
+* **The TMB engine now rejects `offset()` terms with an error.** The shared data
+  prep understands offsets but the TMB template has no offset in its linear
+  predictor, so accepting one would silently drop it. Use `fit_rpbnb()`
+  (`engine = "cpp"`) for offset models.
+* The two Halton generators are deliberately **not** unified:
+  `halton_uniform()` (Rcpp engine, via `randtoolbox`) and
+  `.tmb_halton_uniform()` (TMB engine, radical inverse). They are believed
+  equivalent for a common `burn`, but `test-laplace.R` pins the TMB engine's
+  SML log-likelihood to `1e-10` and that guard was not worth moving on a
+  belief. `test-halton-equivalence.R` asserts the agreement; unify once it has
+  held across platforms.
+* Known duplication left in place: `signif_stars()` (returns a character
+  vector) and `.signif_stars()` (returns the `symnum` object). The names differ
+  and so do the return types, so collapsing them would change table formatting.
+
+## Tests, data, docs
+
+* New `slow-tmb` tier in `tools/test-tiers.R`. `test-dependence-profile.R` and
+  `test-inference-memory.R` are gated with `skip_slow()` and excluded from the
+  fast tier — the former alone runs ~6 minutes.
+* `test-against-rpbnb.R` became `test-engine-agreement.R`: it cross-checked
+  against `rpbnb` as a Suggests dependency, which is now an intra-package
+  comparison, plus new cpp-vs-tmb agreement tests.
+* All 23 scripts carried over from `rpbnb.tmb/inst/` are prefixed `tmb_`.
+* Hand-written design docs live in `dev-docs/`, not `docs/` — the latter is
+  pkgdown output that `build_site()` cleans.
+* `inst/extdata/export_dense_all.csv` is gitignored and build-ignored, matching
+  the existing treatment of `export_open_all.csv` (local research data).
+
 # rpbnb 0.2.3
 
 * Equation-specific `offset()` support on every model path (`fit_bnb()` under

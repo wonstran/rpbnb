@@ -37,3 +37,4 @@ tests/testthat/Rplots.pdf
 
 # Local research data -- deliberately not published to this public repo
 inst/extdata/export_open_all.csv
+inst/extdata/export_dense_all.csv
