@@ -219,3 +219,25 @@ famoye_support_bounds <- function(X1, X2, off1, off2,
   )
   c(lower = b[1], upper = b[2])
 }
+
+#' Map the working dependence parameter to Famoye's lambda
+#'
+#' `lambda = lo + (hi - lo) * (eps + (1 - 2*eps) * plogis(z))`, the interior
+#' logistic map the likelihood uses. Shared so that the post-fit admissibility
+#' guard and its tests cannot drift from the objective's own parameterization.
+#'
+#' The interval passed here must be the one the OBJECTIVE used. Mapping `z`
+#' through some other interval and then testing membership in that same interval
+#' is a tautology -- the map lands strictly inside whatever it is given, because
+#' `eps + (1 - 2*eps) * plogis(z)` is in `(0, 1)` for every finite `z` -- so a
+#' guard written that way can never fire. With the objective frozen at
+#' `[-2, 2]`, an optimum interval of `[-0.5, 0.5]` and `z = 2`, the objective
+#' used `lambda = 1.523185266`, which is inadmissible; remapping through the
+#' optimum interval gives `0.3807963164` and calls it admissible.
+#'
+#' @keywords internal
+#' @noRd
+famoye_lam_from_z <- function(bounds, z, eps = 1e-6) {
+  lo <- bounds[[1]]; hi <- bounds[[2]]
+  lo + (hi - lo) * (eps + (1 - 2 * eps) * stats::plogis(z))
+}

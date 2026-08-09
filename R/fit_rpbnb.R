@@ -414,11 +414,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   # [-2, 2], optimum [-0.5, 0.5] and z = 2, the objective used
   # lambda = 1.523185266 (inadmissible), while remapping gives 0.3807963164 and
   # calls it admissible.
-  eps_lam <- 1e-6
-  sig_lam <- stats::plogis(par_hat[[length(par_hat)]])
-  lam_hat_used <- lam_frozen[["lower"]] +
-    (lam_frozen[["upper"]] - lam_frozen[["lower"]]) *
-    (eps_lam + (1 - 2 * eps_lam) * sig_lam)
+  # The shared map, so this guard and its tests use the objective's own
+  # parameterization rather than a local re-derivation of it.
+  lam_hat_used <- famoye_lam_from_z(lam_frozen, par_hat[[length(par_hat)]])
   lambda_admissible <- NA
   if (is.finite(lam_hat_used) && lamLo_h < lamHi_h) {
     lambda_admissible <- isTRUE(lam_hat_used >= lamLo_h && lam_hat_used <= lamHi_h)

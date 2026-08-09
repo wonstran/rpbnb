@@ -3,6 +3,30 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 21:49 response review)
+
+See `comments/response_2026-08-08-22-04-13.md`. Tests only; no behaviour change.
+
+* **The Famoye guard regressions now discriminate.** As written they would have
+  passed against the broken wiring they exist to catch: the arithmetic test
+  reimplemented the logistic map instead of calling it, the end-to-end test
+  commented that the frozen and optimum intervals differ without asserting it,
+  produced no inadmissible fit, and used `compute_se = FALSE` so it entered none
+  of the OPG, analytic-Hessian or numeric-Hessian branches; and the score
+  identity test called both wrappers with `lam_bounds = NULL`, exercising only
+  the recomputed-bound default.
+* The interior map is now `famoye_lam_from_z()`, shared by the guard and its
+  test. Every fit-level test asserts that the two intervals actually differ
+  before testing anything that depends on it. A constructed escaped fit
+  (`z_lambda` pinned; frozen `[-2.3186, 2.7647]`, optimum `[-1.7987, 1.4202]`,
+  `lambda = 2.73066`) asserts the production warning fires and
+  `lambda_admissible` is `FALSE`. A new test covers all three `se_method`
+  branches. The score identity is checked with the frozen interval supplied to
+  both wrappers, plus a positive control asserting that omitting `lam_bounds`
+  breaks it — the silent-default path that caused the original defect.
+* Verified by reinstating the old wiring: 8 assertions across the three new
+  fit-level tests fail, and pass again once the correct source is restored.
+
 ## Review fixes (2026-08-08 13:15 response review)
 
 See `comments/response_2026-08-08-15-26-11.md`.

@@ -146,3 +146,49 @@ test_that("fixed-bounds C++ value matches R Hessian objective", {
                                       n_threads = 2L)
   expect_equal(c_fb, r_fb, tolerance = 1e-9)
 })
+
+test_that("scores and gradient agree under a SUPPLIED interval, and the argument matters", {
+  skip_on_cran()
+  skip_if_not(rpbnb:::rpbnb_cpp_available(), "C++ core unavailable")
+  # The existing identity test calls both wrappers with lam_bounds = NULL, so it
+  # validates only the recomputed-bound default and would pass with the
+  # fit-level wiring removed. This one supplies the frozen interval to both, as
+  # fit_rpbnb() does, on a fixture whose support bound genuinely moves.
+  #
+  # A uniform random coefficient makes the bound depend on beta, m and s.
+  set.seed(31)
+  n <- 40L
+  X1 <- cbind(1, rnorm(n)); X2 <- cbind(1, rnorm(n))
+  y1 <- rpois(n, 2); y2 <- rpois(n, 2)
+  XR1 <- X1[, 2, drop = FALSE]; XR2 <- X2[, 2, drop = FALSE]
+  U1 <- rpbnb:::halton_uniform(50, 1, burn = 50)
+  U2 <- rpbnb:::halton_uniform(50, 1, burn = 50)
+  # "start" and "evaluation point" deliberately differ, so the frozen interval
+  # is not the one the evaluation point would produce.
+  p_start <- c(0.2, 0.1, 0.15, -0.1, log(0.30), log(0.30), log(0.4), log(0.4), 0.1)
+  p_eval  <- c(0.5, 0.4, 0.05, -0.4, log(0.85), log(0.85), log(0.9), log(0.9), 0.6)
+  frozen <- rpbnb:::.rp_support_bounds(p_start, X1, X2, 2L, 2L,
+                                       "uniform", "uniform", 1, 1)
+  at_eval <- rpbnb:::.rp_support_bounds(p_eval, X1, X2, 2L, 2L,
+                                        "uniform", "uniform", 1, 1)
+  # Premise: the two intervals differ. Without this the test is vacuous.
+  expect_false(isTRUE(all.equal(unname(frozen), unname(at_eval))))
+
+  g <- attr(bnbr_rp_ll_and_grad_cpp(p_eval, y1, y2, X1, X2, XR1, XR2,
+                                    2L, 2L, U1, U2, "uniform", "uniform", 1, 1,
+                                    n_threads = 1L, lam_bounds = frozen),
+            "gradient")
+  S <- bnbr_rp_scores_cpp(p_eval, y1, y2, X1, X2, XR1, XR2,
+                          2L, 2L, U1, U2, "uniform", "uniform", 1, 1,
+                          n_threads = 1L, lam_bounds = frozen)
+  expect_equal(colSums(S), as.numeric(g), tolerance = 1e-7, ignore_attr = TRUE)
+
+  # Sensitivity control: dropping lam_bounds from the score wrapper -- exactly
+  # the silent-default path that caused the defect -- must break the identity.
+  # Without this the test could not distinguish the fixed wiring from the
+  # broken one.
+  S_default <- bnbr_rp_scores_cpp(p_eval, y1, y2, X1, X2, XR1, XR2,
+                                  2L, 2L, U1, U2, "uniform", "uniform", 1, 1,
+                                  n_threads = 1L)
+  expect_gt(max(abs(colSums(S_default) - as.numeric(g))), 1e-6)
+})
