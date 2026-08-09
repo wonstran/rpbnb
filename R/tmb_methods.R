@@ -25,8 +25,10 @@ print.rpbnb_tmb_fit <- function(x, ...) {
   }
   cat("  Estimator:", if (is.null(x$method)) "sml" else x$method, "\n")
   cat("  Dependence:", deparse(x$dependence), "\n")
+  .print_standardize_note(x)
+  orig <- .rpbnb_orig_units(x)
   cat("\nCoefficients:\n")
-  print(round(x$coef, 4))
+  print(round(if (!is.null(orig)) orig$coef else x$coef, 4))
   invisible(x)
 }
 
@@ -67,17 +69,23 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   cat("  Nobs:", object$nobs, "  Npar:", object$npar,
       if (!is.null(iterations)) c("  Iterations:", iterations), "\n")
   cat("  Estimator:", if (is.null(object$method)) "sml" else object$method,
-      "\n\n")
+      "\n")
+  .print_standardize_note(object)
+  cat("\n")
+
+  orig <- .rpbnb_orig_units(object)
+  cf <- if (!is.null(orig)) orig$coef else object$coef
+  cse <- if (!is.null(orig)) orig$se else object$se
 
   # ---- Equation 1 coefficients (b1:*) ----
   nm <- names(object$coef)
   eq1 <- grep("^b1:", nm)
   if (length(eq1)) {
     cat("--- Equation 1 (y1) ---\n")
-    p1 <- 2 * pnorm(-abs(object$coef[eq1] / object$se[eq1]))
-    tbl1 <- data.frame(Estimate = object$coef[eq1],
-                       `Std. Error` = object$se[eq1],
-                       `z value` = object$coef[eq1] / object$se[eq1],
+    p1 <- 2 * pnorm(-abs(cf[eq1] / cse[eq1]))
+    tbl1 <- data.frame(Estimate = cf[eq1],
+                       `Std. Error` = cse[eq1],
+                       `z value` = cf[eq1] / cse[eq1],
                        `Pr(>|z|)` = p1,
                        Signif = .signif_stars(p1),
                        row.names = nm[eq1], check.names = FALSE)
@@ -89,10 +97,10 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   eq2 <- grep("^b2:", nm)
   if (length(eq2)) {
     cat("--- Equation 2 (y2) ---\n")
-    p2 <- 2 * pnorm(-abs(object$coef[eq2] / object$se[eq2]))
-    tbl2 <- data.frame(Estimate = object$coef[eq2],
-                       `Std. Error` = object$se[eq2],
-                       `z value` = object$coef[eq2] / object$se[eq2],
+    p2 <- 2 * pnorm(-abs(cf[eq2] / cse[eq2]))
+    tbl2 <- data.frame(Estimate = cf[eq2],
+                       `Std. Error` = cse[eq2],
+                       `z value` = cf[eq2] / cse[eq2],
                        `Pr(>|z|)` = p2,
                        Signif = .signif_stars(p2),
                        row.names = nm[eq2], check.names = FALSE)
@@ -132,7 +140,7 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   scale_block <- function(idx, eq) {
     if (!length(idx)) return(invisible(NULL))
     cat("--- Random-coefficient scales (equation ", eq, ") ---\n", sep = "")
-    log_est <- object$coef[idx]
+    log_est <- cf[idx]
     log_se  <- object$se[idx]
     nat_est <- exp(log_est)
     tbl <- data.frame(

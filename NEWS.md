@@ -11,6 +11,31 @@ That source tree is now superseded; everything it provided is available here.
   `fit_rpbnb_tmb()` themselves are unaffected — only the `rpbnb()` dispatcher's
   `engine` argument changed name.
 
+## New feature: `rpbnb(standardize = TRUE)`
+
+* **Automatic centring/scaling with original-units display**, generalizing
+  the by-hand pattern in `inst/rpbnb_frank_open.R` and
+  `inst/tmb_rpbnb_frank_open.R`. `standardize = TRUE` auto-detects continuous
+  predictors (numeric, non-factor columns with more than two distinct values
+  — so 0/1 and other two-level numeric indicators are left alone — excluding
+  anything used only inside an `offset()`), centres and scales them (mean 0,
+  SD 1) before fitting, and attaches the scaling as `$scaling` /
+  `$continuous_vars` on the fit. `continuous_vars` overrides auto-detection
+  when supplied.
+* The fitted design itself (`X1`/`X2`, `mu1`/`mu2`, stored draws) stays on
+  the standardized scale, so `predict()`, marginal effects, and boundary/LR
+  tests are unaffected. Only `print()`/`summary()` change: the coefficient
+  table is back-transformed to the covariates' original units by the exact
+  affine chain rule (a continuous slope divides by its scale, the intercept
+  absorbs the centring shift, a random coefficient's log-scale parameter
+  shifts by `-log(scale)`) — no refit, no numerical differentiation — and is
+  the *only* coefficient table shown. Works identically for both engines
+  (`engine = "classic"` and `engine = "tmb"`).
+* `coef()`/`vcov()` continue to return the standardized-scale values that
+  match the stored design (needed by `predict()` etc.); the original-units
+  values shown by `print()`/`summary()` are computed on demand, not written
+  back into the fit.
+
 ## Review fixes (2026-08-09 project review)
 
 See `comments/review_2026-08-09-08-10-18.md`. Documentation and test hygiene

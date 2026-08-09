@@ -4,8 +4,8 @@
 #' "classic"` calls [fit_rpbnb()] (Rcpp/OpenMP simulated likelihood, `maxLik` BFGS);
 #' `engine = "tmb"` calls [fit_rpbnb_tmb()] (TMB automatic differentiation,
 #' `nlminb` with restart polish). Both fitters remain exported and can be called
-#' directly; this wrapper adds nothing to the fit itself and returns exactly
-#' what the chosen fitter returns.
+#' directly; with `standardize = FALSE` (the default) this wrapper adds nothing
+#' to the fit itself and returns exactly what the chosen fitter returns.
 #'
 #' What it does add is argument checking across the two APIs. The engines do not
 #' take the same arguments, and passing one engine's argument to the other is a
@@ -14,6 +14,32 @@
 #' plausible. Every extra argument is therefore matched by name against the
 #' selected fitter's own formals, and anything that does not belong is an error
 #' rather than a silently ignored `...` entry.
+#'
+#' # Automatic centring and scaling
+#'
+#' `standardize = TRUE` automates the pattern in `inst/rpbnb_frank_open.R` and
+#' `inst/tmb_rpbnb_frank_open.R`: continuous predictors are centred and scaled
+#' (mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
+#' carrier from acting as a disguised random intercept (see those scripts'
+#' headers) and fixes the design matrix's conditioning when regressors span
+#' very different ranges. Continuous predictors are identified automatically —
+#' numeric, non-factor columns used by either formula with more than two
+#' distinct values, so 0/1 (or any two-level numeric) indicators are left
+#' alone — or supplied explicitly via `continuous_vars`. Variables that appear
+#' only inside an `offset()` are never standardized.
+#'
+#' The fitted design itself (the stored `X1`/`X2`, `mu1`/`mu2`, simulation
+#' draws) stays on the standardized scale, exactly as in the two scripts above,
+#' so `predict()`, marginal effects, and boundary/LR tests keep working
+#' unchanged. Only the coefficient table `print()` and `summary()` display is
+#' affected: it is back-transformed to the covariates' original units by the
+#' exact affine chain rule (no refit, no numerical differentiation) and is the
+#' *only* coefficient table shown — there is no separate standardized-scale
+#' table to reconcile. `coef()`/`vcov()` still return the standardized-scale
+#' values that match the stored design; call `.rpbnb_orig_units()`
+#' (internal, mirrors what `print()` displays) if the numeric original-units
+#' vector is needed directly. The scaling actually used is stored on the fit
+#' as `$scaling` (a named list of `c(center=, scale=)`) and `$continuous_vars`.
 #'
 #' # Which arguments go with which engine
 #'
@@ -44,6 +70,12 @@
 #'   `"independence"` (TMB engine only).
 #' @param poisson_1,poisson_2 Restrict the corresponding margin to its Poisson
 #'   limit.
+#' @param standardize Centre and scale continuous predictors before fitting,
+#'   and display fitted coefficients back-transformed to their original units
+#'   (see "Automatic centring and scaling" above). Default `FALSE`.
+#' @param continuous_vars Optional character vector overriding automatic
+#'   continuous-predictor detection when `standardize = TRUE`. Must be columns
+#'   of `data`; ignored when `standardize = FALSE`.
 #' @param control An `rpbnb_control()` object when `engine = "classic"`, or an
 #'   `rpbnb_tmb_control()` object when `engine = "tmb"`. Defaults to the right
 #'   one for the chosen engine. The two are not interchangeable and are never
@@ -57,7 +89,10 @@
 #'   `engine = "classic"`, or `rpbnb_tmb_fit` for `engine = "tmb"`. The class
 #'   therefore depends on `engine`; test with `inherits(fit, "rpbnb_tmb_fit")`
 #'   if you need to branch. No wrapper class is introduced, so every existing S3
-#'   method and post-estimation function works unchanged.
+#'   method and post-estimation function works unchanged. With
+#'   `standardize = TRUE`, two extra fields are attached -- `$scaling` and
+#'   `$continuous_vars` -- and `print()`/`summary()` use them to display
+#'   original-units coefficients; nothing else on the object changes.
 #'
 #' @seealso [fit_rpbnb()], [fit_rpbnb_tmb()], [rpbnb_control()],
 #'   [rpbnb_tmb_control()], [copula()], [fit_bnb()]
@@ -74,6 +109,7 @@ rpbnb <- function(formula_1, formula_2, data,
                   draws = 400, seed = 1234, start = NULL,
                   dependence = "famoye",
                   poisson_1 = FALSE, poisson_2 = FALSE,
+                  standardize = FALSE, continuous_vars = NULL,
                   control = NULL,
                   ...) {
   engine <- match.arg(engine)
@@ -155,11 +191,38 @@ rpbnb <- function(formula_1, formula_2, data,
          call. = FALSE)
   }
 
+  # Automatic centring/scaling (see "Automatic centring and scaling" above).
+  # `data` is reassigned to the standardized copy so the fitter below sees it;
+  # `scaling` stays NULL (and is never attached to the fit) unless at least
+  # one continuous predictor was found.
+  scaling <- NULL
+  if (isTRUE(standardize)) {
+    cvars <- if (is.null(continuous_vars)) {
+      .identify_continuous_vars(formula_1, formula_2, data)
+    } else {
+      miss <- setdiff(continuous_vars, names(data))
+      if (length(miss)) {
+        stop("`continuous_vars` not found in `data`: ",
+             paste(miss, collapse = ", "), call. = FALSE)
+      }
+      continuous_vars
+    }
+    if (length(cvars)) {
+      scaling <- .compute_scaling(data, cvars)
+      data <- .apply_scaling(data, scaling)
+    }
+  }
+
   args <- c(list(formula_1 = formula_1, formula_2 = formula_2, data = data,
                  random_1 = random_1, random_2 = random_2,
                  draws = draws, seed = seed, start = start,
                  dependence = dependence, control = control,
                  poisson_1 = poisson_1, poisson_2 = poisson_2),
             dots)
-  do.call(this_fit, args)
+  fit <- do.call(this_fit, args)
+  if (!is.null(scaling)) {
+    fit$scaling <- scaling
+    fit$continuous_vars <- names(scaling)
+  }
+  fit
 }

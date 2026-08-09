@@ -17,6 +17,8 @@ rpbnb(
   dependence = "famoye",
   poisson_1 = FALSE,
   poisson_2 = FALSE,
+  standardize = FALSE,
+  continuous_vars = NULL,
   control = NULL,
   ...
 )
@@ -42,6 +44,14 @@ rpbnb(
 \item{poisson_1, poisson_2}{Restrict the corresponding margin to its Poisson
 limit.}
 
+\item{standardize}{Centre and scale continuous predictors before fitting,
+and display fitted coefficients back-transformed to their original units
+(see "Automatic centring and scaling" above). Default \code{FALSE}.}
+
+\item{continuous_vars}{Optional character vector overriding automatic
+continuous-predictor detection when \code{standardize = TRUE}. Must be columns
+of \code{data}; ignored when \code{standardize = FALSE}.}
+
 \item{control}{An \code{rpbnb_control()} object when \code{engine = "classic"}, or an
 \code{rpbnb_tmb_control()} object when \code{engine = "tmb"}. Defaults to the right
 one for the chosen engine. The two are not interchangeable and are never
@@ -57,14 +67,17 @@ underlying fitter would return: an object of class \code{rpbnb_fit} for
 \code{engine = "classic"}, or \code{rpbnb_tmb_fit} for \code{engine = "tmb"}. The class
 therefore depends on \code{engine}; test with \code{inherits(fit, "rpbnb_tmb_fit")}
 if you need to branch. No wrapper class is introduced, so every existing S3
-method and post-estimation function works unchanged.
+method and post-estimation function works unchanged. With
+\code{standardize = TRUE}, two extra fields are attached -- \verb{$scaling} and
+\verb{$continuous_vars} -- and \code{print()}/\code{summary()} use them to display
+original-units coefficients; nothing else on the object changes.
 }
 \description{
 A common front end over the package's two estimation engines. \code{engine = "classic"} calls \code{\link[=fit_rpbnb]{fit_rpbnb()}} (Rcpp/OpenMP simulated likelihood, \code{maxLik} BFGS);
 \code{engine = "tmb"} calls \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (TMB automatic differentiation,
 \code{nlminb} with restart polish). Both fitters remain exported and can be called
-directly; this wrapper adds nothing to the fit itself and returns exactly
-what the chosen fitter returns.
+directly; with \code{standardize = FALSE} (the default) this wrapper adds nothing
+to the fit itself and returns exactly what the chosen fitter returns.
 }
 \details{
 What it does add is argument checking across the two APIs. The engines do not
@@ -75,6 +88,32 @@ plausible. Every extra argument is therefore matched by name against the
 selected fitter's own formals, and anything that does not belong is an error
 rather than a silently ignored \code{...} entry.
 }
+\section{Automatic centring and scaling}{
+\code{standardize = TRUE} automates the pattern in \code{inst/rpbnb_frank_open.R} and
+\code{inst/tmb_rpbnb_frank_open.R}: continuous predictors are centred and scaled
+(mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
+carrier from acting as a disguised random intercept (see those scripts'
+headers) and fixes the design matrix's conditioning when regressors span
+very different ranges. Continuous predictors are identified automatically —
+numeric, non-factor columns used by either formula with more than two
+distinct values, so 0/1 (or any two-level numeric) indicators are left
+alone — or supplied explicitly via \code{continuous_vars}. Variables that appear
+only inside an \code{offset()} are never standardized.
+
+The fitted design itself (the stored \code{X1}/\code{X2}, \code{mu1}/\code{mu2}, simulation
+draws) stays on the standardized scale, exactly as in the two scripts above,
+so \code{predict()}, marginal effects, and boundary/LR tests keep working
+unchanged. Only the coefficient table \code{print()} and \code{summary()} display is
+affected: it is back-transformed to the covariates' original units by the
+exact affine chain rule (no refit, no numerical differentiation) and is the
+\emph{only} coefficient table shown — there is no separate standardized-scale
+table to reconcile. \code{coef()}/\code{vcov()} still return the standardized-scale
+values that match the stored design; call \code{.rpbnb_orig_units()}
+(internal, mirrors what \code{print()} displays) if the numeric original-units
+vector is needed directly. The scaling actually used is stored on the fit
+as \verb{$scaling} (a named list of \code{c(center=, scale=)}) and \verb{$continuous_vars}.
+}
+
 \section{Which arguments go with which engine}{
 \tabular{lll}{
    Argument \tab \code{engine = "classic"} \tab \code{engine = "tmb"} \cr

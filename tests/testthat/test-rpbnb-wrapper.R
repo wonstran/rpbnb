@@ -53,7 +53,8 @@ test_that("unnamed extra arguments are rejected", {
     rpbnb(formula_1 = y1 ~ x1, formula_2 = y2 ~ x1, data = d, engine = "classic",
           random_1 = NULL, random_2 = NULL, draws = 400, seed = 1234,
           start = NULL, dependence = "famoye",
-          poisson_1 = FALSE, poisson_2 = FALSE, control = NULL,
+          poisson_1 = FALSE, poisson_2 = FALSE,
+          standardize = FALSE, continuous_vars = NULL, control = NULL,
           "halton"),
     "must be named"
   )

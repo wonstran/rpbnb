@@ -81,8 +81,11 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 # it is not a zero-null Wald test. Regression coefficients and the unconstrained
 # dependence parameters keep their tests.
 .coef_matrix <- function(object) {
-  est <- object$coef
-  se  <- if (is.null(object$se)) rep(NA_real_, length(est)) else object$se[names(est)]
+  orig <- .rpbnb_orig_units(object)
+  est <- if (!is.null(orig)) orig$coef else object$coef
+  se  <- if (!is.null(orig)) orig$se
+         else if (is.null(object$se)) rep(NA_real_, length(est))
+         else object$se[names(est)]
   z   <- est / se
   p   <- 2 * stats::pnorm(-abs(z))
   no_test <- grepl("^log_(sd|w|s|m)", names(est))
@@ -115,7 +118,8 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 # not test the boundary null a = 0; dependence parameters keep the Wald test.
 # Returns a list with $random (random SDs) and $dispersion (m1, m2, lambda) components.
 .natural_scale_table <- function(object) {
-  cf <- object$coef
+  orig <- .rpbnb_orig_units(object)
+  cf <- if (!is.null(orig)) orig$coef else object$coef
   se <- object$se
   se_of <- function(nm) if (!is.null(se) && nm %in% names(se) && is.finite(se[[nm]])) se[[nm]] else NA_real_
 
@@ -496,6 +500,7 @@ print.rpbnb_fit <- function(x, digits = 4, ...) {
   cat("Random-parameter bivariate NB fit (draws = ", x$draws,
       ", draw_type = ", x$draw_type, ")\n", sep = "")
   cat("Call: "); print(x$call)
+  .print_standardize_note(x)
 
   coef_matrix <- .coef_matrix(x)
   split_coef <- .split_coef_by_equation(coef_matrix)
@@ -527,13 +532,15 @@ summary.rpbnb_fit <- function(object, ...) {
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
                  draws = object$draws, call = object$call,
-                 formula_1 = object$formula_1, formula_2 = object$formula_2),
+                 formula_1 = object$formula_1, formula_2 = object$formula_2,
+                 scaling = object$scaling, continuous_vars = object$continuous_vars),
             class = "summary.rpbnb_fit")
 }
 
 #' @export
 print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
   cat("Random-parameter bivariate NB - summary (draws = ", x$draws, ")\n", sep = "")
+  .print_standardize_note(x)
 
   split_coef <- .split_coef_by_equation(x$coefficients)
 
