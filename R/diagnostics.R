@@ -510,7 +510,13 @@ bnb_elasticities <- function(fit,
 # Assemble the static metadata for one equation's interpretation computation:
 # design, coefficient names, random metadata, the delta-method parameter names,
 # the selected-variable indices and their binary/continuous classification.
-.rp_diag_meta <- function(fit, eq, type, vars, include_intercept) {
+# `scaling`/`log_vars` (see rpbnb_marginal_effects()'s docs) resolve here, via
+# the SAME .scaling_vec()/.log_vars_flag() helpers the TMB engine's
+# rpbnb_tmb_marginal_effects() uses (R/tmb_marginal_effects.R) -- one
+# implementation of "what does this centring/scaling and log-var mean",
+# shared by both engines' estimand functions.
+.rp_diag_meta <- function(fit, eq, type, vars, include_intercept,
+                          scaling = NULL, log_vars = NULL) {
   X  <- if (eq == 1L) fit$X1 else fit$X2
   cn <- colnames(X)
   p  <- ncol(X)
@@ -558,10 +564,20 @@ bnb_elasticities <- function(fit,
   off_full <- .as_offset(.fit_offset(fit, eq), nrow(X))
   offset   <- if (type == "MEM") mean(off_full) else off_full
 
+  # Centre/scale of the pre-fit standardization, or 0/1 throughout when the
+  # design was never transformed (`ctr`/`scl` are full-length, aligned to
+  # `cn`, indexed by design column below; `is_log` is aligned to `idx`/`sel`).
+  # X itself is deliberately left on the scale the model was fitted on -- see
+  # rpbnb_marginal_effects()'s `scaling` documentation for why substituting
+  # raw x back into a random term would be wrong.
+  sv  <- .scaling_vec(scaling, cn)
+  is_log <- .log_vars_flag(log_vars, cn, idx, is_bin)
+
   list(X = X, Xbar = Xbar, cn = cn, b_names = b_names, scale_names = scale_names,
        rand_idx = rand_idx, dist = dist, sign = sign, Z = Z, type = type,
        offset = offset,
-       sel = idx, is_bin = is_bin, is_rand = is_rand)
+       sel = idx, is_bin = is_bin, is_rand = is_rand,
+       ctr = sv$center, scl = sv$scale, is_log = is_log)
 }
 
 # Deterministic, vector-valued estimand over theta = c(b, log-scales), holding
@@ -601,7 +617,19 @@ bnb_elasticities <- function(fit,
       rk <- match(j, meta$rand_idx)
       coef_row <- if (!is.na(rk)) coef_mat[, rk] else rep(b[[j]], nrow(Z))
       dmu <- rowMeans(sweep(g, 2, coef_row, `*`))
-      val <- if (quantity == "me") dmu else X[, j] * dmu / mu
+      s <- meta$scl[j]; c0 <- meta$ctr[j]
+      if (isTRUE(meta$is_log[m])) {
+        # x_j is already log(v_j): report per unit of v_j, not of log v_j
+        # (see rpbnb_marginal_effects()'s `log_vars` documentation). d/dlog v
+        # = (1/s) d/dx_std, so the elasticity is E[dmu/mu]/s and the marginal
+        # effect divides by v = exp(x_std * s + c) as well.
+        val <- if (quantity == "me") dmu / (s * exp(X[, j] * s + c0))
+               else (dmu / mu) / s
+      } else if (quantity == "me") {
+        val <- dmu / s
+      } else {
+        val <- (X[, j] + c0 / s) * dmu / mu
+      }
     }
     if (any(inf_rows)) val[inf_rows] <- Inf
     out[m] <- mean(val)
@@ -641,8 +669,10 @@ bnb_elasticities <- function(fit,
 # the cluster instead of one sequential numDeriv::jacobian() call -- the two
 # paths are numerically identical (see .rp_jac_col()).
 .rp_diag_one <- function(fit, eq, quantity, type, vars, include_intercept,
-                         digits, print_output, resp_name, cl = NULL) {
-  meta <- .rp_diag_meta(fit, eq, type, vars, include_intercept)
+                         digits, print_output, resp_name, cl = NULL,
+                         scaling = NULL, log_vars = NULL) {
+  meta <- .rp_diag_meta(fit, eq, type, vars, include_intercept,
+                        scaling, log_vars)
 
   est <- .rp_estimand(fit$coef, meta, quantity, mark_inf = TRUE)
 
@@ -688,9 +718,11 @@ bnb_elasticities <- function(fit,
 
   tab <- .bnb_me_tidy(names(est), as.numeric(est), se, digits)
   base <- if (quantity == "me") {
-    ifelse(meta$is_bin, "binary(0->1)", "continuous")
+    ifelse(meta$is_bin, "binary(0->1)",
+           ifelse(meta$is_log, "log-continuous", "continuous"))
   } else {
-    ifelse(meta$is_bin, "semi-elasticity", "elasticity")
+    ifelse(meta$is_bin, "semi-elasticity",
+           ifelse(meta$is_log, "log-elasticity", "elasticity"))
   }
   tab$var_type <- ifelse(meta$is_rand, paste0(base, " (random)"), base)
 
@@ -800,6 +832,29 @@ bnb_elasticities <- function(fit,
 #'   every equation `which` computes); results are numerically identical to the
 #'   sequential path. Falls back to sequential with a warning if the `parallel`
 #'   package is unavailable.
+#' @param scaling Optional named list of `c(center =, scale =)` pairs, one per
+#'   covariate that was centred and/or scaled before fitting (e.g. via
+#'   `rpbnb(standardize = TRUE)`, whose `$scaling` field is exactly this
+#'   shape), used to report the results in the covariate's original units.
+#'   Columns not named are left alone, so binary indicators and untransformed
+#'   variables need no entry.
+#'
+#'   Only the reported quantity is rescaled; the fitted design is not rebuilt.
+#'   That distinction is not cosmetic when a standardized covariate also
+#'   carries a random coefficient: the random term enters as `x_std * dev`, so
+#'   substituting `x_raw = x_std * s + c` would add a `(c/s) * dev` random
+#'   intercept the model never estimated -- the disguised random intercept
+#'   centring was meant to remove, back again. The chain rule avoids that:
+#'   `d(mu)/d(x_raw) = (d(mu)/d(x_std))/s`, and the elasticity's leading factor
+#'   becomes `x_raw/s = x_std + c/s`. Binary effects are untouched.
+#' @param log_vars Optional character vector naming covariates that are
+#'   ALREADY a log, so results are reported per unit of the underlying
+#'   variable `v_j = exp(x_j)` rather than per unit of `x_j` itself. Without
+#'   this the elasticity formula treats `log v` as an ordinary regressor and
+#'   returns `xbar * b`, the elasticity with respect to the LOG -- for a
+#'   log-traffic column that can be an order of magnitude off from the
+#'   elasticity with respect to traffic itself (the coefficient). Rejects
+#'   binary columns (a 0/1 indicator is not a log-transformed variable).
 #' @return A data frame (single margin, invisibly) or a named list of data frames
 #'   (`both`/`all`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
 #'   `Signif`, `var_type`.
@@ -821,7 +876,9 @@ rpbnb_marginal_effects <- function(fit,
                                    include_intercept = FALSE,
                                    digits = 4,
                                    print_output = TRUE,
-                                   n_cores = 1L) {
+                                   n_cores = 1L,
+                                   scaling = NULL,
+                                   log_vars = NULL) {
   stopifnot(inherits(fit, "rpbnb_fit"))
   which <- match.arg(which)
   type  <- match.arg(type)
@@ -830,13 +887,16 @@ rpbnb_marginal_effects <- function(fit,
   if (which %in% c("both", "all")) {
     return(invisible(list(
       y1 = .rp_diag_one(fit, 1L, "me", type, vars, include_intercept,
-                        digits, print_output, "y1", cl = cl),
+                        digits, print_output, "y1", cl = cl,
+                        scaling = scaling, log_vars = log_vars),
       y2 = .rp_diag_one(fit, 2L, "me", type, vars, include_intercept,
-                        digits, print_output, "y2", cl = cl))))
+                        digits, print_output, "y2", cl = cl,
+                        scaling = scaling, log_vars = log_vars))))
   }
   eq <- if (which == "y1") 1L else 2L
   invisible(.rp_diag_one(fit, eq, "me", type, vars, include_intercept,
-                         digits, print_output, which, cl = cl))
+                         digits, print_output, which, cl = cl,
+                         scaling = scaling, log_vars = log_vars))
 }
 
 #' Elasticities and semi-elasticities for a random-parameter bivariate NB model
@@ -862,6 +922,14 @@ rpbnb_marginal_effects <- function(fit,
 #'   every equation `which` computes); results are numerically identical to the
 #'   sequential path. Falls back to sequential with a warning if the `parallel`
 #'   package is unavailable.
+#' @param scaling Optional named list of `c(center =, scale =)` pairs, one per
+#'   covariate that was centred and/or scaled before fitting (e.g. via
+#'   `rpbnb(standardize = TRUE)`, whose `$scaling` field is exactly this
+#'   shape), used to report the results in the covariate's original units. See
+#'   [rpbnb_marginal_effects()]'s `scaling` documentation for the full
+#'   explanation (elasticities and marginal effects share it verbatim).
+#' @param log_vars Optional character vector naming covariates that are
+#'   ALREADY a log; see [rpbnb_marginal_effects()]'s `log_vars` documentation.
 #' @return A data frame (single margin, invisibly) or a named list of data frames
 #'   (`both`), each with columns `Name`, `Estimate`, `StdErr`, `z`, `p`,
 #'   `Signif`, `var_type`.
@@ -883,7 +951,9 @@ rpbnb_elasticities <- function(fit,
                                include_intercept = FALSE,
                                digits = 4,
                                print_output = TRUE,
-                               n_cores = 1L) {
+                               n_cores = 1L,
+                               scaling = NULL,
+                               log_vars = NULL) {
   stopifnot(inherits(fit, "rpbnb_fit"))
   which <- match.arg(which)
   type  <- match.arg(type)
@@ -892,13 +962,16 @@ rpbnb_elasticities <- function(fit,
   if (which == "both") {
     return(invisible(list(
       y1 = .rp_diag_one(fit, 1L, "elas", type, vars, include_intercept,
-                        digits, print_output, "y1", cl = cl),
+                        digits, print_output, "y1", cl = cl,
+                        scaling = scaling, log_vars = log_vars),
       y2 = .rp_diag_one(fit, 2L, "elas", type, vars, include_intercept,
-                        digits, print_output, "y2", cl = cl))))
+                        digits, print_output, "y2", cl = cl,
+                        scaling = scaling, log_vars = log_vars))))
   }
   eq <- if (which == "y1") 1L else 2L
   invisible(.rp_diag_one(fit, eq, "elas", type, vars, include_intercept,
-                         digits, print_output, which, cl = cl))
+                         digits, print_output, which, cl = cl,
+                         scaling = scaling, log_vars = log_vars))
 }
 
 # ============================================================================

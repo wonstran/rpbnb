@@ -12,7 +12,9 @@ rpbnb_elasticities(
   include_intercept = FALSE,
   digits = 4,
   print_output = TRUE,
-  n_cores = 1L
+  n_cores = 1L,
+  scaling = NULL,
+  log_vars = NULL
 )
 }
 \arguments{
@@ -37,6 +39,16 @@ independent per-parameter columns are dispatched across a
 every equation \code{which} computes); results are numerically identical to the
 sequential path. Falls back to sequential with a warning if the \code{parallel}
 package is unavailable.}
+
+\item{scaling}{Optional named list of \code{c(center =, scale =)} pairs, one per
+covariate that was centred and/or scaled before fitting (e.g. via
+\code{rpbnb(standardize = TRUE)}, whose \verb{$scaling} field is exactly this
+shape), used to report the results in the covariate's original units. See
+\code{\link[=rpbnb_marginal_effects]{rpbnb_marginal_effects()}}'s \code{scaling} documentation for the full
+explanation (elasticities and marginal effects share it verbatim).}
+
+\item{log_vars}{Optional character vector naming covariates that are
+ALREADY a log; see \code{\link[=rpbnb_marginal_effects]{rpbnb_marginal_effects()}}'s \code{log_vars} documentation.}
 }
 \value{
 A data frame (single margin, invisibly) or a named list of data frames

@@ -56,6 +56,30 @@ That source tree is now superseded; everything it provided is available here.
   unaffected. `boundary_tests = TRUE` under `engine = "tmb"` is an error
   (`rpbnb_boundary_tests()` only accepts an `rpbnb_fit`).
 
+## New feature: original-units marginal effects/elasticities for `engine = "classic"`
+
+* **`rpbnb_marginal_effects()`/`rpbnb_elasticities()` gain `scaling =`/
+  `log_vars =`**, matching the TMB engine's `rpbnb_tmb_marginal_effects()`/
+  `rpbnb_tmb_elasticities()` (which have had them since the `rpbnb.tmb`
+  merge). `scaling` is the same named list of `c(center =, scale =)` pairs
+  `rpbnb(standardize = TRUE)` attaches as `$scaling`; `log_vars` names
+  covariates that are already a log (e.g. `log(AADT)`), so results are
+  reported per unit of the underlying variable rather than per unit of its
+  log. Both engines now share one implementation of the restatement
+  (`.scaling_vec()`/`.log_vars_flag()`, `R/tmb_marginal_effects.R`).
+* Without `scaling =`, a centred continuous predictor's elasticity prints as
+  ~0 (its standardized-scale sample mean is 0, so the elasticity's leading
+  x-bar factor vanishes) — that reads as "no effect" but means "these units
+  are arbitrary". `rpbnb_marginal_effects(fit, scaling = fit$scaling)` (and
+  the same for elasticities) restates both by the exact affine/chain-rule
+  transform the delta-method jacobian differentiates directly, so standard
+  errors are exact too — not the ~100-line hand-rolled `raw_diag()`
+  `inst/rpbnb_frank_open.R` previously needed for this (now replaced there,
+  and in `inst/rpbnb_truck.R`, with `scaling = fit$scaling`).
+* `var_type` gains `"log-continuous"`/`"log-elasticity"` for `log_vars`
+  columns, alongside the existing `"continuous"`/`"elasticity"`,
+  `"binary(0->1)"`/`"semi-elasticity"`, and `"(random)"` suffix.
+
 ## Review fixes (2026-08-09 project review)
 
 See `comments/review_2026-08-09-08-10-18.md`. Documentation and test hygiene

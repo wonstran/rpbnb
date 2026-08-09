@@ -12,7 +12,9 @@ rpbnb_marginal_effects(
   include_intercept = FALSE,
   digits = 4,
   print_output = TRUE,
-  n_cores = 1L
+  n_cores = 1L,
+  scaling = NULL,
+  log_vars = NULL
 )
 }
 \arguments{
@@ -37,6 +39,31 @@ independent per-parameter columns are dispatched across a
 every equation \code{which} computes); results are numerically identical to the
 sequential path. Falls back to sequential with a warning if the \code{parallel}
 package is unavailable.}
+
+\item{scaling}{Optional named list of \code{c(center =, scale =)} pairs, one per
+covariate that was centred and/or scaled before fitting (e.g. via
+\code{rpbnb(standardize = TRUE)}, whose \verb{$scaling} field is exactly this
+shape), used to report the results in the covariate's original units.
+Columns not named are left alone, so binary indicators and untransformed
+variables need no entry.
+
+Only the reported quantity is rescaled; the fitted design is not rebuilt.
+That distinction is not cosmetic when a standardized covariate also
+carries a random coefficient: the random term enters as \code{x_std * dev}, so
+substituting \code{x_raw = x_std * s + c} would add a \code{(c/s) * dev} random
+intercept the model never estimated -- the disguised random intercept
+centring was meant to remove, back again. The chain rule avoids that:
+\code{d(mu)/d(x_raw) = (d(mu)/d(x_std))/s}, and the elasticity's leading factor
+becomes \code{x_raw/s = x_std + c/s}. Binary effects are untouched.}
+
+\item{log_vars}{Optional character vector naming covariates that are
+ALREADY a log, so results are reported per unit of the underlying
+variable \code{v_j = exp(x_j)} rather than per unit of \code{x_j} itself. Without
+this the elasticity formula treats \verb{log v} as an ordinary regressor and
+returns \code{xbar * b}, the elasticity with respect to the LOG -- for a
+log-traffic column that can be an order of magnitude off from the
+elasticity with respect to traffic itself (the coefficient). Rejects
+binary columns (a 0/1 indicator is not a log-transformed variable).}
 }
 \value{
 A data frame (single margin, invisibly) or a named list of data frames

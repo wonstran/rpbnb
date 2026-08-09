@@ -11,6 +11,9 @@
 # standardized data by hand. summary(fit) below shows both automatically: the
 # main coefficient table in original units, and a real LR test (not NA) for
 # the random-coefficient SDs and NB2 dispersions in its natural-scale block.
+# Marginal effects and elasticities also pass `scaling = fit$scaling` (and
+# `log_vars`) directly to rpbnb_marginal_effects()/rpbnb_elasticities(),
+# instead of rpbnb_frank_open.R's ~100-line hand-rolled raw_diag().
 #
 # rpbnb_frank_open.R's header explains WHY this data needs standardizing:
 # SR40_MI3 and MPD_ME are strictly positive and bounded away from zero, so as
@@ -188,27 +191,32 @@ cat("\n")
 sep(); cat("FITTED MEANS (predict) -- first 6 observations\n"); sep()
 print(head(predict(fit)))
 
-# ---- Marginal effects (AME) and elasticities --------------------------------
-# rpbnb_marginal_effects()/rpbnb_elasticities() (the classic engine's
-# post-estimation functions) have no `scaling =` argument -- unlike their TMB
-# counterparts -- so their output below is on the STANDARDIZED scale: AMEs are
-# per SD, and the elasticities of the centred continuous predictors print as
-# ~0 (a centred regressor has x-bar = 0, so its elasticity's leading x-bar
-# factor vanishes; this reads as "no effect" but means "these units are
-# arbitrary"). rpbnb_frank_open.R's `raw_diag()` restates both in original
-# units by hand using exactly `fit$scaling`/`fit$continuous_vars` (now
-# attached to any standardize = TRUE fit) -- see that script if the original-
-# units versions are needed here too.
-sep(); cat("AVERAGE MARGINAL EFFECTS (AME, standardized scale)\n"); sep()
+# ---- Marginal effects (AME) and elasticities (original covariate units) ----
+# rpbnb_marginal_effects()/rpbnb_elasticities() now take the same `scaling =`
+# (and `log_vars =`) arguments as their TMB counterparts, so passing
+# `fit$scaling` restates both directly in original units -- no more hand-
+# rolled raw_diag() (the ~100-line function rpbnb_frank_open.R builds for
+# exactly this). Without `scaling =`, elasticities of the centred continuous
+# predictors would print as ~0 (a centred regressor has x-bar = 0, so the
+# elasticity's leading x-bar factor vanishes) -- that reads as "no effect"
+# but actually means "these units are arbitrary".
+#
+# LNAADT_3 is log(AADT); `log_vars` reports its AME/elasticity per unit of
+# AADT itself rather than per unit of log(AADT) -- see
+# rpbnb_marginal_effects()'s `log_vars` documentation for why that distinction
+# is otherwise an order-of-magnitude silent overstatement.
+log_vars <- "LNAADT_3"
+sep(); cat("AVERAGE MARGINAL EFFECTS (AME, original covariate units)\n"); sep()
 marginal_effects <- rpbnb_marginal_effects(fit, which = "both", type = "AME",
-                                           n_cores = n_cores)
+                                           n_cores = n_cores,
+                                           scaling = fit$scaling,
+                                           log_vars = log_vars)
 cat("\n")
 
-sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME, standardized scale)\n"); sep()
+sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME, original covariate units)\n"); sep()
 elasticities <- rpbnb_elasticities(fit, which = "both", type = "AME",
-                                   n_cores = n_cores)
-cat("\nNote: continuous-predictor elasticities above are ~0 -- see the note\n")
-cat("above the AME section. Restate in original units via fit$scaling,\n")
-cat("following rpbnb_frank_open.R's raw_diag() pattern.\n")
+                                   n_cores = n_cores,
+                                   scaling = fit$scaling,
+                                   log_vars = log_vars)
 
 cat("\nFit saved to:", fit_path, "\n")
