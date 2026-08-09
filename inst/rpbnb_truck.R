@@ -1,12 +1,16 @@
 #!/usr/bin/env Rscript
 # =============================================================================
-# rpbnb() (engine = "classic", standardize = TRUE) on the open-section
-# truck-crash data. Same data, formulas, random-coefficient specification,
-# dependence, and draws as inst/rpbnb_frank_open.R -- but fit through the
-# rpbnb() dispatcher instead of calling fit_rpbnb() directly, and with
+# rpbnb() (engine = "classic", standardize = TRUE, boundary_tests = TRUE) on
+# the open-section truck-crash data. Same data, formulas, random-coefficient
+# specification, dependence, and draws as inst/rpbnb_frank_open.R -- but fit
+# through the rpbnb() dispatcher instead of calling fit_rpbnb() directly, with
 # standardize = TRUE instead of the by-hand centring/scaling + original-units
 # back-transform that script builds itself (~150 lines of coef_orig_units()/
-# sd_orig_units() code, replaced here by two arguments).
+# sd_orig_units() code, replaced here by two arguments), and boundary_tests =
+# TRUE instead of a separate rpbnb_boundary_tests() call that reconstructs the
+# standardized data by hand. summary(fit) below shows both automatically: the
+# main coefficient table in original units, and a real LR test (not NA) for
+# the random-coefficient SDs and NB2 dispersions in its natural-scale block.
 #
 # rpbnb_frank_open.R's header explains WHY this data needs standardizing:
 # SR40_MI3 and MPD_ME are strictly positive and bounded away from zero, so as
@@ -56,30 +60,42 @@ f2 <- C_HV ~ SR40_MI3 + MPD_ME + LNAADT_3 + IRI_ME + SP50LE + ACCPNTS + SIGNAL1 
 cat("Equation 1   :", deparse(f1), "\n")
 cat("Equation 2   :", deparse(f2), "\n\n")
 
+# boundary_tests = TRUE folds every restricted refit (rpbnb_boundary_tests(),
+# one per random-coefficient SD plus one per NB2 dispersion) into this same
+# call, run against the same standardized design the full fit uses -- rpbnb()
+# derives that data itself (see "Boundary LR tests" in ?rpbnb), so unlike
+# rpbnb_frank_open.R there is no separate rpbnb:::.apply_scaling() step here.
+# Cost is real: per rpbnb_boundary_tests()'s own timing note, a copula
+# dependence's restricted refits run markedly more expensive than Famoye's, so
+# t_fit below now includes that cost too, not just the full fit's.
 t_fit <- system.time(
   fit <- rpbnb(
-    formula_1   = f1,
-    formula_2   = f2,
-    data        = data,
-    engine      = "classic",
-    random_1    = c("SR40_MI3", "MPD_ME"),
-    random_2    = c("SR40_MI3"),
-    dependence  = dependence,
-    seed        = 20240712,
-    draws       = draws,
-    standardize = TRUE,
-    control     = rpbnb_control(
+    formula_1      = f1,
+    formula_2      = f2,
+    data           = data,
+    engine         = "classic",
+    random_1       = c("SR40_MI3", "MPD_ME"),
+    random_2       = c("SR40_MI3"),
+    dependence     = dependence,
+    seed           = 20240712,
+    draws          = draws,
+    standardize    = TRUE,
+    boundary_tests = boundary_tests,
+    control        = rpbnb_control(
       print_level = 1,
       n_cores     = n_cores,
       # Observed-information Hessian on the same draws that produced the
       # estimate. "opg" is a faster BHHH alternative; "numeric" is the
-      # robust default (rpbnb_frank_open.R uses "opg" too).
+      # robust default (rpbnb_frank_open.R uses "opg" too). The boundary
+      # refits force compute_se = FALSE internally regardless of this
+      # setting -- the LR test needs only logLik and df.
       se_method   = "opg"
     )
   )
 )[["elapsed"]]
 
-cat(sprintf("\nEstimation finished in %.2f s\n", t_fit))
+cat(sprintf("\nEstimation finished in %.2f s%s\n", t_fit,
+            if (boundary_tests) " (includes the boundary LR test refits)" else ""))
 # Memory is not reported: the C++ core keeps its working set outside R's
 # allocator, so gc() would understate exactly the quantity this script tests.
 cat(sprintf("Convergence : code=%d, message=%s (iterations=%d)\n",
@@ -137,39 +153,34 @@ if (length(diagnostics)) {
   cat("No boundary or Hessian warnings.\n")
 }
 
-# ---- Model summary (already in ORIGINAL covariate units) -------------------
+# ---- Model summary (original covariate units + boundary LR tests) ----------
 # rpbnb(standardize = TRUE) back-transforms the print()/summary() coefficient
 # table automatically (see R/rpbnb_scaling.R and the NEWS.md entry
 # "rpbnb(standardize = TRUE)") -- no coef_orig_units()/sd_orig_units() helper
 # code is needed here, unlike rpbnb_frank_open.R. The dependence parameter
 # (lambda, or the copula's native theta and Kendall's tau) is included in the
 # "Natural-scale dispersion / dependence" block below, so this script has no
-# separate DEPENDENCE section either.
-sep(); cat("MODEL SUMMARY (original covariate units)\n"); sep()
+# separate DEPENDENCE section either. With boundary_tests = TRUE, that same
+# block ALSO carries the boundary-corrected LR test (LR/df/p) for the
+# random-coefficient SDs and NB2 dispersions, in place of the NA those rows
+# would otherwise show -- see the NEWS.md entry "rpbnb(boundary_tests = TRUE)".
+sep(); cat("MODEL SUMMARY (original covariate units, boundary LR tests)\n"); sep()
 print(summary(fit))
 cat("\n")
 
-# ---- Boundary LR tests ------------------------------------------------------
-# The one valid test for the random-coefficient SDs and NB2 dispersions:
-# rpbnb_boundary_tests() refits each properly nested restricted model against
-# the fit's own stored draws. It needs the SAME (standardized) data the fit
-# itself used -- `data` in this script is still in ORIGINAL units, because
-# rpbnb(standardize = TRUE) standardizes an internal copy and never mutates
-# the caller's data frame -- so reconstruct it with the fit's own `$scaling`.
-if (boundary_tests) {
+# ---- Boundary LR tests (standalone table) -----------------------------------
+# fit$boundary_tests is the same rpbnb_boundary_tests() result already folded
+# into the summary above (attached automatically by boundary_tests = TRUE);
+# printed again here on its own for the raw LR/df/p table with its Signif
+# stars, matching what rpbnb_frank_open.R prints from its separate call.
+if (!is.null(fit$boundary_tests)) {
   sep(); cat("BOUNDARY LR TESTS (SDs and dispersions)\n"); sep()
-  data_std <- rpbnb:::.apply_scaling(data, fit$scaling)
-  t_bt <- system.time(
-    bt <- rpbnb_boundary_tests(fit, data = data_std,
-                               control = rpbnb_control(n_cores = n_cores,
-                                                       compute_se = FALSE))
-  )[["elapsed"]]
-  print(bt)
-  cat(sprintf("\nBoundary tests finished in %.2f s\n", t_bt))
+  print(fit$boundary_tests)
 } else {
   sep(); cat("BOUNDARY LR TESTS (SDs and dispersions)\n"); sep()
   cat("Skipped (boundary_tests = FALSE). Set boundary_tests <- TRUE at the top\n")
-  cat("of this script to run them (one restricted refit per boundary parameter).\n")
+  cat("of this script to run them (one restricted refit per boundary parameter,\n")
+  cat("folded into the rpbnb() call above via boundary_tests = TRUE).\n")
 }
 cat("\n")
 
