@@ -57,6 +57,18 @@
 #' @return An object of class `rpbnb_lrtest` with the LR `statistic`, degrees of
 #'   freedom `df`, `p.value`, the two log-likelihoods and their df, and the
 #'   `boundary` flag. Has a `print` method.
+#'
+#' @section Famoye caveat for bounded random-coefficient distributions:
+#'   Each Famoye fit maximizes its likelihood over an admissible lambda
+#'   interval frozen at that fit's own starting values. With normal or
+#'   lognormal random coefficients loaded in both margins the interval is the
+#'   constant `c(-1, 1)` for every fit, so the comparison is unaffected. With
+#'   uniform or triangular coefficients (or a single varying margin) the bound
+#'   moves with the parameters, so two fits frozen at different starting
+#'   values maximize over slightly different lambda ranges and the LR
+#'   statistic inherits that second-order discrepancy. Check
+#'   `lambda_admissible` on both fits before relying on a comparison in that
+#'   regime.
 #' @references Self, S. G. and Liang, K.-Y. (1987). Asymptotic properties of
 #'   maximum likelihood estimators and likelihood ratio tests under nonstandard
 #'   conditions. \emph{JASA} 82(398), 605--610.

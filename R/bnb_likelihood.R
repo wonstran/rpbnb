@@ -13,6 +13,28 @@
 # "analytic (frozen-bounds) gradient agrees with the true objective gradient" in
 # tests/testthat/test-fit-bnb.R. The Hessian/SEs use the same frozen-bounds
 # objective (bnbr_loglik_fixed_bounds) for consistency.
+#
+# DECISION -- this is the opposite trade-off from the RP engine, on purpose.
+# There are two coherent ways to handle a lambda interval that depends on the
+# parameters, and this package uses one on each Famoye fitter:
+#
+#   * fit_bnb (here): MOVING bounds. The interval is recomputed from the
+#     per-observation c values at every evaluation, so the fitted lambda is
+#     admissible BY CONSTRUCTION and no post-fit validity check is needed.
+#     The price is the gradient inconsistency documented above -- search
+#     directions en route are not exact derivatives -- mitigated by the
+#     multi-start policy in fit_bnb.R and accepted because the fixed-parameter
+#     objective is cheap enough to multi-start.
+#   * fit_rpbnb / fit_rpbnb_tmb: FROZEN bounds. The interval is fixed at the
+#     starting values, so the analytic gradient is exactly the derivative of
+#     the optimized objective (a property the simulated likelihood's expensive
+#     evaluations cannot buy back by multi-starting). The price is that the
+#     optimizer can escape the region admissible at the optimum, which is
+#     detected post fit (lambda_admissible) but not prevented.
+#
+# Neither guarantee can be had for free with the other; changing either side
+# means re-litigating this note, the multi-start policy, and the RP engines'
+# post-fit guard together.
 
 #' Per-observation log-likelihood (vector) for the Famoye BNB model
 #'

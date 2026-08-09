@@ -69,6 +69,13 @@
 #' @return An object of class `rpbnb_boundary_tests`: a data frame with columns
 #'   `Parameter`, `LR`, `df`, `p.value`, `Signif` (one row per boundary
 #'   parameter), and a `print` method.
+#'
+#'   Under Famoye dependence with uniform or triangular random coefficients
+#'   (or a single varying margin), the full and restricted fits' admissible
+#'   lambda intervals are frozen at different starting values, so each LR
+#'   statistic compares maxima over slightly different lambda ranges; see the
+#'   "Famoye caveat" section of [lr_test()]. Normal/lognormal coefficients in
+#'   both margins are unaffected (the interval is the constant `c(-1, 1)`).
 #' @seealso [lr_test()], [fit_rpbnb()]
 #' @export
 #' @examples

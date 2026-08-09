@@ -133,6 +133,20 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
 
   # Standard errors from the Hessian, with lambda-bounds frozen at optimum. The
   # analytic and numeric paths differentiate the same frozen-bounds objective.
+  #
+  # Freezing AT THE OPTIMUM is consistent here, and this is the argument that
+  # makes the moving-bounds design (see the DECISION note in bnb_likelihood.R)
+  # acceptable: the frozen-bounds gradient at any point uses the bounds
+  # evaluated AT THAT POINT, so maxLik's convergence means the converged theta*
+  # is a stationary point of the fixed-bound objective with bounds(theta*) --
+  # a self-consistent fixed point. The Hessian below differentiates exactly
+  # that objective at exactly that interval, and lambda_hat above maps z_hat
+  # through the same interval the score used at theta*. Everything reported is
+  # therefore one coherent parameterization; the ~1e-3 moving-vs-frozen
+  # gradient agreement holds AT the solution and only there, which is the only
+  # place these SEs are computed. (Contrast fit_rpbnb, where the interval is
+  # frozen at the START and the covariance must use that same start-frozen
+  # interval -- pinned by the oracle test in test-fit-rpbnb.R.)
   if (isTRUE(control$compute_se)) {
     lamLo_h <- bnds_hat[1]; lamHi_h <- bnds_hat[2]
     ll_fb <- function(p) bnbr_loglik_fixed_bounds(p, Y1, Y2, X1, X2, lamLo_h, lamHi_h,

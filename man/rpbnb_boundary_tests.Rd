@@ -30,6 +30,13 @@ both (the default).}
 An object of class \code{rpbnb_boundary_tests}: a data frame with columns
 \code{Parameter}, \code{LR}, \code{df}, \code{p.value}, \code{Signif} (one row per boundary
 parameter), and a \code{print} method.
+
+Under Famoye dependence with uniform or triangular random coefficients
+(or a single varying margin), the full and restricted fits' admissible
+lambda intervals are frozen at different starting values, so each LR
+statistic compares maxima over slightly different lambda ranges; see the
+"Famoye caveat" section of \code{\link[=lr_test]{lr_test()}}. Normal/lognormal coefficients in
+both margins are unaffected (the interval is the constant \code{c(-1, 1)}).
 }
 \description{
 Runs a likelihood-ratio test for every random-coefficient standard deviation

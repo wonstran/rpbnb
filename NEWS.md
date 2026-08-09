@@ -3,6 +3,40 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-09 project review)
+
+See `comments/review_2026-08-09-08-10-18.md`. Documentation and test hygiene
+only; no estimation behaviour change.
+
+* **The moving-vs-frozen bounds trade-off is now a recorded decision, not an
+  accident.** The two Famoye fitters resolve it in opposite directions:
+  `fit_bnb()` recomputes the interval per evaluation (fitted lambda admissible
+  *by construction*, gradient inconsistent en route, mitigated by multi-start),
+  while the RP engines freeze it at the starting values (gradient exactly the
+  derivative of the optimized objective, escape detected post fit). A DECISION
+  note in `R/bnb_likelihood.R` states both horns and cross-references; the
+  `fit_bnb` SE site documents why freezing *at the optimum* is self-consistent
+  there (the converged point is a fixed point of the frozen-gradient system);
+  `?rpbnb` states the RP engines' semantics.
+* **`?fit_rpbnb_tmb` no longer denies fields its own warning points to**:
+  `lambda_bounds_at_optimum` and `lambda_admissible` are documented, and the
+  "not recomputed at the optimum" sentence now says the recomputation is for
+  validation only. `?fit_rpbnb` documents `bounds`, `bounds_at_optimum` and
+  `lambda_admissible` likewise.
+* **`?lr_test` and `?rpbnb_boundary_tests` state the frozen-interval caveat**,
+  confined to where it exists: uniform/triangular coefficients or a single
+  varying margin. Normal/lognormal in both margins use the constant `[-1, 1]`
+  and are unaffected.
+* **`AGENTS.md` describes the two-engine reality**: single hand-written
+  `R_init_rpbnb`, the TMB source layout, the engine table including `rpbnb()`,
+  non-interchangeable control objects, and a corrected lambda-bounds
+  convention note (the old one described pre-0.4.0 semantics).
+* **`R CMD check` breakers inherited from pre-merge `master` fixed**:
+  `tests/bnb_rwm1984.R` now resolves its results directory robustly instead of
+  writing to a cwd-relative path that does not exist under check, and
+  `test-rpbnb-interpretation.R` uses `n_cores = 2L` (the `--as-cran` core cap)
+  — the parallel-equals-serial property it tests is preserved.
+
 ## Review fixes (2026-08-08 22:12 response review)
 
 See `comments/response_2026-08-08-22-29-34.md`. Tests and one shared helper; no

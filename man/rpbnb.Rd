@@ -85,6 +85,14 @@ rather than a silently ignored \code{...} entry.
    \code{control} class \tab \code{rpbnb_control} \tab \code{rpbnb_tmb_control} \cr
    optimizer \tab \code{maxLik::maxLik(method = "BFGS")} \tab \code{stats::nlminb} + restarts \cr
 }
+
+
+Both engines freeze the Famoye admissible lambda interval at the starting
+values (so the analytic gradient is exactly the derivative of the optimized
+objective) and validate the fitted lambda against the interval admissible at
+the optimum afterwards — check \code{lambda_admissible} on the fit. The
+fixed-parameter \code{\link[=fit_bnb]{fit_bnb()}} takes the opposite trade-off (moving bounds,
+admissible by construction); see the decision note in \code{R/bnb_likelihood.R}.
 }
 
 \examples{

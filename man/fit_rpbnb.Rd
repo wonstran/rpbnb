@@ -79,7 +79,18 @@ reuses a full fit's draws (common random numbers). Used by
 \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}; not intended for direct use.}
 }
 \value{
-An object of class \code{rpbnb_fit}.
+An object of class \code{rpbnb_fit}. Under Famoye dependence three fields
+describe the admissible lambda interval: \code{bounds} is the interval the
+optimized likelihood actually used, frozen at the starting values (its
+width also feeds \code{summary()}'s delta-method standard error for lambda);
+\code{bounds_at_optimum} is the interval admissible at the fitted parameters,
+recomputed after optimization for validation only; and
+\code{lambda_admissible} records whether \code{lambda} — the fitted value, mapped
+through \code{bounds} — lies inside \code{bounds_at_optimum}. \code{FALSE} means the
+optimizer escaped the valid region (a warning is raised) and the fit
+should be re-run from starting values closer to the optimum. For normal
+or lognormal random coefficients loaded in both margins the bound is the
+constant \code{c(-1, 1)}, the two intervals coincide, and escape cannot occur.
 }
 \description{
 Maximum simulated likelihood estimation with normal random coefficients and

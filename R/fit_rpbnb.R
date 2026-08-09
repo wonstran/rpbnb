@@ -96,7 +96,18 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #'   matrices to use verbatim instead of generating them, so a restricted refit
 #'   reuses a full fit's draws (common random numbers). Used by
 #'   [rpbnb_boundary_tests()]; not intended for direct use.
-#' @return An object of class `rpbnb_fit`.
+#' @return An object of class `rpbnb_fit`. Under Famoye dependence three fields
+#'   describe the admissible lambda interval: `bounds` is the interval the
+#'   optimized likelihood actually used, frozen at the starting values (its
+#'   width also feeds `summary()`'s delta-method standard error for lambda);
+#'   `bounds_at_optimum` is the interval admissible at the fitted parameters,
+#'   recomputed after optimization for validation only; and
+#'   `lambda_admissible` records whether `lambda` — the fitted value, mapped
+#'   through `bounds` — lies inside `bounds_at_optimum`. `FALSE` means the
+#'   optimizer escaped the valid region (a warning is raised) and the fit
+#'   should be re-run from starting values closer to the optimum. For normal
+#'   or lognormal random coefficients loaded in both margins the bound is the
+#'   constant `c(-1, 1)`, the two intervals coincide, and escape cannot occur.
 #' @export
 #' @examples
 #' sim <- simulate_rpbnb(n = 600,

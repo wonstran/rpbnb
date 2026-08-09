@@ -26,6 +26,13 @@
 #' | `control` class | `rpbnb_control` | `rpbnb_tmb_control` |
 #' | optimizer | `maxLik::maxLik(method = "BFGS")` | `stats::nlminb` + restarts |
 #'
+#' Both engines freeze the Famoye admissible lambda interval at the starting
+#' values (so the analytic gradient is exactly the derivative of the optimized
+#' objective) and validate the fitted lambda against the interval admissible at
+#' the optimum afterwards — check `lambda_admissible` on the fit. The
+#' fixed-parameter [fit_bnb()] takes the opposite trade-off (moving bounds,
+#' admissible by construction); see the decision note in `R/bnb_likelihood.R`.
+#'
 #' @param formula_1,formula_2 Model formulas for the two count responses.
 #' @param data A data frame containing the model variables.
 #' @param engine Estimation engine: `"cpp"` (default) or `"tmb"`.

@@ -90,16 +90,30 @@
 #'
 #'   \code{lambda_bounds} is a named numeric vector \code{c(lower =, upper =)}
 #'   giving the admissible Famoye dependence interval, and \code{NULL} for
-#'   every other dependence structure. The bounds are computed once at the
-#'   starting values and held fixed for the whole fit; they are \emph{not}
-#'   recomputed at the optimum. A \code{lam} estimate at either end is
-#'   therefore an artefact of the starting values rather than a property of the
-#'   data, which is why the field is exposed.
+#'   every other dependence structure. The bounds \emph{used by the likelihood}
+#'   are computed once at the starting values and held fixed for the whole fit.
+#'   A \code{lam} estimate at either end is therefore an artefact of the
+#'   starting values rather than a property of the data, which is why the field
+#'   is exposed.
 #'   \code{\link{rpbnb_tmb_dependence_profile}} reports a likelihood-based
 #'   interval where the delta-method standard error collapses to \code{NA}, but
 #'   for Famoye that interval is mapped through this same frozen box and so
 #'   cannot escape it: widen the box by refitting from better starting values
 #'   before treating such an interval as informative.
+#'
+#'   \code{lambda_bounds_at_optimum} is the interval admissible at the
+#'   \emph{fitted} parameters, recomputed after optimization for validation
+#'   only — it never enters the likelihood. \code{lambda_admissible} records
+#'   whether the fitted \code{lam} (mapped through the frozen
+#'   \code{lambda_bounds}, i.e. the value the objective actually used) lies
+#'   inside it; \code{FALSE} means the optimizer left the region where the
+#'   joint pmf is a valid probability model, a warning was raised, and the fit
+#'   should not be interpreted — refit from starting values closer to the
+#'   optimum. When the bound is parameter-independent (normal or lognormal
+#'   coefficients loaded in both margins, where it is the constant
+#'   \code{c(-1, 1)}), the two intervals coincide and the flag is trivially
+#'   \code{TRUE}. Both fields are \code{NULL}/\code{NA} outside Famoye
+#'   dependence.
 #' @export
 #' @examples
 #' \dontrun{

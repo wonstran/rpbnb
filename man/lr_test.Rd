@@ -46,6 +46,20 @@ establish convergence. Generic objects that only carry a \code{logLik()} (no
 convergence record) are still accepted, but their convergence cannot be
 validated and is the caller's responsibility.
 }
+\section{Famoye caveat for bounded random-coefficient distributions}{
+
+Each Famoye fit maximizes its likelihood over an admissible lambda
+interval frozen at that fit's own starting values. With normal or
+lognormal random coefficients loaded in both margins the interval is the
+constant \code{c(-1, 1)} for every fit, so the comparison is unaffected. With
+uniform or triangular coefficients (or a single varying margin) the bound
+moves with the parameters, so two fits frozen at different starting
+values maximize over slightly different lambda ranges and the LR
+statistic inherits that second-order discrepancy. Check
+\code{lambda_admissible} on both fits before relying on a comparison in that
+regime.
+}
+
 \examples{
 sim <- simulate_rpbnb(n = 600,
   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),

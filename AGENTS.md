@@ -6,9 +6,15 @@
 - Package name: `rpbnb`
 - Build: roxygen2, testthat (edition 3), pkgdown, devtools
 - RStudio project: `rpbnb.Rproj` (`BuildType: Package`, roxygen on build)
-- No JavaScript or Python. Compiled code IS present: a multithreaded Rcpp/OpenMP
-  core lives in `src/` (`halton_parallel.cpp`, `copula_parallel.cpp`,
-  `RcppExports.cpp`); DESCRIPTION declares `LinkingTo: Rcpp` and `Imports: Rcpp`.
+- No JavaScript or Python. Compiled code IS present, in ONE shared library with
+  TWO engines: a multithreaded Rcpp/OpenMP core (`halton_parallel.cpp`,
+  `copula_parallel.cpp`, `RcppExports.cpp`) and a TMB automatic-differentiation
+  template (`rpbnb_tmb.cpp`). DESCRIPTION declares
+  `LinkingTo: Rcpp, TMB, RcppEigen`. The single `R_init_rpbnb` is HAND-WRITTEN
+  at the bottom of `src/rpbnb_tmb.cpp` (it registers `TMB_CALLDEFS` plus the
+  six Rcpp entries; `Rcpp::compileAttributes()` detects it and stands down) —
+  adding an `// [[Rcpp::export]]` means adding a row there AND to
+  `tests/testthat/test-native-registration.R`.
 
 ## Commands
 
@@ -41,16 +47,26 @@ Rscript -e 'devtools::test()'
 
 ## Architecture
 
-Three user-facing model paths, all producing S3 objects:
+User-facing model paths, all producing S3 objects:
 
 | Function | Class | Estimator |
 |----------|-------|-----------|
 | `fit_bnb(dependence = "independence")` | `bnb_fit` | Two `MASS::glm.nb` margins |
 | `fit_bnb(dependence = "famoye")` | `bnb_fit` | maxLik BFGS, analytic gradient |
 | `fit_bnb(dependence = copula(...))` | `bnb_fit` | maxLik BFGS, copula gradient |
-| `fit_rpbnb()` | `rpbnb_fit` | maxLik BFGS, MSL with Halton draws |
+| `fit_rpbnb()` | `rpbnb_fit` | maxLik BFGS, MSL with Halton draws (Rcpp/OpenMP) |
+| `fit_rpbnb_tmb()` | `rpbnb_tmb_fit` | nlminb + restart polish, TMB AD; SML or Laplace |
+| `rpbnb(engine = "cpp"/"tmb")` | engine-native | Front end dispatching to the two above |
 
-Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `rpbnb_control()`, `copula()`, plus S3 methods for `print`, `summary`, `coef`, `vcov`, `logLik`, `predict`, `AIC`, `BIC`.
+`rpbnb()` validates every extra argument against the selected fitter's own
+formals and errors on anything that does not belong — never silently ignore an
+argument through `...`. The TMB engine REJECTS `offset()` terms; the Gaussian
+copula is capped at one thread (known SIGSEGV in the registered atomic).
+
+Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `simulate_rpbnb_tmb()`,
+`rpbnb_control()`, `rpbnb_tmb_control()` (NOT interchangeable), `copula()`,
+plus S3 methods for `print`, `summary`, `coef`, `vcov`, `logLik`, `predict`,
+`AIC`, `BIC` on each fit class.
 
 **Source layout** in `R/` (plus a compiled Rcpp/OpenMP core in `src/`):
 - `fit_bnb.R` — public `fit_bnb()` + three internal fitters (famoye, copula, independence)
@@ -65,6 +81,12 @@ Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `rpbnb_control()`, `copula()`,
 - `methods.R` — S3 methods (print, summary, coef, vcov, logLik, predict)
 - `control.R` — `rpbnb_control()`
 - `utilities.R` — helpers
+- `rpbnb.R` — the `rpbnb()` engine front end
+- `fit_rpbnb_tmb.R`, `tmb_helpers.R`, `tmb_inference.R`, `tmb_methods.R`,
+  `tmb_marginal_effects.R`, `tmb_results_export.R`, `tmb_utilities.R`,
+  `tmb_halton.R`, `simulate_rpbnb_tmb.R` — the TMB engine (carried over from
+  the former `rpbnb.tmb` package in 0.4.0; its design docs live in
+  `dev-docs/superpowers/specs/`, NOT `docs/`, which is pkgdown output)
 - `rpbnb-package.R` — package doc + imports
 
 **Internal visibility**: Internal functions use `@keywords internal @noRd`. Public objects in `NAMESPACE` are defined via `@export` roxygen tags. Do not add exports manually to NAMESPACE.
@@ -76,7 +98,14 @@ Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `rpbnb_control()`, `copula()`,
 - **Constructor pattern** — `new_bnb_fit()` / `new_rpbnb_fit()` build the object; public `fit_*()` functions are thin wrappers
 - **`rpbnb_control()`** — all tuning params (iterlim, reltol, hessian, n_cores, etc.) funnel through one control object
 - **Seed semantics** — `set.seed(seed)` drives the Cranley-Patterson rotation in `halton_uniform()`; it affects reproducibility of Halton draws, not RNG
-- **Lambda bounds** — the Famoye dependence parameter λ has data-adaptive bounds; the Hessian freezes bounds at the optimum for valid SEs
+- **Lambda bounds** — the Famoye admissible interval is the random
+  coefficients' SUPPORT bound (`famoye_support_bounds()` in `famoye_core.R`),
+  never a reduction over draws. The RP engines freeze it at the STARTING values
+  (objective, gradient, and every covariance path use that same interval — the
+  oracle test in `test-fit-rpbnb.R` pins this) and validate post fit
+  (`lambda_admissible`); `fit_bnb` instead recomputes bounds per evaluation and
+  is admissible by construction. See the DECISION note in `bnb_likelihood.R`
+  before touching either side.
 
 ## Testing
 
