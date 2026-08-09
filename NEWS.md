@@ -36,6 +36,26 @@ That source tree is now superseded; everything it provided is available here.
   values shown by `print()`/`summary()` are computed on demand, not written
   back into the fit.
 
+## New feature: `rpbnb(boundary_tests = TRUE)`
+
+* **Boundary LR tests integrated into `rpbnb()`**, `engine = "classic"` only.
+  The random-coefficient SDs and NB2 dispersions (`m1`, `m2`) have a null that
+  sits on the boundary of the parameter space, so an ordinary Wald `z`/`p`
+  does not test it (`summary()` has always reported `NA` for those rows).
+  `boundary_tests = TRUE` runs [rpbnb_boundary_tests()] on the fit as soon as
+  it converges — against the same (possibly standardized) data the fit itself
+  used — and attaches the result as `$boundary_tests`.
+* `print()`/`summary()` now show that boundary-corrected LR test (`LR`, `df`,
+  `p`) for the SD and dispersion rows in the natural-scale block, in place of
+  the `NA` they previously carried; rows without a matching boundary test
+  (dependence parameters, a Poisson-pinned margin) are unaffected. Composes
+  with `standardize = TRUE`.
+* Default `FALSE` — each restricted refit costs roughly another full fit, more
+  under a `copula()` dependence than `"famoye"` (see
+  `rpbnb_boundary_tests()`'s timing note) — so existing `rpbnb()` calls are
+  unaffected. `boundary_tests = TRUE` under `engine = "tmb"` is an error
+  (`rpbnb_boundary_tests()` only accepts an `rpbnb_fit`).
+
 ## Review fixes (2026-08-09 project review)
 
 See `comments/review_2026-08-09-08-10-18.md`. Documentation and test hygiene

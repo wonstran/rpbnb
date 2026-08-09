@@ -54,7 +54,8 @@ test_that("unnamed extra arguments are rejected", {
           random_1 = NULL, random_2 = NULL, draws = 400, seed = 1234,
           start = NULL, dependence = "famoye",
           poisson_1 = FALSE, poisson_2 = FALSE,
-          standardize = FALSE, continuous_vars = NULL, control = NULL,
+          standardize = FALSE, continuous_vars = NULL,
+          boundary_tests = FALSE, control = NULL,
           "halton"),
     "must be named"
   )

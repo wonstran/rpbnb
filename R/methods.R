@@ -98,7 +98,13 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 
 .print_coef_matrix <- function(tab, digits = 4) {
   num <- vapply(tab, is.numeric, logical(1))
+  # A "df" column (boundary LR test degrees of freedom) is an integer count,
+  # not a decimal estimate -- format it as one rather than "1.0000".
+  if ("df" %in% names(tab)) num[["df"]] <- FALSE
   tab[num] <- lapply(tab[num], formatC, format = "f", digits = digits)
+  if ("df" %in% names(tab)) {
+    tab[["df"]] <- ifelse(is.na(tab[["df"]]), "NA", formatC(tab[["df"]], format = "d"))
+  }
   print(tab, row.names = FALSE, right = TRUE)
 }
 
@@ -114,32 +120,59 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 # Natural-scale view of the transformed parameters: random-coefficient SDs
 # (exp(log_sd)), NB2 dispersions m = exp(log_m), and the Famoye dependence lambda
 # (stored on the object), each with a delta-method standard error. Positive scale
-# components (SDs, dispersions) report no z/p/stars because their Wald ratio does
-# not test the boundary null a = 0; dependence parameters keep the Wald test.
-# Returns a list with $random (random SDs) and $dispersion (m1, m2, lambda) components.
+# components (SDs, dispersions) report no Wald z/p because their ratio does not
+# test the boundary null a = 0 (a = 0 is eta = -Inf); dependence parameters have
+# an interior zero and keep the regular Wald test.
+#
+# When `object$boundary_tests` is present (attached by rpbnb(boundary_tests =
+# TRUE, engine = "classic"), or by assigning a manual rpbnb_boundary_tests()
+# result), the SD and dispersion rows report that boundary-corrected LR test
+# instead of leaving the gap unfilled: LR/df columns, and `p`/`Signif` from the
+# LR p-value rather than NA. Rows without a matching boundary-test parameter
+# (no `$boundary_tests`, or a Poisson-pinned margin, which is fixed rather than
+# estimated) keep LR/df = NA. Returns a list with $random (random SDs) and
+# $dispersion (m1, m2, lambda) components.
 .natural_scale_table <- function(object) {
   orig <- .rpbnb_orig_units(object)
   cf <- if (!is.null(orig)) orig$coef else object$coef
   se <- object$se
   se_of <- function(nm) if (!is.null(se) && nm %in% names(se) && is.finite(se[[nm]])) se[[nm]] else NA_real_
 
+  bt <- object$boundary_tests
+  bt_row <- function(param) {
+    if (is.null(bt)) return(NULL)
+    hit <- which(bt$Parameter == param)
+    if (!length(hit)) return(NULL)
+    bt[hit[1L], , drop = FALSE]
+  }
+
   random_rows <- list()
   dispersion_rows <- list()
 
-  # `test = FALSE` for positive scale/dispersion parameters a = exp(eta): there
-  # z = est/SE reduces to 1/SE(eta), which is not a Wald test of a = 0 (a = 0 is
-  # eta = -Inf, a boundary). Report the estimate and delta-method SE but no
-  # z/p/stars. Dependence parameters (lambda, copula native/tau) have an
-  # interior zero and keep the regular Wald test (test = TRUE).
+  # SD rows are always boundary parameters (never a plain Wald z/p); a matching
+  # boundary-test row supplies LR/df/p instead of leaving them NA.
   add_random <- function(name, est, stderr) {
+    b <- bt_row(name)
     random_rows[[length(random_rows) + 1L]] <<-
       data.frame(Parameter = name, Estimate = est, StdErr = stderr,
-                 z = NA_real_, p = NA_real_, Signif = signif_stars(NA_real_),
+                 LR = if (is.null(b)) NA_real_ else b$LR,
+                 df = if (is.null(b)) NA_integer_ else b$df,
+                 z = NA_real_,
+                 p = if (is.null(b)) NA_real_ else b$p.value,
+                 Signif = signif_stars(if (is.null(b)) NA_real_ else b$p.value),
                  check.names = FALSE)
   }
 
-  add_dispersion <- function(name, est, stderr, test = TRUE) {
-    if (test) {
+  # `test = FALSE` for positive scale/dispersion parameters a = exp(eta) without
+  # a `boundary_param` match: their z = est/SE reduces to 1/SE(eta), which is
+  # not a Wald test of a = 0. Dependence parameters (lambda, copula native/tau)
+  # are never boundary-tested (`boundary_param = NULL`) and keep the ordinary
+  # Wald test (`test = TRUE`).
+  add_dispersion <- function(name, est, stderr, test = TRUE, boundary_param = NULL) {
+    b <- if (is.null(boundary_param)) NULL else bt_row(boundary_param)
+    if (!is.null(b)) {
+      z_val <- NA_real_; p_val <- b$p.value
+    } else if (test) {
       z_val <- if (is.na(est) || is.na(stderr) || stderr == 0) NA_real_ else est / stderr
       p_val <- if (is.na(z_val)) NA_real_ else 2 * stats::pnorm(-abs(z_val))
     } else {
@@ -147,6 +180,8 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     }
     dispersion_rows[[length(dispersion_rows) + 1L]] <<-
       data.frame(Parameter = name, Estimate = est, StdErr = stderr,
+                 LR = if (is.null(b)) NA_real_ else b$LR,
+                 df = if (is.null(b)) NA_integer_ else b$df,
                  z = z_val, p = p_val, Signif = signif_stars(p_val),
                  check.names = FALSE)
   }
@@ -164,13 +199,15 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   # Dispersion parameters. A Poisson-restricted margin (poisson_1/poisson_2) is
   # exactly m = 0 by the public contract; its pinned log_m holds only the
   # numerical POISSON_M display placeholder, which must NOT leak into the
-  # natural-scale table. Report exactly 0 with an NA SE (a fixed parameter).
+  # natural-scale table. Report exactly 0 with an NA SE (a fixed parameter, so
+  # it has no boundary counterpart either -- `boundary_param` stays unset).
   if ("log_m1" %in% names(cf)) {
     if (isTRUE(object$poisson_1)) {
       add_dispersion("m1 (dispersion)", 0, NA_real_, test = FALSE)
     } else {
       m1 <- exp(cf[["log_m1"]])
-      add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"), test = FALSE)
+      add_dispersion("m1 (dispersion)", m1, m1 * se_of("log_m1"), test = FALSE,
+                     boundary_param = "m1")
     }
   }
   if ("log_m2" %in% names(cf)) {
@@ -178,7 +215,8 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
       add_dispersion("m2 (dispersion)", 0, NA_real_, test = FALSE)
     } else {
       m2 <- exp(cf[["log_m2"]])
-      add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"), test = FALSE)
+      add_dispersion("m2 (dispersion)", m2, m2 * se_of("log_m2"), test = FALSE,
+                     boundary_param = "m2")
     }
   }
 
@@ -237,15 +275,29 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   out
 }
 
-# Footnote for a natural-scale table: when any row reports no z/p (positive
-# scale/dispersion parameters, where the Wald ratio does not test the boundary
-# null a = 0), point users to lr_test() for a valid test rather than leaving the
-# blank z/p unexplained. `tab` is a natural-scale data frame with a `z` column.
+# Footnote for a natural-scale table. Two independent notes, either or both
+# printed: one for rows carrying an actual boundary-corrected LR test (`LR`
+# column non-NA -- from `rpbnb(boundary_tests = TRUE)` or a manually attached
+# rpbnb_boundary_tests() result), explaining what LR/df/p mean there; and one
+# for rows with neither a Wald z/p nor a boundary LR/p (positive scale/
+# dispersion parameters left untested), pointing to rpbnb_boundary_tests() to
+# fill the gap. `tab` is a natural-scale data frame with `z`/`p` columns and,
+# when boundary tests are present, `LR`/`df` columns.
 .print_natural_scale_footnote <- function(tab) {
   if (is.null(tab) || !"z" %in% names(tab)) return(invisible(NULL))
-  if (any(is.na(tab$z))) {
-    cat("Note: no Wald z/p for positive scale/dispersion parameters (SDs, m);\n",
-        "      their null is a boundary. Use lr_test() to test these.\n", sep = "")
+  lr_tested <- if ("LR" %in% names(tab)) !is.na(tab$LR) else rep(FALSE, nrow(tab))
+  has_lr <- any(lr_tested)
+  untested <- is.na(tab$z) & !lr_tested
+  if (has_lr) {
+    cat("Note: LR/df/p for rows with a boundary-corrected LR test (H0:\n",
+        "      parameter = 0, 50:50 chi-square mixture; see rpbnb_boundary_tests()).\n",
+        sep = "")
+  }
+  if (any(untested)) {
+    cat("Note: no Wald z/p or boundary LR test for positive scale/dispersion\n",
+        "      parameters (SDs, m) above without one; their null is a boundary.\n",
+        "      Use rpbnb_boundary_tests() (or rpbnb(boundary_tests = TRUE)) to\n",
+        "      test these.\n", sep = "")
   }
   invisible(NULL)
 }
