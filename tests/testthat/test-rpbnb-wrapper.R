@@ -10,23 +10,23 @@ toy <- function(n = 30L) {
 
 test_that("engine-specific arguments are rejected by the other engine", {
   d <- toy()
-  # tmb-only arguments under engine = "cpp"
+  # tmb-only arguments under engine = "classic"
   expect_error(
-    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp", inference = "none"),
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic", inference = "none"),
     'only accepted by engine = "tmb"'
   )
   expect_error(
-    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp", keep = "full"),
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic", keep = "full"),
     'only accepted by engine = "tmb"'
   )
-  # cpp-only arguments under engine = "tmb"
+  # classic-only arguments under engine = "tmb"
   expect_error(
     rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", draw_type = "halton"),
-    'only accepted by engine = "cpp"'
+    'only accepted by engine = "classic"'
   )
   expect_error(
     rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", .opt_draws = 10),
-    'only accepted by engine = "cpp"'
+    'only accepted by engine = "classic"'
   )
 })
 
@@ -34,7 +34,7 @@ test_that("unknown argument names are an error, not a silent no-op", {
   d <- toy()
   # The whole point of the wrapper: a typo must not vanish into `...`.
   expect_error(
-    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp", drawtype = "halton"),
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic", drawtype = "halton"),
     "not an argument of either engine"
   )
   expect_error(
@@ -50,7 +50,7 @@ test_that("unnamed extra arguments are rejected", {
   # formal (here `random_1`, which then fails with "random name(s) not found").
   # So fill them all, or this asserts the wrong error.
   expect_error(
-    rpbnb(formula_1 = y1 ~ x1, formula_2 = y2 ~ x1, data = d, engine = "cpp",
+    rpbnb(formula_1 = y1 ~ x1, formula_2 = y2 ~ x1, data = d, engine = "classic",
           random_1 = NULL, random_2 = NULL, draws = 400, seed = 1234,
           start = NULL, dependence = "famoye",
           poisson_1 = FALSE, poisson_2 = FALSE, control = NULL,
@@ -62,7 +62,7 @@ test_that("unnamed extra arguments are rejected", {
 test_that("control objects are engine-typed and never translated", {
   d <- toy()
   expect_error(
-    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp",
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
           control = rpbnb_tmb_control()),
     "needs a `rpbnb_control` object"
   )
@@ -76,13 +76,13 @@ test_that("control objects are engine-typed and never translated", {
 test_that("dependence structures unsupported by an engine are rejected", {
   d <- toy()
   expect_error(
-    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp",
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
           dependence = "independence"),
-    'engine = "cpp" does not implement'
+    'engine = "classic" does not implement'
   )
   # copula(par=) is simulation-only; rpbnb() rejects it for BOTH engines even
   # though fit_rpbnb() would accept and ignore it.
-  for (eng in c("cpp", "tmb")) {
+  for (eng in c("classic", "tmb")) {
     expect_error(
       rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = eng,
             dependence = copula("frank", par = 2)),
@@ -97,7 +97,7 @@ test_that("rpbnb() returns exactly what the underlying fitter returns", {
   d <- toy(60L)
   ctl <- rpbnb_control(compute_se = FALSE, print_level = 0)
 
-  a <- rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "cpp",
+  a <- rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
              draws = 30, seed = 7, control = ctl)
   b <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = d,
                  draws = 30, seed = 7, control = ctl)

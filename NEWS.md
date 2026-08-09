@@ -3,6 +3,14 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Breaking change
+
+* **`rpbnb(engine = )` renamed `"cpp"` to `"classic"`**. `engine = "classic"`
+  now selects the Rcpp/OpenMP `fit_rpbnb()` path (unchanged behaviour); the
+  old `engine = "cpp"` value is no longer accepted. `fit_rpbnb()` and
+  `fit_rpbnb_tmb()` themselves are unaffected — only the `rpbnb()` dispatcher's
+  `engine` argument changed name.
+
 ## Review fixes (2026-08-09 project review)
 
 See `comments/review_2026-08-09-08-10-18.md`. Documentation and test hygiene

@@ -56,7 +56,7 @@ User-facing model paths, all producing S3 objects:
 | `fit_bnb(dependence = copula(...))` | `bnb_fit` | maxLik BFGS, copula gradient |
 | `fit_rpbnb()` | `rpbnb_fit` | maxLik BFGS, MSL with Halton draws (Rcpp/OpenMP) |
 | `fit_rpbnb_tmb()` | `rpbnb_tmb_fit` | nlminb + restart polish, TMB AD; SML or Laplace |
-| `rpbnb(engine = "cpp"/"tmb")` | engine-native | Front end dispatching to the two above |
+| `rpbnb(engine = "classic"/"tmb")` | engine-native | Front end dispatching to the two above |
 
 `rpbnb()` validates every extra argument against the selected fitter's own
 formals and errors on anything that does not belong — never silently ignore an

@@ -1,7 +1,7 @@
 #' Fit a random-parameter bivariate NB model with either engine
 #'
 #' A common front end over the package's two estimation engines. `engine =
-#' "cpp"` calls [fit_rpbnb()] (Rcpp/OpenMP simulated likelihood, `maxLik` BFGS);
+#' "classic"` calls [fit_rpbnb()] (Rcpp/OpenMP simulated likelihood, `maxLik` BFGS);
 #' `engine = "tmb"` calls [fit_rpbnb_tmb()] (TMB automatic differentiation,
 #' `nlminb` with restart polish). Both fitters remain exported and can be called
 #' directly; this wrapper adds nothing to the fit itself and returns exactly
@@ -17,7 +17,7 @@
 #'
 #' # Which arguments go with which engine
 #'
-#' | Argument | `engine = "cpp"` | `engine = "tmb"` |
+#' | Argument | `engine = "classic"` | `engine = "tmb"` |
 #' | --- | --- | --- |
 #' | `draw_type`, `.fixed`, `.opt_draws` | yes | error |
 #' | `inference`, `keep`, `method` | error | yes |
@@ -35,7 +35,7 @@
 #'
 #' @param formula_1,formula_2 Model formulas for the two count responses.
 #' @param data A data frame containing the model variables.
-#' @param engine Estimation engine: `"cpp"` (default) or `"tmb"`.
+#' @param engine Estimation engine: `"classic"` (default) or `"tmb"`.
 #' @param random_1,random_2 Random-coefficient specifications for each equation.
 #' @param draws Number of simulation draws.
 #' @param seed Random seed for the draw sequence.
@@ -44,7 +44,7 @@
 #'   `"independence"` (TMB engine only).
 #' @param poisson_1,poisson_2 Restrict the corresponding margin to its Poisson
 #'   limit.
-#' @param control An `rpbnb_control()` object when `engine = "cpp"`, or an
+#' @param control An `rpbnb_control()` object when `engine = "classic"`, or an
 #'   `rpbnb_tmb_control()` object when `engine = "tmb"`. Defaults to the right
 #'   one for the chosen engine. The two are not interchangeable and are never
 #'   translated into one another.
@@ -54,7 +54,7 @@
 #'
 #' @return The engine-native fit object, identical to what a direct call to the
 #'   underlying fitter would return: an object of class `rpbnb_fit` for
-#'   `engine = "cpp"`, or `rpbnb_tmb_fit` for `engine = "tmb"`. The class
+#'   `engine = "classic"`, or `rpbnb_tmb_fit` for `engine = "tmb"`. The class
 #'   therefore depends on `engine`; test with `inherits(fit, "rpbnb_tmb_fit")`
 #'   if you need to branch. No wrapper class is introduced, so every existing S3
 #'   method and post-estimation function works unchanged.
@@ -69,7 +69,7 @@
 #'              engine = "tmb", random_1 = "outwork", draws = 50)
 #' }
 rpbnb <- function(formula_1, formula_2, data,
-                  engine = c("cpp", "tmb"),
+                  engine = c("classic", "tmb"),
                   random_1 = NULL, random_2 = NULL,
                   draws = 400, seed = 1234, start = NULL,
                   dependence = "famoye",
@@ -78,9 +78,9 @@ rpbnb <- function(formula_1, formula_2, data,
                   ...) {
   engine <- match.arg(engine)
 
-  this_fit  <- if (engine == "cpp") fit_rpbnb     else fit_rpbnb_tmb
-  other_fit <- if (engine == "cpp") fit_rpbnb_tmb else fit_rpbnb
-  other_nm  <- if (engine == "cpp") "tmb"         else "cpp"
+  this_fit  <- if (engine == "classic") fit_rpbnb     else fit_rpbnb_tmb
+  other_fit <- if (engine == "classic") fit_rpbnb_tmb else fit_rpbnb
+  other_nm  <- if (engine == "classic") "tmb"         else "classic"
 
   # Validate the dots against the selected fitter's own formals rather than a
   # hard-coded list, so this stays correct as either fitter gains arguments --
@@ -112,20 +112,20 @@ rpbnb <- function(formula_1, formula_2, data,
                               paste0("`", unknown, "`", collapse = ", ")))
       }
       stop(paste(msg, collapse = " "),
-           "\n  cpp-only: draw_type, .fixed, .opt_draws",
+           "\n  classic-only: draw_type, .fixed, .opt_draws",
            "\n  tmb-only: inference, keep, method",
            "\n  See ?rpbnb for the full argument matrix.", call. = FALSE)
     }
   }
 
   # Engine-typed control. The default must NOT be rpbnb_control() in the
-  # signature: a default evaluated at call time would hand the cpp control
+  # signature: a default evaluated at call time would hand the classic control
   # object to the TMB engine.
   if (is.null(control)) {
-    control <- if (engine == "cpp") rpbnb_control() else rpbnb_tmb_control()
+    control <- if (engine == "classic") rpbnb_control() else rpbnb_tmb_control()
   } else {
-    want <- if (engine == "cpp") "rpbnb_control"   else "rpbnb_tmb_control"
-    ctor <- if (engine == "cpp") "rpbnb_control()" else "rpbnb_tmb_control()"
+    want <- if (engine == "classic") "rpbnb_control"   else "rpbnb_tmb_control"
+    ctor <- if (engine == "classic") "rpbnb_control()" else "rpbnb_tmb_control()"
     if (!inherits(control, want)) {
       stop("engine = \"", engine, "\" needs a `", want, "` object; got `",
            class(control)[1L], "`. Build it with ", ctor, ".\n",
@@ -139,8 +139,8 @@ rpbnb <- function(formula_1, formula_2, data,
   }
 
   # Dependence structures the two engines do not share.
-  if (engine == "cpp" && identical(dependence, "independence")) {
-    stop("engine = \"cpp\" does not implement dependence = \"independence\" ",
+  if (engine == "classic" && identical(dependence, "independence")) {
+    stop("engine = \"classic\" does not implement dependence = \"independence\" ",
          "for the random-parameter model. Use engine = \"tmb\", or ",
          "fit_bnb(dependence = \"independence\") for the fixed-parameter ",
          "model.", call. = FALSE)

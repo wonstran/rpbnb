@@ -8,7 +8,7 @@ rpbnb(
   formula_1,
   formula_2,
   data,
-  engine = c("cpp", "tmb"),
+  engine = c("classic", "tmb"),
   random_1 = NULL,
   random_2 = NULL,
   draws = 400,
@@ -26,7 +26,7 @@ rpbnb(
 
 \item{data}{A data frame containing the model variables.}
 
-\item{engine}{Estimation engine: \code{"cpp"} (default) or \code{"tmb"}.}
+\item{engine}{Estimation engine: \code{"classic"} (default) or \code{"tmb"}.}
 
 \item{random_1, random_2}{Random-coefficient specifications for each equation.}
 
@@ -42,7 +42,7 @@ rpbnb(
 \item{poisson_1, poisson_2}{Restrict the corresponding margin to its Poisson
 limit.}
 
-\item{control}{An \code{rpbnb_control()} object when \code{engine = "cpp"}, or an
+\item{control}{An \code{rpbnb_control()} object when \code{engine = "classic"}, or an
 \code{rpbnb_tmb_control()} object when \code{engine = "tmb"}. Defaults to the right
 one for the chosen engine. The two are not interchangeable and are never
 translated into one another.}
@@ -54,13 +54,13 @@ engine, or an unrecognised name, is an error.}
 \value{
 The engine-native fit object, identical to what a direct call to the
 underlying fitter would return: an object of class \code{rpbnb_fit} for
-\code{engine = "cpp"}, or \code{rpbnb_tmb_fit} for \code{engine = "tmb"}. The class
+\code{engine = "classic"}, or \code{rpbnb_tmb_fit} for \code{engine = "tmb"}. The class
 therefore depends on \code{engine}; test with \code{inherits(fit, "rpbnb_tmb_fit")}
 if you need to branch. No wrapper class is introduced, so every existing S3
 method and post-estimation function works unchanged.
 }
 \description{
-A common front end over the package's two estimation engines. \code{engine = "cpp"} calls \code{\link[=fit_rpbnb]{fit_rpbnb()}} (Rcpp/OpenMP simulated likelihood, \code{maxLik} BFGS);
+A common front end over the package's two estimation engines. \code{engine = "classic"} calls \code{\link[=fit_rpbnb]{fit_rpbnb()}} (Rcpp/OpenMP simulated likelihood, \code{maxLik} BFGS);
 \code{engine = "tmb"} calls \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (TMB automatic differentiation,
 \code{nlminb} with restart polish). Both fitters remain exported and can be called
 directly; this wrapper adds nothing to the fit itself and returns exactly
@@ -77,7 +77,7 @@ rather than a silently ignored \code{...} entry.
 }
 \section{Which arguments go with which engine}{
 \tabular{lll}{
-   Argument \tab \code{engine = "cpp"} \tab \code{engine = "tmb"} \cr
+   Argument \tab \code{engine = "classic"} \tab \code{engine = "tmb"} \cr
    \code{draw_type}, \code{.fixed}, \code{.opt_draws} \tab yes \tab error \cr
    \code{inference}, \code{keep}, \code{method} \tab error \tab yes \cr
    \code{offset()} in a formula \tab yes \tab error \cr

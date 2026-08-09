@@ -56,7 +56,7 @@ sim <- simulate_rpbnb(n = 2000,
 `rpbnb(..., engine = )` selects between them; both underlying fitters are also
 exported and can be called directly.
 
-| | `engine = "cpp"` (`fit_rpbnb()`) | `engine = "tmb"` (`fit_rpbnb_tmb()`) |
+| | `engine = "classic"` (`fit_rpbnb()`) | `engine = "tmb"` (`fit_rpbnb_tmb()`) |
 | --- | --- | --- |
 | likelihood | Rcpp + OpenMP simulated likelihood | TMB automatic differentiation |
 | optimizer | `maxLik::maxLik(method = "BFGS")` | `stats::nlminb` + restart polish |
@@ -68,7 +68,7 @@ exported and can be called directly.
 ```r
 # Same model, either engine. The return object is the engine's native class.
 a <- rpbnb(docvis ~ outwork + kids, hospvis ~ outwork + kids, data = d,
-           engine = "cpp", random_1 = "kids", draws = 400, seed = 1234)
+           engine = "classic", random_1 = "kids", draws = 400, seed = 1234)
 b <- rpbnb(docvis ~ outwork + kids, hospvis ~ outwork + kids, data = d,
            engine = "tmb", random_1 = "kids", draws = 400, seed = 1234)
 ```
