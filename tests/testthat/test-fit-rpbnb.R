@@ -284,24 +284,73 @@ test_that("an escaped fit warns and is flagged inadmissible", {
                tolerance = 1e-10)
 })
 
-test_that("every se_method computes covariance under the frozen interval", {
+# Rebuild a fit's covariance from scratch at coef(fit), on the stored
+# optimization draws, under a SUPPLIED interval. Comparing a fit's vcov to this
+# oracle under the frozen interval and again under the interval at the optimum
+# is what pins which interval the covariance path actually used -- a property no
+# assertion about `bounds`, SE finiteness or summary() shape can establish.
+rp_vcov_oracle <- function(fit, method, bounds) {
+  p <- coef(fit); rm <- fit$rp_meta
+  X1 <- fit$X1; X2 <- fit$X2
+  XR1 <- X1[, fit$rand_idx1, drop = FALSE]
+  XR2 <- X2[, fit$rand_idx2, drop = FALSE]
+  if (method == "opg") {
+    S <- bnbr_rp_scores_cpp(p, fit$Y1, fit$Y2, X1, X2, XR1, XR2,
+                            fit$rand_idx1, fit$rand_idx2, rm$Z1, rm$Z2,
+                            rm$dist1, rm$dist2, rm$sign1, rm$sign2,
+                            n_threads = 1L, lam_bounds = bounds)
+    solve(crossprod(S))
+  } else if (method == "analytic") {
+    H <- bnbr_rp_hessian(p, fit$Y1, fit$Y2, X1, X2, XR1, XR2,
+                         fit$rand_idx1, fit$rand_idx2, rm$Z1, rm$Z2,
+                         rm$dist1, rm$dist2, rm$sign1, rm$sign2,
+                         lamLo = bounds[[1]], lamHi = bounds[[2]])
+    solve(-H)
+  } else {
+    ll <- function(q) bnbr_rp_ll_fixed_bounds_cpp(
+      q, fit$Y1, fit$Y2, X1, X2, XR1, XR2, fit$rand_idx1, fit$rand_idx2,
+      rm$Z1, rm$Z2, bounds[[1]], bounds[[2]],
+      rm$dist1, rm$dist2, rm$sign1, rm$sign2, n_threads = 1L)
+    H <- numDeriv::hessian(ll, p, method.args = list(r = 4L, eps = 1e-5))
+    info <- -H
+    solve((info + t(info)) / 2)
+  }
+}
+
+test_that("every se_method builds covariance from the objective's own interval", {
   skip_on_cran()
   skip_slow()
-  # Exercises the OPG, analytic-Hessian and numeric-Hessian branches on the
-  # moving-bound fixture. With compute_se = FALSE none of them run, which is why
-  # the earlier version of this test could not have caught the wiring defect.
+  skip_if_not(rpbnb:::rpbnb_cpp_available(), "C++ core unavailable")
+  # An earlier version of this test asserted only that the two intervals differ,
+  # that non-NA SEs are finite, and that summary() returns a table. None of
+  # those says WHICH interval produced the covariance: reverting a single
+  # covariance call site while leaving fit$bounds correct left it entirely
+  # green. (The finiteness assertion was worse than useless -- it was written
+  # over fit$se[!is.na(fit$se)], and all(logical(0)) is TRUE, so it would have
+  # passed with every SE equal to NA.)
+  #
+  # The oracle below rebuilds the covariance under an interval of our choosing.
+  # Matching under the frozen interval AND differing under the optimum interval
+  # is the discriminating pair.
   d <- rp_moving_bound_fixture()
-  for (sm in c("numeric", "opg", "analytic")) {
+  for (sm in c("opg", "analytic", "numeric")) {
     fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = d,
                      random_1 = list(x1 = list(dist = "uniform")),
                      draws = 60, seed = 2,
                      control = rpbnb_control(print_level = 0, se_method = sm))
+    # Premise: the two intervals differ, or there is nothing to discriminate.
     expect_false(isTRUE(all.equal(unname(fit$bounds),
-                                  unname(fit$bounds_at_optimum))),
-                 info = sm)
-    expect_true(all(is.finite(fit$se[!is.na(fit$se)])), info = sm)
-    # summary()'s lambda delta method must use the objective's width.
-    s <- summary(fit)
-    expect_true(is.data.frame(s$coefficients) || is.matrix(s$coefficients))
+                                  unname(fit$bounds_at_optimum))), info = sm)
+    # No fixed parameters in this fixture, so this is a real assertion.
+    expect_false(anyNA(fit$se), info = sm)
+    expect_true(all(is.finite(fit$se)), info = sm)
+
+    V <- vcov(fit)
+    expect_equal(V, rp_vcov_oracle(fit, sm, fit$bounds),
+                 tolerance = 1e-8, ignore_attr = TRUE, info = sm)
+    # The discriminator: had this path used the interval at the optimum, the
+    # covariance would differ by ~5-7% here.
+    o_opt <- rp_vcov_oracle(fit, sm, fit$bounds_at_optimum)
+    expect_gt(max(abs(V - o_opt)) / max(1, max(abs(o_opt))), 1e-3)
   }
 })

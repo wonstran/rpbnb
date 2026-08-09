@@ -103,7 +103,7 @@ bnbr_rp_hessian <- function(par, y1, y2, X1, X2, XR1, XR2,
     lamLo <- sb[["lower"]]; lamHi <- sb[["upper"]]
   }
   eps <- 1e-6; sig <- plogis(zlam)
-  lam       <- lamLo + (lamHi - lamLo) * (eps + (1 - 2 * eps) * sig)
+  lam       <- famoye_lam_from_z(c(lamLo, lamHi), zlam, eps)
   dlam_dz   <- (lamHi - lamLo) * (1 - 2 * eps) * sig * (1 - sig)
   d2lam_dz2 <- (lamHi - lamLo) * (1 - 2 * eps) * sig * (1 - sig) * (1 - 2 * sig)
 

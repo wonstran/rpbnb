@@ -3,6 +3,33 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## Review fixes (2026-08-08 22:12 response review)
+
+See `comments/response_2026-08-08-22-29-34.md`. Tests and one shared helper; no
+estimation behaviour change.
+
+* **The covariance regression now pins which interval each path used.** The
+  previous version asserted only that the two intervals differ, that non-NA SEs
+  are finite, and that `summary()` returns a table — none of which says which
+  interval produced the covariance. Reverting a single covariance call site
+  while leaving `fit$bounds` correct left it entirely green. (The finiteness
+  assertion was itself vacuous: written over `fit$se[!is.na(fit$se)]`, and
+  `all(logical(0))` is `TRUE`, it would have passed with every SE `NA`.)
+  A new oracle rebuilds the covariance at `coef(fit)` on the stored draws under
+  a supplied interval — `crossprod()` of scores for OPG, `bnbr_rp_hessian()` for
+  analytic, the fixed-bound numeric objective for numeric — and the test asserts
+  it matches under the frozen interval and differs under the optimum interval.
+  Verified by mutating each covariance site independently, `fit$bounds`
+  untouched: 2 failures each.
+* **`famoye_lam_from_z()` is now used by every R-side implementation of the
+  map** — `bnbr_rp_ll_and_grad()`, `bnbr_rp_ll_fixed_bounds()` and
+  `bnbr_rp_hessian()`, alongside the post-fit guard. It previously prevented
+  only guard/test drift while its documentation claimed it prevented drift from
+  the objective's parameterization; the map was still written out separately at
+  three R sites. The C++ core keeps its own copy, now documented as such and
+  tied to the R side by the math-identity assertions in
+  `test-cpp-likelihood.R`.
+
 ## Review fixes (2026-08-08 21:49 response review)
 
 See `comments/response_2026-08-08-22-04-13.md`. Tests only; no behaviour change.

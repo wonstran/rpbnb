@@ -122,7 +122,7 @@ bnbr_rp_ll_and_grad <- compiler::cmpfun(function(par, y1, y2, X1, X2, XR1, XR2,
     val <- -1e50; attr(val, "gradient") <- rep(0, length(par)); return(val)
   }
   eps <- 1e-6; sig <- plogis(zlam)
-  lam <- lamLo + (lamHi - lamLo) * (eps + (1 - 2*eps) * sig)
+  lam <- famoye_lam_from_z(c(lamLo, lamHi), zlam, eps)
   dlam_dz <- (lamHi - lamLo) * (1 - 2*eps) * sig * (1 - sig)
 
   # ---- Pass 2: LL matrix (n x R) ----
@@ -261,7 +261,7 @@ bnbr_rp_ll_fixed_bounds <- function(par, y1, y2, X1, X2, XR1, XR2,
   sd2 <- if (q2>0) exp(log_sd2) else numeric(0)
 
   eps <- 1e-6; sig <- plogis(zlam)
-  lam <- lamLo + (lamHi - lamLo) * (eps + (1 - 2*eps) * sig)
+  lam <- famoye_lam_from_z(c(lamLo, lamHi), zlam, eps)
 
   xb1 <- as.vector(X1 %*% beta1) + .as_offset(off1, nrow(X1))
   xb2 <- as.vector(X2 %*% beta2) + .as_offset(off2, nrow(X2))

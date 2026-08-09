@@ -223,8 +223,18 @@ famoye_support_bounds <- function(X1, X2, off1, off2,
 #' Map the working dependence parameter to Famoye's lambda
 #'
 #' `lambda = lo + (hi - lo) * (eps + (1 - 2*eps) * plogis(z))`, the interior
-#' logistic map the likelihood uses. Shared so that the post-fit admissibility
-#' guard and its tests cannot drift from the objective's own parameterization.
+#' logistic map the likelihood uses.
+#'
+#' Called by every R-side implementation of the map -- `bnbr_rp_ll_and_grad()`,
+#' `bnbr_rp_ll_fixed_bounds()`, `bnbr_rp_hessian()` -- and by the post-fit
+#' admissibility guard in `fit_rpbnb()` and its tests, so none of them can drift
+#' from the objective's parameterization.
+#'
+#' The C++ core in `src/halton_parallel.cpp` necessarily carries its own copy;
+#' that one is tied to this by the R/C++ math-identity assertions in
+#' `tests/testthat/test-cpp-likelihood.R`, not by sharing code. Only the
+#' derivative terms (`dlam_dz`, `d2lam_dz2`) remain written out at each call
+#' site, since they are not this map.
 #'
 #' The interval passed here must be the one the OBJECTIVE used. Mapping `z`
 #' through some other interval and then testing membership in that same interval
