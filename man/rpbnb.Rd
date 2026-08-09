@@ -135,7 +135,10 @@ LR test instead by refitting each restricted model. \code{summary()}/\code{print
 then show that test's \code{LR}/\code{df}/\code{p} for those rows in the natural-scale
 block, in place of the \code{NA} they would otherwise carry. Only supported for
 \code{engine = "classic"} (\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} requires an \code{rpbnb_fit}); it
-is an error under \code{engine = "tmb"}.
+is an error under \code{engine = "tmb"}. A \code{\link[=message]{message()}} reports how many
+restricted refits are about to run (one per random-coefficient SD, one per
+estimated NB2 dispersion) before they start, unless \code{control$print_level}
+is \code{0}; suppress it with \code{\link[=suppressMessages]{suppressMessages()}} if needed.
 
 Each restricted refit costs roughly as much as the original fit (more for a
 \code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s

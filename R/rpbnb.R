@@ -53,7 +53,10 @@
 #' then show that test's `LR`/`df`/`p` for those rows in the natural-scale
 #' block, in place of the `NA` they would otherwise carry. Only supported for
 #' `engine = "classic"` ([rpbnb_boundary_tests()] requires an `rpbnb_fit`); it
-#' is an error under `engine = "tmb"`.
+#' is an error under `engine = "tmb"`. A [message()] reports how many
+#' restricted refits are about to run (one per random-coefficient SD, one per
+#' estimated NB2 dispersion) before they start, unless `control$print_level`
+#' is `0`; suppress it with [suppressMessages()] if needed.
 #'
 #' Each restricted refit costs roughly as much as the original fit (more for a
 #' [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
@@ -275,6 +278,16 @@ rpbnb <- function(formula_1, formula_2, data,
   if (isTRUE(boundary_tests)) {
     bt_control <- control
     bt_control$compute_se <- FALSE
+    if (is.null(control$print_level) || control$print_level > 0) {
+      n_sd   <- length(fit$rand_idx1) + length(fit$rand_idx2)
+      n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
+      n_tot  <- n_sd + n_disp
+      message(sprintf(
+        "rpbnb(): running boundary LR tests (%d restricted refit%s: %d random-coefficient SD%s, %d NB2 dispersion%s)...",
+        n_tot, if (n_tot == 1L) "" else "s",
+        n_sd, if (n_sd == 1L) "" else "s",
+        n_disp, if (n_disp == 1L) "" else "s"))
+    }
     fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data, control = bt_control)
   }
   fit
