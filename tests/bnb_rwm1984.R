@@ -82,8 +82,15 @@ cat("\n--- Predicted means (first 5 observations) ---\n")
 print(round(head(pred, 5), 3))
 
 # ---- 7. Export results to CSV -----------------------------------------------
-results_dir <- "tests/results"
-if (!dir.exists(results_dir)) dir.create(results_dir, showWarnings = FALSE)
+# In the source tree (cwd = package root, "tests" exists) this regenerates the
+# committed fixtures in tests/results. Under R CMD check the script runs from
+# <pkg>.Rcheck/tests, where the cwd-relative "tests/results" has no parent and
+# the non-recursive dir.create() failed silently -- write.csv() then errored and
+# the whole check reported ERROR. Fall back to tempdir() there: the exports are
+# a side product, and check only needs the script to run.
+results_dir <- if (dir.exists("tests")) "tests/results" else
+  file.path(tempdir(), "rpbnb-bnb-results")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Export model summary table
 s <- summary(fit_fam)

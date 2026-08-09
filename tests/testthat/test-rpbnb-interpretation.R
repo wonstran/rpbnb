@@ -185,7 +185,10 @@ test_that("rpbnb_marginal_effects: n_cores > 1 matches n_cores = 1 exactly", {
   seq_res <- rpbnb_marginal_effects(f, which = "both", type = "AME",
                                     print_output = FALSE, n_cores = 1L)
   par_res <- rpbnb_marginal_effects(f, which = "both", type = "AME",
-                                    print_output = FALSE, n_cores = 3L)
+                                    # 2L, not 3L: --as-cran caps spawned
+                                    # processes at 2, and 2 exercises the
+                                    # parallel path just as fully.
+                                    print_output = FALSE, n_cores = 2L)
   expect_equal(par_res$y1$Estimate, seq_res$y1$Estimate, tolerance = 0)
   expect_equal(par_res$y1$StdErr,   seq_res$y1$StdErr,   tolerance = 0)
   expect_equal(par_res$y2$Estimate, seq_res$y2$Estimate, tolerance = 0)
@@ -198,7 +201,8 @@ test_that("rpbnb_elasticities: n_cores > 1 matches n_cores = 1 exactly", {
   seq_res <- rpbnb_elasticities(f, which = "both", type = "AME",
                                 print_output = FALSE, n_cores = 1L)
   par_res <- rpbnb_elasticities(f, which = "both", type = "AME",
-                                print_output = FALSE, n_cores = 3L)
+                                # 2L, not 3L: see the note above.
+                                print_output = FALSE, n_cores = 2L)
   expect_equal(par_res$y1$Estimate, seq_res$y1$Estimate, tolerance = 0)
   expect_equal(par_res$y1$StdErr,   seq_res$y1$StdErr,   tolerance = 0)
   expect_equal(par_res$y2$Estimate, seq_res$y2$Estimate, tolerance = 0)
