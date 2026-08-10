@@ -153,7 +153,7 @@ reconstruct the fitting-scale data first: \code{rpbnb:::.apply_scaling(data, fit
 \tabular{lll}{
    Argument \tab \code{engine = "classic"} \tab \code{engine = "tmb"} \cr
    \code{draw_type}, \code{.fixed}, \code{.opt_draws} \tab yes \tab error \cr
-   \code{inference}, \code{keep}, \code{method} \tab error \tab yes \cr
+   \code{inference}, \code{keep}, \code{method}, \code{force_parallel_gaussian} \tab error \tab yes \cr
    \code{offset()} in a formula \tab yes \tab error \cr
    \code{dependence = "independence"} \tab error \tab yes \cr
    \code{control} class \tab \code{rpbnb_control} \tab \code{rpbnb_tmb_control} \cr

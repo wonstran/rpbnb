@@ -3,6 +3,32 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## New feature: `fit_rpbnb_tmb(force_parallel_gaussian = )`
+
+* **Opt-in override for the Gaussian-copula single-thread safety cap.**
+  `dependence = copula("normal")` fits have always been silently capped to
+  one TMB thread (`n_cores`/`max_threads` forced to 1, `parallel_tape`
+  forced off) because multithreaded evaluation of this family has reliably
+  crashed the R process (SIGSEGV) on the first objective evaluation — a
+  defect in the registered Gaussian atomic
+  (`REGISTER_ATOMIC(gauss_cell_vec)`, not re-entrant under OpenMP). That cap
+  is unchanged by default. `force_parallel_gaussian = TRUE` (also usable via
+  `rpbnb(engine = "tmb", force_parallel_gaussian = TRUE, ...)`) instead
+  honors the requested thread count, with a `warning()` naming the crash
+  risk explicitly rather than the earlier cap-notice warning.
+* This does **not** fix the underlying defect — it is an escape hatch for
+  someone who has read the documentation and still wants to try running
+  multithreaded (e.g. to test whether a particular TMB/OpenMP build is
+  actually affected). A crash under this override can still corrupt memory
+  and lose unsaved work. Frank and Clayton copulas were never capped and are
+  unaffected by this argument.
+* Internally, the capping/override logic is now a pure function
+  (`.resolve_gaussian_threads()`, `R/tmb_helpers.R`) with no TMB/DLL calls,
+  so its warning/capping behavior is unit-tested directly
+  (`tests/testthat/test-parallel.R`) without ever triggering a real
+  multithreaded Gaussian-copula evaluation — no test in this package
+  exercises that path, by design.
+
 ## Breaking change
 
 * **`rpbnb(engine = )` renamed `"cpp"` to `"classic"`**. `engine = "classic"`

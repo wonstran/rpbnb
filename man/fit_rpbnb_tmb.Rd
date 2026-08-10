@@ -19,7 +19,8 @@ fit_rpbnb_tmb(
   keep = c("postfit", "compact", "full"),
   poisson_1 = FALSE,
   poisson_2 = FALSE,
-  method = c("sml", "laplace")
+  method = c("sml", "laplace"),
+  force_parallel_gaussian = FALSE
 )
 }
 \arguments{
@@ -84,6 +85,29 @@ and requires at least one random coefficient.
 \code{"laplace"} they are computed from an approximated marginal
 likelihood rather than the exact one, so an AIC from a Laplace fit is not
 meaningful to compare against an AIC from an SML fit of the same model.}
+
+\item{force_parallel_gaussian}{Opt-in override of the Gaussian-copula
+(\code{dependence = copula("normal")}) single-thread safety cap. Default
+\code{FALSE}: whenever \code{control$n_cores > 1} or
+\code{control$parallel_tape} is requested together with a Gaussian
+copula, the request is silently capped to one thread with a
+\code{warning()} instead of being honored. This is not a performance
+knob -- it exists because evaluating a Gaussian-copula TMB object built
+with more than one OpenMP thread has reliably crashed the R process
+(SIGSEGV) on the first objective evaluation, a defect in the registered
+Gaussian atomic (\code{REGISTER_ATOMIC(gauss_cell_vec)} in
+\code{src/rpbnb_tmb.cpp}) that is not fixed by the existing
+\code{#pragma omp critical} force-init. Frank and Clayton copulas are
+unaffected at any thread count and never see this cap.
+
+Setting \code{force_parallel_gaussian = TRUE} honors the requested
+thread count instead of capping it, with a \code{warning()} naming the
+crash risk explicitly. This is an escape hatch for someone who has read
+this paragraph and still wants to try it (e.g. to test whether a
+particular TMB/OpenMP build is actually affected) -- it does not fix the
+underlying defect, and a crash under this override can still corrupt
+memory and lose unsaved work in the R session. Ignored for every other
+dependence structure.}
 }
 \value{
 An object of class \code{rpbnb_tmb_fit}. The \code{sdreport} field

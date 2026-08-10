@@ -1,3 +1,67 @@
+# Resolve the effective TMB thread configuration for a fit's dependence
+# family, applying the Gaussian-copula (family_code == 2L) single-thread
+# safety cap unless overridden.
+#
+# Evaluating a Gaussian-copula TMB object built with more than one OpenMP
+# thread has reliably crashed the R process (SIGSEGV) on the FIRST objective
+# evaluation -- not a rare or data-dependent failure. The trigger is
+# REGISTER_ATOMIC(gauss_cell_vec) under OpenMP; the
+# `#pragma omp critical(gauss_cell_vec_init)` force-init in src/rpbnb_tmb.cpp
+# does not make it re-entrant. Frank and Clayton are unaffected at any thread
+# count and never see this cap (this function is a no-op for them).
+#
+# By default (`force_parallel_gaussian = FALSE`) this caps the request down
+# to one thread with a `warning()` rather than attempting the call that would
+# crash the process: a slow correct fit is strictly better than a user who
+# passed a perfectly ordinary-looking `n_cores = 2L` losing their session and
+# any unsaved work. `force_parallel_gaussian = TRUE` is an opt-in escape
+# hatch for someone who has read this comment and still wants to try running
+# multithreaded anyway (e.g. to test whether a particular TMB/OpenMP build is
+# actually affected) -- it honors the request instead of capping it, with a
+# louder warning naming the crash risk explicitly. It does not fix the
+# underlying defect; test-parallel.R's "serial and parallel copula objectives
+# and gradients agree" test remains skip()-ed for exactly this reason, and
+# no test in this package exercises real multithreaded Gaussian evaluation.
+#
+# Deliberately a pure function (no TMB/DLL calls) that only inspects
+# `family_code`/`control`/`force_parallel_gaussian` and returns what to
+# configure -- so its warning/capping LOGIC is unit-testable without ever
+# triggering the crash-prone evaluation itself.
+#' @keywords internal
+#' @noRd
+.resolve_gaussian_threads <- function(family_code, control,
+                                      force_parallel_gaussian = FALSE) {
+  requested_cores <- control$n_cores
+  out <- list(cores = requested_cores, max_threads = control$max_threads,
+             parallel_tape = control$parallel_tape)
+  if (!identical(family_code, 2L)) return(out)
+
+  wants_parallel <- requested_cores > 1L || isTRUE(control$parallel_tape)
+  if (!wants_parallel) return(out)
+
+  if (isTRUE(force_parallel_gaussian)) {
+    warning(
+      "force_parallel_gaussian = TRUE: running the Gaussian copula with ",
+      "n_cores = ", requested_cores, ", parallel_tape = ",
+      isTRUE(control$parallel_tape), ". This overrides a safety cap for a ",
+      "KNOWN DEFECT: multithreaded evaluation of this family (registered ",
+      "Gaussian atomic, not re-entrant under OpenMP) has reliably crashed ",
+      "the R process (SIGSEGV) on the first objective evaluation. Save your ",
+      "work before proceeding; if R terminates unexpectedly, this override ",
+      "is why.", call. = FALSE)
+    return(out)
+  }
+
+  warning("Gaussian copula fits are restricted to one thread: ",
+          "multithreaded evaluation of this family crashes the R process ",
+          "(a known defect in the registered Gaussian atomic). Continuing ",
+          "with n_cores = 1 and parallel_tape = FALSE; requested n_cores = ",
+          requested_cores, ". Pass force_parallel_gaussian = TRUE to fit_rpbnb_tmb() ",
+          "to override -- only if you understand and accept the crash risk ",
+          "(see ?fit_rpbnb_tmb).", call. = FALSE)
+  list(cores = 1L, max_threads = 1L, parallel_tape = FALSE)
+}
+
 #' Configure the TMB model DLL's OpenMP thread count
 #' @keywords internal
 #' @noRd

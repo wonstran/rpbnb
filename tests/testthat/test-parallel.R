@@ -583,6 +583,62 @@ test_that("Gaussian copula fits are capped at one thread", {
   expect_identical(fit$parallel$requested, 4L)
 })
 
+test_that("force_parallel_gaussian is a pure opt-in override, tested WITHOUT evaluating", {
+  # .resolve_gaussian_threads() decides cores/max_threads/parallel_tape before
+  # any TMB object is built or evaluated, so its logic is testable without
+  # the crash risk a real multithreaded Gaussian fit carries -- deliberately
+  # NOT exercised here (or anywhere else in this package; see the skipped
+  # "serial and parallel copula objectives and gradients agree" test above).
+  # This test must never grow a `fit_rpbnb_tmb(force_parallel_gaussian = TRUE,
+  # control = rpbnb_tmb_control(n_cores > 1, ...))` call: that would build and
+  # evaluate a real multithreaded Gaussian-copula tape.
+  ctl1 <- rpbnb_tmb_control(n_cores = 1L)
+  ctl4 <- rpbnb_tmb_control(n_cores = 4L, max_threads = 4L)
+
+  # Non-Gaussian families are never touched, at any thread count.
+  expect_no_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(1L, ctl4, force_parallel_gaussian = FALSE)
+  )
+  expect_identical(r$cores, 4L)
+  expect_no_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(0L, ctl4, force_parallel_gaussian = TRUE)
+  )
+  expect_identical(r$cores, 4L)
+
+  # Gaussian (family_code 2) at n_cores = 1 needs no cap and warns nothing.
+  expect_no_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl1, force_parallel_gaussian = FALSE)
+  )
+  expect_identical(r$cores, 1L)
+
+  # Default: capped, warns "restricted to one thread" (matches the end-to-end
+  # test above) and names the override.
+  expect_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, force_parallel_gaussian = FALSE),
+    "restricted to one thread"
+  )
+  expect_identical(r$cores, 1L)
+  expect_identical(r$max_threads, 1L)
+  expect_identical(r$parallel_tape, FALSE)
+
+  # force_parallel_gaussian = TRUE: request honored, warns about the crash
+  # risk instead of the cap.
+  expect_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, force_parallel_gaussian = TRUE),
+    "SIGSEGV"
+  )
+  expect_identical(r$cores, 4L)
+  expect_identical(r$max_threads, 4L)
+
+  # parallel_tape alone (n_cores = 1) also triggers the cap by default.
+  ctl_tape <- rpbnb_tmb_control(n_cores = 1L, parallel_tape = TRUE)
+  expect_warning(
+    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl_tape, force_parallel_gaussian = FALSE),
+    "restricted to one thread"
+  )
+  expect_identical(r$parallel_tape, FALSE)
+})
+
 test_that("non-Gaussian copulas are not capped", {
   skip_on_cran()
   skip_slow()

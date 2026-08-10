@@ -54,6 +54,28 @@
 #'   \code{"laplace"} they are computed from an approximated marginal
 #'   likelihood rather than the exact one, so an AIC from a Laplace fit is not
 #'   meaningful to compare against an AIC from an SML fit of the same model.
+#' @param force_parallel_gaussian Opt-in override of the Gaussian-copula
+#'   (\code{dependence = copula("normal")}) single-thread safety cap. Default
+#'   \code{FALSE}: whenever \code{control$n_cores > 1} or
+#'   \code{control$parallel_tape} is requested together with a Gaussian
+#'   copula, the request is silently capped to one thread with a
+#'   \code{warning()} instead of being honored. This is not a performance
+#'   knob -- it exists because evaluating a Gaussian-copula TMB object built
+#'   with more than one OpenMP thread has reliably crashed the R process
+#'   (SIGSEGV) on the first objective evaluation, a defect in the registered
+#'   Gaussian atomic (\code{REGISTER_ATOMIC(gauss_cell_vec)} in
+#'   \code{src/rpbnb_tmb.cpp}) that is not fixed by the existing
+#'   \code{#pragma omp critical} force-init. Frank and Clayton copulas are
+#'   unaffected at any thread count and never see this cap.
+#'
+#'   Setting \code{force_parallel_gaussian = TRUE} honors the requested
+#'   thread count instead of capping it, with a \code{warning()} naming the
+#'   crash risk explicitly. This is an escape hatch for someone who has read
+#'   this paragraph and still wants to try it (e.g. to test whether a
+#'   particular TMB/OpenMP build is actually affected) -- it does not fix the
+#'   underlying defect, and a crash under this override can still corrupt
+#'   memory and lose unsaved work in the R session. Ignored for every other
+#'   dependence structure.
 #' @return An object of class \code{rpbnb_tmb_fit}. The \code{sdreport} field
 #'   is a compact package-owned summary and does not retain a second TMB tape.
 #'
@@ -132,7 +154,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
                           inference = c("full", "diag", "none"),
                           keep = c("postfit", "compact", "full"),
                           poisson_1 = FALSE, poisson_2 = FALSE,
-                          method = c("sml", "laplace")) {
+                          method = c("sml", "laplace"),
+                          force_parallel_gaussian = FALSE) {
   had_random_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_random_seed) {
     saved_random_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -274,37 +297,15 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   } else {
     1L
   }
-  # Gaussian copula is capped at one thread, unconditionally.
-  #
-  # Evaluating a Gaussian-copula (family_code 2) TMB object built with more than
-  # one thread terminates the R process with a SIGSEGV on the first objective
-  # call. The trigger is REGISTER_ATOMIC(gauss_cell_vec) under OpenMP; the
-  # `#pragma omp critical(gauss_cell_vec_init)` force-init in src/rpbnb_tmb.cpp
-  # does not make it safe. Frank and Clayton are unaffected at any thread count.
-  #
-  # This is a hard cap rather than a documentation note because the failure mode
-  # is memory corruption and process termination: a user who passes a perfectly
-  # ordinary-looking `n_cores = 2L` loses their session and any unsaved work. A
-  # slow correct fit is strictly better than that. Remove the cap only once the
-  # atomic is genuinely re-entrant and the parallel Gaussian assertions in
-  # tests/testthat/test-parallel.R are restored.
-  gaussian_serial <- (family_code == 2L)
+  # Gaussian copula thread safety: capped by default, opt-in override via
+  # force_parallel_gaussian. See .resolve_gaussian_threads()'s own comment for
+  # the crash this guards against.
   requested_cores <- control$n_cores
-  effective_cores <- requested_cores
-  effective_max_threads <- control$max_threads
-  effective_parallel_tape <- control$parallel_tape
-  if (gaussian_serial) {
-    if (requested_cores > 1L || isTRUE(control$parallel_tape)) {
-      warning("Gaussian copula fits are restricted to one thread: ",
-              "multithreaded evaluation of this family crashes the R process ",
-              "(a known defect in the registered Gaussian atomic). Continuing ",
-              "with n_cores = 1 and parallel_tape = FALSE; requested n_cores = ",
-              requested_cores, ".", call. = FALSE)
-    }
-    effective_cores <- 1L
-    effective_max_threads <- 1L
-    effective_parallel_tape <- FALSE
-  }
+  resolved_threads <- .resolve_gaussian_threads(family_code, control,
+                                                force_parallel_gaussian)
+  effective_cores <- resolved_threads$cores
+  effective_max_threads <- resolved_threads$max_threads
+  effective_parallel_tape <- resolved_threads$parallel_tape
   configured_threads <- .configure_tmb_threads(
     effective_cores,
     max_threads = effective_max_threads,

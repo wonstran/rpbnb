@@ -72,7 +72,7 @@
 #' | Argument | `engine = "classic"` | `engine = "tmb"` |
 #' | --- | --- | --- |
 #' | `draw_type`, `.fixed`, `.opt_draws` | yes | error |
-#' | `inference`, `keep`, `method` | error | yes |
+#' | `inference`, `keep`, `method`, `force_parallel_gaussian` | error | yes |
 #' | `offset()` in a formula | yes | error |
 #' | `dependence = "independence"` | error | yes |
 #' | `control` class | `rpbnb_control` | `rpbnb_tmb_control` |
@@ -185,7 +185,7 @@ rpbnb <- function(formula_1, formula_2, data,
       }
       stop(paste(msg, collapse = " "),
            "\n  classic-only: draw_type, .fixed, .opt_draws",
-           "\n  tmb-only: inference, keep, method",
+           "\n  tmb-only: inference, keep, method, force_parallel_gaussian",
            "\n  See ?rpbnb for the full argument matrix.", call. = FALSE)
     }
   }
