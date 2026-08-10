@@ -20,7 +20,8 @@ fit_rpbnb_tmb(
   poisson_1 = FALSE,
   poisson_2 = FALSE,
   method = c("sml", "laplace"),
-  force_parallel_gaussian = FALSE
+  force_parallel_gaussian = FALSE,
+  .fixed = NULL
 )
 }
 \arguments{
@@ -108,6 +109,14 @@ particular TMB/OpenMP build is actually affected) -- it does not fix the
 underlying defect, and a crash under this override can still corrupt
 memory and lose unsaved work in the R session. Ignored for every other
 dependence structure.}
+
+\item{.fixed}{Internal. A named numeric vector of parameters (in the
+optimization parameterization, e.g. \code{c("log_sd1:x" = -20)}) to pin
+at the supplied values and hold fixed during estimation, so they leave
+the free-parameter count and \code{logLik()}'s \code{df}. Used by
+\code{\link{rpbnb_tmb_boundary_tests}()} to construct scale-zero
+restricted fits; not intended for direct use. The classic engine's
+\code{\link{fit_rpbnb}()} carries an identically named argument.}
 }
 \value{
 An object of class \code{rpbnb_tmb_fit}. The \code{sdreport} field

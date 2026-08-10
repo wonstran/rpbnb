@@ -136,17 +136,13 @@ each restricted model instead. \code{summary()}/\code{print()} then show that te
 \code{LR}/\code{df}/\code{p} for those rows in the natural-scale block, in place of the
 \code{NA} they would otherwise carry.
 
-Which parameters get tested depends on \code{engine}:
-\itemize{
-\item \code{engine = "classic"} calls \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}, which tests both
-the random-coefficient SDs and the NB2 dispersions.
-\item \code{engine = "tmb"} calls \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}, which tests only
-the NB2 dispersions -- the TMB engine has no equivalent of the classic
-engine's common-random-numbers trick for zeroing one random
-coefficient's draws, so its random-coefficient SD rows still carry \code{NA}
-(see \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s "Which parameters this tests"
-section for why, and the workaround).
-}
+Both engines test the same parameters -- every random-coefficient scale
+and every unrestricted NB2 dispersion -- via \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}
+(\code{engine = "classic"}) or \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}
+(\code{engine = "tmb"}). They differ only in how each restricted fit holds the
+scale at zero while preserving common random numbers: the classic engine
+zeroes that coefficient's draw column, the TMB engine pins its \code{log_sd}
+and maps it out of the free parameters.
 
 A \code{\link[=message]{message()}} reports how many restricted refits are about to run before
 they start, unless \code{control$print_level} is \code{0}; suppress it with
@@ -155,8 +151,8 @@ they start, unless \code{control$print_level} is \code{0}; suppress it with
 Each restricted refit costs roughly as much as the original fit (more for
 a \code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s
 timing note), so this defaults to \code{FALSE}. For finer control -- testing
-only \code{"sd"} or only \code{"dispersion"} under \code{engine = "classic"}, or reusing
-one boundary-test run across several summaries -- call
+only \code{"sd"} or only \code{"dispersion"} (both engines take a \code{which} argument),
+or reusing one boundary-test run across several summaries -- call
 \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}/\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} directly on the fit
 and assign its result to \code{fit$boundary_tests} (with \code{standardize = TRUE},
 reconstruct the fitting-scale data first: \code{rpbnb:::.apply_scaling(data, fit$scaling)}).

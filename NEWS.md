@@ -5,35 +5,41 @@ That source tree is now superseded; everything it provided is available here.
 
 ## New feature: `rpbnb_tmb_boundary_tests()` / `rpbnb(engine = "tmb", boundary_tests = TRUE)`
 
-* **Boundary-corrected LR test for the TMB engine's NB2 dispersions.**
-  `summary.rpbnb_tmb_fit()`'s "Dispersion (m1, m2)" block has always reported
-  no significance test for `m1`/`m2` (their null, `m = 0`, is the Poisson
-  limit — a boundary of the parameter space, where an ordinary Wald ratio
-  doesn't apply). `rpbnb_tmb_boundary_tests(fit, data)` is the TMB-engine
-  counterpart of the classic engine's [rpbnb_boundary_tests()]: it refits the
-  model with each unrestricted margin pinned at its Poisson limit
-  (`poisson_1`/`poisson_2 = TRUE`, warm-started from `fit$coef`, same seed so
-  the two fits share simulated draws) and applies [lr_test()]'s 50:50
-  chi-square boundary correction. Returns an object of class
-  `rpbnb_boundary_tests` — the same class the classic engine's function
-  returns — so both share one `print()` method.
+* **Boundary-corrected LR tests for the TMB engine's boundary parameters** —
+  every random-coefficient scale (`sd1:*`, `sd2:*`) and every unrestricted
+  NB2 dispersion (`m1`, `m2`). `summary.rpbnb_tmb_fit()` has always reported
+  no significance test for these (their nulls — scale = 0, or `m = 0`, the
+  Poisson limit — sit on the boundary of the parameter space, where an
+  ordinary Wald ratio doesn't apply). `rpbnb_tmb_boundary_tests(fit, data)`
+  is the TMB-engine counterpart of the classic engine's
+  [rpbnb_boundary_tests()], with the same `which = c("sd", "dispersion")`
+  argument, and returns the same `rpbnb_boundary_tests` class so both share
+  one `print()` method.
+* Each restricted refit is otherwise identical to the full fit (same
+  formulas, specification, dependence, draws, seed, estimator), warm-started
+  from `fit$coef`. **Dispersions** are restricted via `poisson_1`/
+  `poisson_2 = TRUE`. **Scales** are restricted by pinning that
+  coefficient's `log_sd` at the parameterization's zero (`-20`; the template
+  clamps `log_sd` to `[-20, 20]` and computes `sd = exp(log_sd)`, so this is
+  `sd = 2.1e-9`) and mapping it out of the free parameters, giving a 1-df
+  restriction.
+* Pinning the scale rather than dropping the coefficient from
+  `random_1`/`random_2` is what preserves **common random numbers**: the
+  Halton draw matrix keeps the same width, so every *other* random
+  coefficient draws from exactly the dimensions it did in the full fit. (An
+  earlier version of this feature shipped dispersion-only on the assumption
+  that TMB had no CRN-preserving way to restrict a scale; pinning via TMB's
+  own `map` is that way.)
 * `rpbnb(engine = "tmb", boundary_tests = TRUE)` now works (previously a
   documented error) and attaches the result as `$boundary_tests`, same as
-  `engine = "classic"`. `summary()`'s dispersion block merges it in
-  automatically: `LR`/`df`/`Pr(>chisq)` columns replace the `NA` that would
-  otherwise be there for `m1`/`m2`.
-* **Scope**: dispersions only, not random-coefficient SDs (unlike the
-  classic engine's version, which tests both). The classic engine's SD test
-  zeroes one coefficient's simulation draws while keeping every other column
-  at the full model's exact draws, which needs a `.opt_draws`-style
-  mechanism the TMB engine has no equivalent of; dropping a name from
-  `random_1`/`random_2` on a TMB refit instead shifts which Halton
-  dimensions the *remaining* random coefficients draw from, so the two fits
-  would no longer share common random numbers. Testing a TMB
-  random-coefficient SD this way remains possible by hand — refit with the
-  name dropped and call [lr_test()] directly — just not wrapped in this
-  function. See `rpbnb_tmb_boundary_tests()`'s "Which parameters this tests"
-  section.
+  `engine = "classic"`. `summary()` merges it into **both** the
+  random-coefficient scale blocks and the dispersion block automatically:
+  `LR`/`df`/`Pr(>chisq)` columns replace the `NA` those rows previously
+  carried.
+* `fit_rpbnb_tmb()` gains an internal `.fixed` argument (a named numeric
+  vector of parameters to pin, in the optimization parameterization),
+  mirroring the classic engine's identically named argument. Not intended
+  for direct use; it is how the scale-zero refits above are built.
 * Also fixed in the same area: `summary.rpbnb_tmb_fit()`'s dispersion block
   was missing `Std. Error` entirely (a real gap, not intentional design —
   `m1`/`m2` are `ADREPORT`ed in the template, so the delta-method SE was

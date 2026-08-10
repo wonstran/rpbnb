@@ -76,6 +76,13 @@
 #'   underlying defect, and a crash under this override can still corrupt
 #'   memory and lose unsaved work in the R session. Ignored for every other
 #'   dependence structure.
+#' @param .fixed Internal. A named numeric vector of parameters (in the
+#'   optimization parameterization, e.g. \code{c("log_sd1:x" = -20)}) to pin
+#'   at the supplied values and hold fixed during estimation, so they leave
+#'   the free-parameter count and \code{logLik()}'s \code{df}. Used by
+#'   \code{\link{rpbnb_tmb_boundary_tests}()} to construct scale-zero
+#'   restricted fits; not intended for direct use. The classic engine's
+#'   \code{\link{fit_rpbnb}()} carries an identically named argument.
 #' @return An object of class \code{rpbnb_tmb_fit}. The \code{sdreport} field
 #'   is a compact package-owned summary and does not retain a second TMB tape.
 #'
@@ -155,7 +162,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
                           keep = c("postfit", "compact", "full"),
                           poisson_1 = FALSE, poisson_2 = FALSE,
                           method = c("sml", "laplace"),
-                          force_parallel_gaussian = FALSE) {
+                          force_parallel_gaussian = FALSE,
+                          .fixed = NULL) {
   had_random_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_random_seed) {
     saved_random_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -361,6 +369,24 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   if (length(fixed_names)) {
     start[fixed_names] <- log(POISSON_M)
   }
+  # Internal .fixed: pin arbitrary parameters (in this optimization
+  # parameterization) at supplied values and hold them out of the free set,
+  # so npar -- and therefore logLik()'s df -- drops accordingly. Used by
+  # rpbnb_tmb_boundary_tests() to build the scale-zero restricted fits; the
+  # classic engine's fit_rpbnb() has an identically named argument for the
+  # same purpose.
+  if (!is.null(.fixed)) {
+    if (!is.numeric(.fixed) || is.null(names(.fixed)) || anyNA(names(.fixed))) {
+      stop("`.fixed` must be a named numeric vector.", call. = FALSE)
+    }
+    bad <- setdiff(names(.fixed), par_names)
+    if (length(bad)) {
+      stop("`.fixed` names not in the model's parameter vector: ",
+           paste(bad, collapse = ", "), call. = FALSE)
+    }
+    start[names(.fixed)] <- .fixed
+    fixed_names <- unique(c(fixed_names, names(.fixed)))
+  }
   free <- !(par_names %in% fixed_names)
   npar <- sum(free)
 
@@ -457,13 +483,33 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
                               family_code, poisson_1, poisson_2,
                               lamLo, lamHi,
                               est_method = if (identical(method, "laplace")) 1L else 0L)
-  # Map fixed parameters (e.g., pinned log_m for Poisson margins)
+  # Map fixed parameters (e.g., pinned log_m for Poisson margins).
+  #
+  # Two shapes. log_m1/log_m2 are SCALAR template parameters whose par_names
+  # entry is the template name itself, so factor(NA) pins them outright. The
+  # random-coefficient scales are VECTOR template parameters (log_sd1,
+  # log_sd2) whose par_names entries are per-column ("log_sd1:x"), so pinning
+  # one column needs a length-q factor with NA in that position and distinct
+  # levels elsewhere -- TMB's per-element map. Pinning a scale rather than
+  # dropping the coefficient is what keeps the Halton draw matrix the same
+  # width, so every OTHER random coefficient still draws from exactly the
+  # dimensions it did in the full fit: the common-random-numbers property
+  # rpbnb_tmb_boundary_tests()'s scale-zero refits depend on.
   map <- list()
-  if (length(fixed_names)) {
-    for (fn in fixed_names) {
-      map[[fn]] <- factor(NA)  # fix to starting value
-    }
+  for (fn in intersect(fixed_names, c("log_m1", "log_m2"))) {
+    map[[fn]] <- factor(NA)  # fix to starting value
   }
+  .scale_map <- function(tmb_name, offset, q) {
+    if (q == 0L) return(NULL)
+    nms <- par_names[offset + seq_len(q)]
+    pinned <- nms %in% fixed_names
+    if (!any(pinned)) return(NULL)
+    factor(ifelse(pinned, NA_integer_, seq_len(q)))
+  }
+  sd1_map <- .scale_map("log_sd1", k1 + k2, q1)
+  if (!is.null(sd1_map)) map[["log_sd1"]] <- sd1_map
+  sd2_map <- .scale_map("log_sd2", k1 + k2 + q1, q2)
+  if (!is.null(sd2_map)) map[["log_sd2"]] <- sd2_map
   # Independence: z_dep is in the C++ template but not estimated
   if (family_code < 0L) {
     map[["z_dep"]] <- factor(NA)

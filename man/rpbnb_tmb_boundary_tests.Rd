@@ -2,77 +2,92 @@
 % Please edit documentation in R/tmb_boundary_tests.R
 \name{rpbnb_tmb_boundary_tests}
 \alias{rpbnb_tmb_boundary_tests}
-\title{Boundary-corrected LR test for the NB2 dispersions of an rpbnb_tmb_fit}
+\title{Boundary-corrected LR tests for an rpbnb_tmb_fit's boundary parameters}
 \usage{
-rpbnb_tmb_boundary_tests(fit, data, control = NULL)
+rpbnb_tmb_boundary_tests(
+  fit,
+  data,
+  control = NULL,
+  which = c("sd", "dispersion")
+)
 }
 \arguments{
 \item{fit}{A converged \code{rpbnb_tmb_fit} (from \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} or
 \code{rpbnb(engine = "tmb")}).}
 
 \item{data}{The data frame the model was fit on. Required -- the fit
-object does not store it, and the restricted refit needs it. With
-\code{standardize = TRUE}, pass the standardized data (\code{rpbnb(engine = "tmb", boundary_tests = TRUE)} does this automatically; a manual call needs
-\code{rpbnb:::.apply_scaling(data, fit$scaling)}).}
+object does not store it, and every restricted model is refit on the
+same data. With \code{standardize = TRUE}, pass the standardized data
+(\code{rpbnb(engine = "tmb", boundary_tests = TRUE)} does this automatically;
+a manual call needs \code{rpbnb:::.apply_scaling(data, fit$scaling)}).}
 
 \item{control}{An \code{\link[=rpbnb_tmb_control]{rpbnb_tmb_control()}} for the restricted refits.
 Defaults to \code{rpbnb_tmb_control(print_level = 0, n_cores = 1, max_workload = Inf)}. \code{draws}/\code{seed}/\code{method} are taken from \code{fit}, not
 \code{control}.}
+
+\item{which}{Which boundary parameters to test: \code{"sd"}, \code{"dispersion"}, or
+both (the default).}
 }
 \value{
 An object of class \code{rpbnb_boundary_tests} -- the same class
 \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} returns, with columns \code{Parameter}, \code{LR}, \code{df},
-\code{p.value}, \code{Signif} (one row per unrestricted dispersion) and the same
+\code{p.value}, \code{Signif} (one row per boundary parameter) and the same
 \code{print()} method -- so the two engines' results are interchangeable
-wherever that class is consumed (e.g. \code{summary.rpbnb_tmb_fit()}'s
-dispersion block, once \verb{$boundary_tests} is attached to the fit).
+wherever that class is consumed (e.g. \code{summary.rpbnb_tmb_fit()}'s scale
+and dispersion blocks, once \verb{$boundary_tests} is attached to the fit).
+
+Scale rows are labelled by the distribution's own scale parameter
+(\code{sd} for normal/lognormal, \code{w} for uniform/triangular half-width, \code{s}
+for a lognormal log-scale), matching \code{summary()}'s row names.
 }
 \description{
-Runs a likelihood-ratio test for each unrestricted NB2 dispersion (\code{m1},
-\code{m2}) of a fitted TMB-engine random-parameter bivariate NB model: the
-parameter whose null (\code{m = 0}, the Poisson limit) lies on the boundary of
-the parameter space, for which \code{summary(fit)}'s "Dispersion (m1, m2)"
-block reports no Wald \code{z}/\code{p}. Each test refits the model with
-that margin pinned at its Poisson limit (\code{poisson_1}/\code{poisson_2
-= TRUE}) -- otherwise identical to \code{fit} (same formulas,
-random-coefficient specification, dependence, draws, and seed, so the two
-fits share the same simulated draws) -- and applies \code{\link[=lr_test]{lr_test()}}'s 50:50
-chi-square boundary correction.
+Runs a likelihood-ratio test for every random-coefficient scale
+(\verb{sd1:*}, \verb{sd2:*}) and NB2 dispersion (\code{m1}, \code{m2}) of a fitted TMB-engine
+random-parameter bivariate NB model, and merges them into one table. These
+are the parameters whose null lies on the boundary of the parameter space
+(scale = 0, or dispersion \code{m = 0} = Poisson), for which
+\code{summary(fit)} reports no Wald \code{z}/\code{p}; each test uses the
+50:50 chi-square boundary correction of \code{\link[=lr_test]{lr_test()}} (\code{boundary = TRUE}).
 }
 \details{
-The restricted refit is warm-started from \code{fit$coef} (the pinned
-margin's own coefficient is overwritten to the Poisson-limit placeholder
-internally, so this is safe to pass as-is) and run with
-\code{inference = "none"}, since the LR test needs only \code{logLik} and
-the parameter count.
-}
-\section{Which parameters this tests}{
-Only NB2 dispersions. The classic engine's \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} also
-tests each random-coefficient standard deviation, by zeroing that
-coefficient's simulation draws so it collapses to its SD-zero null on
-every draw while every other column keeps the full model's exact draws
-(see that function's documentation). The TMB engine has no equivalent
-\code{.opt_draws}-style mechanism to reuse; dropping a name from
-\code{random_1}/\code{random_2} on a refit would change which Halton
-dimensions the remaining random coefficients draw from, so the two fits
-would no longer share common random numbers and the resulting LR
-statistic would carry extra simulation noise beyond the restriction being
-tested. Testing a TMB random-coefficient SD this way remains possible by
-hand -- refit with the name dropped from \code{random_1}/\code{random_2}
-and call \code{\link[=lr_test]{lr_test()}} directly -- just not wrapped here.
-}
+Each test refits a properly nested restricted model, otherwise identical
+to \code{fit} (same formulas, random-coefficient specification, dependence,
+draws, seed, and estimator), warm-started from \code{fit$coef} and run with
+\code{inference = "none"} since the LR test needs only \code{logLik} and the
+parameter count.
 
+\strong{Dispersions} are restricted with \code{poisson_1}/\code{poisson_2 = TRUE}, the
+template's exact \code{m = 0} branch.
+
+\strong{Scales} are restricted by pinning that coefficient's \code{log_sd} at the
+parameterization's zero (\code{-20}; the template clamps \code{log_sd} to
+\verb{[-20, 20]} and computes \code{sd = exp(log_sd)}, so this is \code{sd = 2.1e-9} --
+numerically zero on every draw) and holding it out of the free-parameter
+count, giving a 1-df restriction. With \strong{multiple random coefficients in
+an equation, each scale is tested individually.}
+
+Pinning the scale rather than dropping the coefficient from
+\code{random_1}/\code{random_2} is what preserves \strong{common random numbers}: the
+Halton draw matrix keeps the same width, so every \emph{other} random
+coefficient draws from exactly the dimensions it did in the full fit, and
+the two simulated log-likelihoods differ only by the restriction under
+test. Dropping the name instead would renumber the remaining coefficients'
+Halton dimensions, and the LR statistic would absorb that reshuffling as
+extra simulation noise.
+}
 \examples{
 \donttest{
 sim <- simulate_rpbnb(n = 600,
   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
   dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
-fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, draws = 100)
+fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                     draws = 100)
 rpbnb_tmb_boundary_tests(fit, sim$data)
 }
 }
 \seealso{
 \code{\link[=lr_test]{lr_test()}}, \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}, \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} (the
-classic-engine counterpart, which also tests random-coefficient SDs)
+classic-engine counterpart)
 }

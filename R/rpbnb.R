@@ -53,15 +53,13 @@
 #' `LR`/`df`/`p` for those rows in the natural-scale block, in place of the
 #' `NA` they would otherwise carry.
 #'
-#' Which parameters get tested depends on `engine`:
-#' * `engine = "classic"` calls [rpbnb_boundary_tests()], which tests both
-#'   the random-coefficient SDs and the NB2 dispersions.
-#' * `engine = "tmb"` calls [rpbnb_tmb_boundary_tests()], which tests only
-#'   the NB2 dispersions -- the TMB engine has no equivalent of the classic
-#'   engine's common-random-numbers trick for zeroing one random
-#'   coefficient's draws, so its random-coefficient SD rows still carry `NA`
-#'   (see [rpbnb_tmb_boundary_tests()]'s "Which parameters this tests"
-#'   section for why, and the workaround).
+#' Both engines test the same parameters -- every random-coefficient scale
+#' and every unrestricted NB2 dispersion -- via [rpbnb_boundary_tests()]
+#' (`engine = "classic"`) or [rpbnb_tmb_boundary_tests()]
+#' (`engine = "tmb"`). They differ only in how each restricted fit holds the
+#' scale at zero while preserving common random numbers: the classic engine
+#' zeroes that coefficient's draw column, the TMB engine pins its `log_sd`
+#' and maps it out of the free parameters.
 #'
 #' A [message()] reports how many restricted refits are about to run before
 #' they start, unless `control$print_level` is `0`; suppress it with
@@ -70,8 +68,8 @@
 #' Each restricted refit costs roughly as much as the original fit (more for
 #' a [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
 #' timing note), so this defaults to `FALSE`. For finer control -- testing
-#' only `"sd"` or only `"dispersion"` under `engine = "classic"`, or reusing
-#' one boundary-test run across several summaries -- call
+#' only `"sd"` or only `"dispersion"` (both engines take a `which` argument),
+#' or reusing one boundary-test run across several summaries -- call
 #' [rpbnb_boundary_tests()]/[rpbnb_tmb_boundary_tests()] directly on the fit
 #' and assign its result to `fit$boundary_tests` (with `standardize = TRUE`,
 #' reconstruct the fitting-scale data first: `rpbnb:::.apply_scaling(data,
@@ -278,22 +276,14 @@ rpbnb <- function(formula_1, formula_2, data,
   # engine = "classic" tests random-coefficient SDs too; engine = "tmb" tests
   # only the NB2 dispersions (see rpbnb_tmb_boundary_tests()'s docs for why).
   if (isTRUE(boundary_tests)) {
-    n_sd   <- if (engine == "classic") {
-      length(fit$rand_idx1) + length(fit$rand_idx2)
-    } else {
-      0L
-    }
+    n_sd   <- length(fit$rand_idx1) + length(fit$rand_idx2)
     n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
     n_tot  <- n_sd + n_disp
     if (is.null(control$print_level) || control$print_level > 0) {
       message(sprintf(
-        "rpbnb(): running boundary LR tests (%d restricted refit%s: %s%d NB2 dispersion%s)...",
+        "rpbnb(): running boundary LR tests (%d restricted refit%s: %d random-coefficient scale%s, %d NB2 dispersion%s)...",
         n_tot, if (n_tot == 1L) "" else "s",
-        if (engine == "classic") {
-          sprintf("%d random-coefficient SD%s, ", n_sd, if (n_sd == 1L) "" else "s")
-        } else {
-          ""
-        },
+        n_sd, if (n_sd == 1L) "" else "s",
         n_disp, if (n_disp == 1L) "" else "s"))
     }
     if (engine == "classic") {

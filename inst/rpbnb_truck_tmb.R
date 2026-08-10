@@ -7,15 +7,13 @@
 # scripts' output is comparing the two engines on an otherwise identical
 # specification.
 #
-# One thing rpbnb_truck.R gets from `engine = "classic"` is only PARTIALLY
-# available here: boundary_tests = TRUE now works under engine = "tmb" too
-# (rpbnb_tmb_boundary_tests(), added after rpbnb_boundary_tests() was
-# classic-only), but it tests only the NB2 dispersions (m1, m2) -- not the
-# random-coefficient SDs the classic engine's version also tests. The TMB
-# engine has no equivalent of the classic engine's common-random-numbers
-# trick for zeroing one random coefficient's draws (see
-# ?rpbnb_tmb_boundary_tests, "Which parameters this tests"), so those rows
-# still carry no z/p or LR/p here regardless of boundary_tests.
+# boundary_tests = TRUE works under engine = "tmb" too
+# (rpbnb_tmb_boundary_tests()), covering the same parameters the classic
+# engine's rpbnb_boundary_tests() does: every random-coefficient scale AND
+# both NB2 dispersions. The two engines differ only in how each restricted
+# fit holds a scale at zero while preserving common random numbers -- the
+# classic engine zeroes that coefficient's draw column, the TMB engine pins
+# its log_sd and maps it out of the free parameters.
 #
 # method = "sml" is used below (not TMB's memory-saving "laplace") so the
 # comparison against rpbnb_truck.R holds the ESTIMATOR fixed and varies only
@@ -60,9 +58,10 @@ draws <- 500L
 method <- "sml"
 # Same knob as rpbnb_truck.R: "famoye" or a copula() object. Kept identical
 # between the two scripts so their output is directly comparable.
-dependence <- copula("normal")
-# Tests m1/m2 only under this engine -- see the header. Always single-
-# threaded (see the header), so this adds real time on top of the main fit.
+dependence <- copula("frank")
+# One restricted refit per random-coefficient scale (3 here) plus one per
+# dispersion (2), all single-threaded (see the header), so this adds real
+# time on top of the main fit.
 boundary_tests <- TRUE
 
 data <- read.csv(file.path("inst", "extdata", "export_open_all.csv"))
@@ -119,7 +118,7 @@ t_fit <- system.time(
 )[["elapsed"]]
 
 cat(sprintf("\nEstimation finished in %.2f s%s\n", t_fit,
-            if (boundary_tests) " (includes the dispersion boundary LR refits)" else ""))
+            if (boundary_tests) " (includes the boundary LR refits)" else ""))
 # Deliberately not reporting gc() figures: the TMB tape lives on the C++ heap
 # and is invisible to R's garbage collector, so gc() would understate exactly
 # the quantity this script exists to test. Watch the process working set
@@ -167,7 +166,7 @@ if (length(diagnostics)) {
   cat("No boundary or Hessian warnings.\n")
 }
 
-# ---- Model summary (original covariate units, dispersion boundary LR) ------
+# ---- Model summary (original covariate units, boundary LR tests) -----------
 # rpbnb(standardize = TRUE) back-transforms the print()/summary() coefficient
 # table automatically for BOTH engines (see R/rpbnb_scaling.R and the
 # NEWS.md entry "rpbnb(standardize = TRUE)") -- no coef_orig_units()/
@@ -175,25 +174,23 @@ if (length(diagnostics)) {
 # The dependence parameter (lambda, or the copula's native theta and Kendall's
 # tau, from ADREPORT) is part of summary()'s own "--- Dependence ---" section,
 # so this script has no separate DEPENDENCE block either. With
-# boundary_tests = TRUE, the "--- Dispersion (m1, m2) ---" block ALSO carries
-# a real LR/df/Pr(>chisq) instead of NA -- see the NEWS.md entry
-# "rpbnb_tmb_boundary_tests()". Random-coefficient SD rows still carry no
-# z/p or LR/p here regardless -- see the header for why (that needs
-# engine = "classic", rpbnb_truck.R).
-sep(); cat("MODEL SUMMARY (original covariate units, dispersion boundary LR)\n"); sep()
+# boundary_tests = TRUE, BOTH the "Random-coefficient scales" blocks and the
+# "Dispersion (m1, m2)" block carry a real LR/df/Pr(>chisq) instead of NA --
+# see the NEWS.md entry "rpbnb_tmb_boundary_tests()".
+sep(); cat("MODEL SUMMARY (original covariate units, boundary LR tests)\n"); sep()
 print(summary(fit))
 cat("\n")
 
-# ---- Boundary LR tests (standalone table, m1/m2 only) -----------------------
+# ---- Boundary LR tests (standalone table) -----------------------------------
 # fit$boundary_tests is the same rpbnb_tmb_boundary_tests() result already
 # folded into the summary above (attached automatically by
 # boundary_tests = TRUE); printed again here on its own for the raw LR/df/p
 # table with its Signif stars, matching rpbnb_truck.R's equivalent section.
 if (!is.null(fit$boundary_tests)) {
-  sep(); cat("BOUNDARY LR TESTS (dispersions m1, m2 only)\n"); sep()
+  sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
   print(fit$boundary_tests)
 } else {
-  sep(); cat("BOUNDARY LR TESTS (dispersions m1, m2 only)\n"); sep()
+  sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
   cat("Skipped (boundary_tests = FALSE). Set boundary_tests <- TRUE at the top\n")
   cat("of this script to run them (folded into the rpbnb() call above via\n")
   cat("boundary_tests = TRUE).\n")
@@ -225,9 +222,9 @@ marginal_effects <- rpbnb_tmb_marginal_effects(fit, which = "both",
                                                log_vars = log_vars)
 cat("\n")
 
-sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME, original covariate units)\n"); sep()
-elasticities <- rpbnb_tmb_elasticities(fit, which = "both",
-                                       scaling = fit$scaling,
-                                       log_vars = log_vars)
+#sep(); cat("ELASTICITIES / SEMI-ELASTICITIES (AME, original covariate units)\n"); sep()
+#elasticities <- rpbnb_tmb_elasticities(fit, which = "both",
+#                                       scaling = fit$scaling,
+#                                       log_vars = log_vars)
 
 cat("\nFit saved to:", fit_path, "\n")

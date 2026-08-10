@@ -144,26 +144,60 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   # the model does not estimate. The label comes from stripping `log_` off the
   # parameter name, which is itself built from rand_dist_registry's
   # `scale_label`, so a new distribution's label follows automatically.
+  # When `object$boundary_tests` carries a row for a scale (from
+  # rpbnb(boundary_tests = TRUE, engine = "tmb") or a manually attached
+  # rpbnb_tmb_boundary_tests() result), that boundary-corrected LR test fills
+  # LR/df/p here instead of leaving the gap unfilled. Row labels match the
+  # boundary table's Parameter values -- both come from .sd_label().
+  bt_all <- object$boundary_tests
+  bt_lookup <- function(param) {
+    if (is.null(bt_all)) return(NULL)
+    hit <- which(bt_all$Parameter == param)
+    if (!length(hit)) return(NULL)
+    bt_all[hit[1L], , drop = FALSE]
+  }
   scale_block <- function(idx, eq) {
     if (!length(idx)) return(invisible(NULL))
     cat("--- Random-coefficient scales (equation ", eq, ") ---\n", sep = "")
     log_est <- cf[idx]
     log_se  <- object$se[idx]
     nat_est <- exp(log_est)
+    labels <- sub("^log_", "", nm[idx])
+    lr_v <- vapply(labels, function(p) {
+      b <- bt_lookup(p); if (is.null(b)) NA_real_ else b$LR
+    }, numeric(1))
+    df_v <- vapply(labels, function(p) {
+      b <- bt_lookup(p); if (is.null(b)) NA_integer_ else b$df
+    }, integer(1))
+    p_v <- vapply(labels, function(p) {
+      b <- bt_lookup(p); if (is.null(b)) NA_real_ else b$p.value
+    }, numeric(1))
     tbl <- data.frame(
       `Estimate (log)`   = log_est,
       `Std. Error (log)` = log_se,
       Estimate           = nat_est,
       `Std. Error`       = nat_est * log_se,   # delta method
-      row.names = sub("^log_", "", nm[idx]),
+      LR = lr_v, df = df_v,
+      `Pr(>chisq)` = p_v,
+      Signif = .signif_stars(p_v),
+      row.names = labels,
       check.names = FALSE
     )
     .print_tbl(tbl, digits)
     cat("Note: sd = standard deviation, w = half-width (uniform/triangular),\n",
         "      s = lognormal log-scale. These are the distributions' own scale\n",
-        "      parameters, not all standard deviations.\n",
-        "      No Wald z/p: the null (scale = 0) is a boundary. Use lr_test().\n",
-        sep = "")
+        "      parameters, not all standard deviations.\n", sep = "")
+    if (any(!is.na(lr_v))) {
+      cat("      LR/df/Pr(>chisq): boundary-corrected LR test (H0: scale = 0,\n",
+          "      50:50 chi-square mixture; see rpbnb_tmb_boundary_tests()).\n",
+          sep = "")
+    }
+    if (any(is.na(lr_v))) {
+      cat("      No Wald z/p or boundary LR test for the row(s) without one:\n",
+          "      the null (scale = 0) is a boundary. Use\n",
+          "      rpbnb_tmb_boundary_tests() (or rpbnb(boundary_tests = TRUE)).\n",
+          sep = "")
+    }
     cat("\n")
   }
   scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L)

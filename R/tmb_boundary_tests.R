@@ -1,74 +1,88 @@
-# Boundary-corrected LR test for the NB2 dispersions of an rpbnb_tmb_fit. The
-# TMB-engine counterpart of R/boundary_tests.R's rpbnb_boundary_tests(),
-# scoped to m1/m2 (the classic engine also tests the random-coefficient SDs;
-# see the "Which which" note in rpbnb_tmb_boundary_tests()'s doc for why that
-# is not offered here).
+# Boundary-corrected LR tests for an rpbnb_tmb_fit's random-coefficient
+# scales and NB2 dispersions. The TMB-engine counterpart of
+# R/boundary_tests.R's rpbnb_boundary_tests().
 
-#' Boundary-corrected LR test for the NB2 dispersions of an rpbnb_tmb_fit
+# The template computes sd = exp(clamp_ad(log_sd, -20, 20)) (src/rpbnb_tmb.cpp),
+# and the R-side Famoye bound uses exp(pmax(log_sd, -20)) to match, so -20 is
+# this parameterization's canonical "scale is zero": exp(-20) = 2.1e-9, which
+# multiplies every draw's deviation to numerically nothing. Pinning lower would
+# be clamped back to -20 by both, so it would not be a different restriction.
+.TMB_SCALE_ZERO <- -20
+
+#' Boundary-corrected LR tests for an rpbnb_tmb_fit's boundary parameters
 #'
-#' Runs a likelihood-ratio test for each unrestricted NB2 dispersion (`m1`,
-#' `m2`) of a fitted TMB-engine random-parameter bivariate NB model: the
-#' parameter whose null (`m = 0`, the Poisson limit) lies on the boundary of
-#' the parameter space, for which \code{summary(fit)}'s "Dispersion (m1, m2)"
-#' block reports no Wald \code{z}/\code{p}. Each test refits the model with
-#' that margin pinned at its Poisson limit (\code{poisson_1}/\code{poisson_2
-#' = TRUE}) -- otherwise identical to \code{fit} (same formulas,
-#' random-coefficient specification, dependence, draws, and seed, so the two
-#' fits share the same simulated draws) -- and applies [lr_test()]'s 50:50
-#' chi-square boundary correction.
+#' Runs a likelihood-ratio test for every random-coefficient scale
+#' (`sd1:*`, `sd2:*`) and NB2 dispersion (`m1`, `m2`) of a fitted TMB-engine
+#' random-parameter bivariate NB model, and merges them into one table. These
+#' are the parameters whose null lies on the boundary of the parameter space
+#' (scale = 0, or dispersion `m = 0` = Poisson), for which
+#' \code{summary(fit)} reports no Wald \code{z}/\code{p}; each test uses the
+#' 50:50 chi-square boundary correction of [lr_test()] (`boundary = TRUE`).
 #'
-#' The restricted refit is warm-started from \code{fit$coef} (the pinned
-#' margin's own coefficient is overwritten to the Poisson-limit placeholder
-#' internally, so this is safe to pass as-is) and run with
-#' \code{inference = "none"}, since the LR test needs only \code{logLik} and
-#' the parameter count.
+#' Each test refits a properly nested restricted model, otherwise identical
+#' to `fit` (same formulas, random-coefficient specification, dependence,
+#' draws, seed, and estimator), warm-started from `fit$coef` and run with
+#' `inference = "none"` since the LR test needs only `logLik` and the
+#' parameter count.
 #'
-#' # Which parameters this tests
+#' **Dispersions** are restricted with `poisson_1`/`poisson_2 = TRUE`, the
+#' template's exact `m = 0` branch.
 #'
-#' Only NB2 dispersions. The classic engine's [rpbnb_boundary_tests()] also
-#' tests each random-coefficient standard deviation, by zeroing that
-#' coefficient's simulation draws so it collapses to its SD-zero null on
-#' every draw while every other column keeps the full model's exact draws
-#' (see that function's documentation). The TMB engine has no equivalent
-#' \code{.opt_draws}-style mechanism to reuse; dropping a name from
-#' \code{random_1}/\code{random_2} on a refit would change which Halton
-#' dimensions the remaining random coefficients draw from, so the two fits
-#' would no longer share common random numbers and the resulting LR
-#' statistic would carry extra simulation noise beyond the restriction being
-#' tested. Testing a TMB random-coefficient SD this way remains possible by
-#' hand -- refit with the name dropped from \code{random_1}/\code{random_2}
-#' and call [lr_test()] directly -- just not wrapped here.
+#' **Scales** are restricted by pinning that coefficient's `log_sd` at the
+#' parameterization's zero (`-20`; the template clamps `log_sd` to
+#' `[-20, 20]` and computes `sd = exp(log_sd)`, so this is `sd = 2.1e-9` --
+#' numerically zero on every draw) and holding it out of the free-parameter
+#' count, giving a 1-df restriction. With **multiple random coefficients in
+#' an equation, each scale is tested individually.**
+#'
+#' Pinning the scale rather than dropping the coefficient from
+#' `random_1`/`random_2` is what preserves **common random numbers**: the
+#' Halton draw matrix keeps the same width, so every *other* random
+#' coefficient draws from exactly the dimensions it did in the full fit, and
+#' the two simulated log-likelihoods differ only by the restriction under
+#' test. Dropping the name instead would renumber the remaining coefficients'
+#' Halton dimensions, and the LR statistic would absorb that reshuffling as
+#' extra simulation noise.
 #'
 #' @param fit A converged `rpbnb_tmb_fit` (from [fit_rpbnb_tmb()] or
 #'   `rpbnb(engine = "tmb")`).
 #' @param data The data frame the model was fit on. Required -- the fit
-#'   object does not store it, and the restricted refit needs it. With
-#'   `standardize = TRUE`, pass the standardized data (`rpbnb(engine = "tmb",
-#'   boundary_tests = TRUE)` does this automatically; a manual call needs
-#'   `rpbnb:::.apply_scaling(data, fit$scaling)`).
+#'   object does not store it, and every restricted model is refit on the
+#'   same data. With `standardize = TRUE`, pass the standardized data
+#'   (`rpbnb(engine = "tmb", boundary_tests = TRUE)` does this automatically;
+#'   a manual call needs `rpbnb:::.apply_scaling(data, fit$scaling)`).
 #' @param control An [rpbnb_tmb_control()] for the restricted refits.
 #'   Defaults to `rpbnb_tmb_control(print_level = 0, n_cores = 1,
 #'   max_workload = Inf)`. `draws`/`seed`/`method` are taken from `fit`, not
 #'   `control`.
+#' @param which Which boundary parameters to test: `"sd"`, `"dispersion"`, or
+#'   both (the default).
 #' @return An object of class `rpbnb_boundary_tests` -- the same class
 #'   [rpbnb_boundary_tests()] returns, with columns `Parameter`, `LR`, `df`,
-#'   `p.value`, `Signif` (one row per unrestricted dispersion) and the same
+#'   `p.value`, `Signif` (one row per boundary parameter) and the same
 #'   `print()` method -- so the two engines' results are interchangeable
-#'   wherever that class is consumed (e.g. `summary.rpbnb_tmb_fit()`'s
-#'   dispersion block, once `$boundary_tests` is attached to the fit).
+#'   wherever that class is consumed (e.g. `summary.rpbnb_tmb_fit()`'s scale
+#'   and dispersion blocks, once `$boundary_tests` is attached to the fit).
+#'
+#'   Scale rows are labelled by the distribution's own scale parameter
+#'   (`sd` for normal/lognormal, `w` for uniform/triangular half-width, `s`
+#'   for a lognormal log-scale), matching `summary()`'s row names.
 #' @seealso [lr_test()], [fit_rpbnb_tmb()], [rpbnb_boundary_tests()] (the
-#'   classic-engine counterpart, which also tests random-coefficient SDs)
+#'   classic-engine counterpart)
 #' @export
 #' @examples
 #' \donttest{
 #' sim <- simulate_rpbnb(n = 600,
 #'   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
 #'   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+#'   random_1 = list(x1 = list(sd = 0.5)),
 #'   dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
-#' fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, draws = 100)
+#' fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+#'                      draws = 100)
 #' rpbnb_tmb_boundary_tests(fit, sim$data)
 #' }
-rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL) {
+rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
+                                     which = c("sd", "dispersion")) {
   if (!inherits(fit, "rpbnb_tmb_fit")) {
     stop("`fit` must be an rpbnb_tmb_fit (from fit_rpbnb_tmb() or ",
          "rpbnb(engine = \"tmb\")).", call. = FALSE)
@@ -87,10 +101,16 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL) {
          "). Refit it to convergence before running boundary tests.",
          call. = FALSE)
   }
-  if (isTRUE(fit$poisson_1) && isTRUE(fit$poisson_2)) {
-    stop("Both margins are already Poisson-restricted (poisson_1 = ",
-         "poisson_2 = TRUE in `fit`); there is no dispersion parameter left ",
-         "to test.", call. = FALSE)
+  which <- match.arg(which, c("sd", "dispersion"), several.ok = TRUE)
+  n_disp_free <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
+  n_scales <- length(fit$rand_idx1) + length(fit$rand_idx2)
+  testable <- ("dispersion" %in% which && n_disp_free > 0L) ||
+    ("sd" %in% which && n_scales > 0L)
+  if (!testable) {
+    stop("No boundary parameters to test for which = c(",
+         paste0("\"", which, "\"", collapse = ", "), "): the model has ",
+         n_scales, " random-coefficient scale(s) and ", n_disp_free,
+         " unrestricted dispersion(s).", call. = FALSE)
   }
   if (is.null(control)) {
     control <- rpbnb_tmb_control(print_level = 0L, n_cores = 1L,
@@ -120,10 +140,16 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL) {
   # than storing/reusing a draw matrix the way the classic engine's
   # .opt_draws does), so the restricted and full fits share common random
   # numbers as long as random_1/random_2 -- and so the draw dimensionality --
-  # are unchanged. Warm-started from the full fit's coefficients; the pinned
-  # margin's own log_m entry is overwritten to the Poisson-limit placeholder
-  # inside fit_rpbnb_tmb() regardless of what's passed here.
-  refit <- function(poisson_1, poisson_2) {
+  # are unchanged. That is exactly why a scale restriction PINS log_sd via
+  # .fixed instead of dropping the name from random_1/random_2: dropping it
+  # would renumber the remaining coefficients' Halton dimensions and break
+  # the comparison. Warm-started from the full fit's coefficients; both a
+  # pinned log_m (Poisson limit) and a pinned log_sd (.fixed) are overwritten
+  # to their restricted values inside fit_rpbnb_tmb() regardless of what
+  # `start` carries.
+  refit <- function(poisson_1 = isTRUE(fit$poisson_1),
+                    poisson_2 = isTRUE(fit$poisson_2),
+                    fixed = NULL) {
     fit_rpbnb_tmb(
       fit$formula_1, fit$formula_2, data = data,
       random_1 = full1, random_2 = full2,
@@ -131,8 +157,17 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL) {
       seed = fit$seed, draws = fit$draws, start = fit$coef,
       control = control, inference = "none",
       poisson_1 = poisson_1, poisson_2 = poisson_2,
-      method = if (is.null(fit$method)) "sml" else fit$method
+      method = if (is.null(fit$method)) "sml" else fit$method,
+      .fixed = fixed
     )
+  }
+  # Optimization-parameterization name of a random coefficient's log-scale
+  # ("log_sd1:x1" for a normal), and the natural-scale label summary() prints
+  # for the same row ("sd1:x1") -- both derived from rand_dist_registry's
+  # scale_label, so a new distribution follows automatically. .sd_label() is
+  # shared with the classic engine (R/boundary_tests.R).
+  .scale_par <- function(dist, eq, name) {
+    paste0(rand_dist_registry[[dist]]$scale_label, eq, ":", name)
   }
 
   # A restricted refit that did not converge cannot supply a valid maximized
@@ -155,13 +190,31 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL) {
   }
 
   rows <- list()
-  if (!isTRUE(fit$poisson_1)) {
-    rows[[length(rows) + 1L]] <- test_row(
-      "m1", refit(poisson_1 = TRUE, poisson_2 = isTRUE(fit$poisson_2)))
+
+  if ("sd" %in% which) {
+    # Equation 1, then equation 2: pin each coefficient's log-scale at the
+    # parameterization's zero in turn (exact scale-zero null on every draw).
+    for (k in seq_along(names1)) {
+      par_nm <- .scale_par(dist1[k], 1L, names1[k])
+      rows[[length(rows) + 1L]] <- test_row(
+        .sd_label(dist1[k], 1L, names1[k]),
+        refit(fixed = stats::setNames(.TMB_SCALE_ZERO, par_nm)))
+    }
+    for (k in seq_along(names2)) {
+      par_nm <- .scale_par(dist2[k], 2L, names2[k])
+      rows[[length(rows) + 1L]] <- test_row(
+        .sd_label(dist2[k], 2L, names2[k]),
+        refit(fixed = stats::setNames(.TMB_SCALE_ZERO, par_nm)))
+    }
   }
-  if (!isTRUE(fit$poisson_2)) {
-    rows[[length(rows) + 1L]] <- test_row(
-      "m2", refit(poisson_1 = isTRUE(fit$poisson_1), poisson_2 = TRUE))
+
+  if ("dispersion" %in% which) {
+    if (!isTRUE(fit$poisson_1)) {
+      rows[[length(rows) + 1L]] <- test_row("m1", refit(poisson_1 = TRUE))
+    }
+    if (!isTRUE(fit$poisson_2)) {
+      rows[[length(rows) + 1L]] <- test_row("m2", refit(poisson_2 = TRUE))
+    }
   }
 
   out <- do.call(rbind, rows)
