@@ -53,11 +53,12 @@ and display fitted coefficients back-transformed to their original units
 continuous-predictor detection when \code{standardize = TRUE}. Must be columns
 of \code{data}; ignored when \code{standardize = FALSE}.}
 
-\item{boundary_tests}{Run \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} after fitting and attach
-the result as \verb{$boundary_tests}, so \code{summary()}/\code{print()} show a
-boundary-corrected LR test (rather than \code{NA}) for the random-coefficient
-SDs and NB2 dispersions (see "Boundary LR tests" above). \code{engine = "classic"} only; default \code{FALSE} (each restricted refit costs roughly
-another full fit).}
+\item{boundary_tests}{Run \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} (\code{engine = "classic"})
+or \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} (\code{engine = "tmb"}) after fitting and
+attach the result as \verb{$boundary_tests}, so \code{summary()}/\code{print()} show a
+boundary-corrected LR test (rather than \code{NA}) for the tested rows (see
+"Boundary LR tests" above for which parameters each engine tests).
+Default \code{FALSE} (each restricted refit costs roughly another full fit).}
 
 \item{control}{An \code{rpbnb_control()} object when \code{engine = "classic"}, or an
 \code{rpbnb_tmb_control()} object when \code{engine = "tmb"}. Defaults to the right
@@ -124,28 +125,40 @@ vector is needed directly. The scaling actually used is stored on the fit
 as \verb{$scaling} (a named list of \code{c(center=, scale=)}) and \verb{$continuous_vars}.
 }
 
-\section{Boundary LR tests (\code{engine = "classic"} only)}{
-\code{boundary_tests = TRUE} runs \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} on the fit as soon as
-it converges (against the same data the fit itself used -- the standardized
-copy, when \code{standardize = TRUE}) and attaches the result as \verb{$boundary_tests}.
-The random-coefficient SDs and the NB2 dispersions (\code{m1}, \code{m2}) have a null
-that sits on the boundary of the parameter space, so an ordinary Wald \code{z}/\code{p}
-does not test it; \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} runs the valid boundary-corrected
-LR test instead by refitting each restricted model. \code{summary()}/\code{print()}
-then show that test's \code{LR}/\code{df}/\code{p} for those rows in the natural-scale
-block, in place of the \code{NA} they would otherwise carry. Only supported for
-\code{engine = "classic"} (\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} requires an \code{rpbnb_fit}); it
-is an error under \code{engine = "tmb"}. A \code{\link[=message]{message()}} reports how many
-restricted refits are about to run (one per random-coefficient SD, one per
-estimated NB2 dispersion) before they start, unless \code{control$print_level}
-is \code{0}; suppress it with \code{\link[=suppressMessages]{suppressMessages()}} if needed.
+\section{Boundary LR tests}{
+\code{boundary_tests = TRUE} runs a boundary-corrected LR test on the fit as
+soon as it converges (against the same data the fit itself used -- the
+standardized copy, when \code{standardize = TRUE}) and attaches the result as
+\verb{$boundary_tests}. The random-coefficient SDs and the NB2 dispersions
+(\code{m1}, \code{m2}) have a null that sits on the boundary of the parameter space,
+so an ordinary Wald \code{z}/\code{p} does not test it; the boundary test refits
+each restricted model instead. \code{summary()}/\code{print()} then show that test's
+\code{LR}/\code{df}/\code{p} for those rows in the natural-scale block, in place of the
+\code{NA} they would otherwise carry.
 
-Each restricted refit costs roughly as much as the original fit (more for a
-\code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s
-timing note), so this defaults to \code{FALSE}. For finer control -- testing only
-\code{"sd"} or only \code{"dispersion"}, or reusing one boundary-test run across
-several summaries -- call \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} directly on the fit and
-assign its result to \code{fit$boundary_tests} (with \code{standardize = TRUE},
+Which parameters get tested depends on \code{engine}:
+\itemize{
+\item \code{engine = "classic"} calls \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}, which tests both
+the random-coefficient SDs and the NB2 dispersions.
+\item \code{engine = "tmb"} calls \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}, which tests only
+the NB2 dispersions -- the TMB engine has no equivalent of the classic
+engine's common-random-numbers trick for zeroing one random
+coefficient's draws, so its random-coefficient SD rows still carry \code{NA}
+(see \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s "Which parameters this tests"
+section for why, and the workaround).
+}
+
+A \code{\link[=message]{message()}} reports how many restricted refits are about to run before
+they start, unless \code{control$print_level} is \code{0}; suppress it with
+\code{\link[=suppressMessages]{suppressMessages()}} if needed.
+
+Each restricted refit costs roughly as much as the original fit (more for
+a \code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s
+timing note), so this defaults to \code{FALSE}. For finer control -- testing
+only \code{"sd"} or only \code{"dispersion"} under \code{engine = "classic"}, or reusing
+one boundary-test run across several summaries -- call
+\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}/\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} directly on the fit
+and assign its result to \code{fit$boundary_tests} (with \code{standardize = TRUE},
 reconstruct the fitting-scale data first: \code{rpbnb:::.apply_scaling(data, fit$scaling)}).
 }
 

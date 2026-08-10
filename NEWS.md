@@ -3,6 +3,47 @@
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
 
+## New feature: `rpbnb_tmb_boundary_tests()` / `rpbnb(engine = "tmb", boundary_tests = TRUE)`
+
+* **Boundary-corrected LR test for the TMB engine's NB2 dispersions.**
+  `summary.rpbnb_tmb_fit()`'s "Dispersion (m1, m2)" block has always reported
+  no significance test for `m1`/`m2` (their null, `m = 0`, is the Poisson
+  limit — a boundary of the parameter space, where an ordinary Wald ratio
+  doesn't apply). `rpbnb_tmb_boundary_tests(fit, data)` is the TMB-engine
+  counterpart of the classic engine's [rpbnb_boundary_tests()]: it refits the
+  model with each unrestricted margin pinned at its Poisson limit
+  (`poisson_1`/`poisson_2 = TRUE`, warm-started from `fit$coef`, same seed so
+  the two fits share simulated draws) and applies [lr_test()]'s 50:50
+  chi-square boundary correction. Returns an object of class
+  `rpbnb_boundary_tests` — the same class the classic engine's function
+  returns — so both share one `print()` method.
+* `rpbnb(engine = "tmb", boundary_tests = TRUE)` now works (previously a
+  documented error) and attaches the result as `$boundary_tests`, same as
+  `engine = "classic"`. `summary()`'s dispersion block merges it in
+  automatically: `LR`/`df`/`Pr(>chisq)` columns replace the `NA` that would
+  otherwise be there for `m1`/`m2`.
+* **Scope**: dispersions only, not random-coefficient SDs (unlike the
+  classic engine's version, which tests both). The classic engine's SD test
+  zeroes one coefficient's simulation draws while keeping every other column
+  at the full model's exact draws, which needs a `.opt_draws`-style
+  mechanism the TMB engine has no equivalent of; dropping a name from
+  `random_1`/`random_2` on a TMB refit instead shifts which Halton
+  dimensions the *remaining* random coefficients draw from, so the two fits
+  would no longer share common random numbers. Testing a TMB
+  random-coefficient SD this way remains possible by hand — refit with the
+  name dropped and call [lr_test()] directly — just not wrapped in this
+  function. See `rpbnb_tmb_boundary_tests()`'s "Which parameters this tests"
+  section.
+* Also fixed in the same area: `summary.rpbnb_tmb_fit()`'s dispersion block
+  was missing `Std. Error` entirely (a real gap, not intentional design —
+  `m1`/`m2` are `ADREPORT`ed in the template, so the delta-method SE was
+  already available and simply wasn't being read).
+* `fit_rpbnb_tmb()` now stores `formula_1`/`formula_2`/`draws`/`seed`/
+  `poisson_1`/`poisson_2` on the returned `rpbnb_tmb_fit` (mirroring what
+  `fit_rpbnb()`'s `rpbnb_fit` already stores) — needed to reconstruct a
+  restricted refit without the caller re-supplying them by hand, and useful
+  for any other refit-based tooling built on a TMB fit going forward.
+
 ## New feature: `fit_rpbnb_tmb(force_parallel_gaussian = )`
 
 * **Opt-in override for the Gaussian-copula single-thread safety cap.**

@@ -716,6 +716,16 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     logLik = ll_hat,
     nobs = n,
     npar = npar,
+    # Retained so a restricted refit (rpbnb_tmb_boundary_tests()) can
+    # reconstruct this exact fitting call without the caller re-supplying
+    # formula_1/formula_2/draws/seed/poisson_1/poisson_2 by hand -- mirrors
+    # what fit_rpbnb()'s rpbnb_fit already stores for the same reason.
+    formula_1 = formula_1,
+    formula_2 = formula_2,
+    draws = draws,
+    seed = seed,
+    poisson_1 = poisson_1,
+    poisson_2 = poisson_2,
     m1 = m1_hat,
     m2 = m2_hat,
     dependence = dependence,

@@ -43,6 +43,13 @@ print.rpbnb_tmb_fit <- function(x, ...) {
 # digits = 4 (default): 4 decimal places. digits < 0: full precision.
 .print_tbl <- function(x, digits = 4) {
   x <- as.data.frame(x)
+  # A "df" column (boundary LR test degrees of freedom) is an integer count,
+  # not a decimal estimate -- format it as one rather than "1.0000".
+  has_df <- "df" %in% names(x)
+  if (has_df) {
+    df_col <- x[["df"]]
+    x[["df"]] <- ifelse(is.na(df_col), "NA", sprintf("%d", as.integer(df_col)))
+  }
   if (!is.null(digits) && digits >= 0) {
     fmt <- sprintf("%%.%df", digits)
     for (j in seq_len(ncol(x))) {
@@ -165,11 +172,14 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   # ---- Dispersion parameters (natural scale from fit object) ----
   # m1/m2 are ADREPORTed in the template (src/rpbnb_tmb.cpp), so their
   # delta-method Std. Error is already in `sdreport` -- read it the same way
-  # the dependence block below does, rather than leaving it unset. No z/p
-  # column: m = 0 (the Poisson limit) is a boundary null, so an ordinary Wald
+  # the dependence block below does, rather than leaving it unset. No Wald
+  # z/p: m = 0 (the Poisson limit) is a boundary null, so an ordinary Wald
   # ratio does not test it (same reasoning as the random-coefficient scale
-  # blocks above); a Poisson-restricted refit + lr_test(boundary = TRUE) is
-  # the valid test (poisson_1/poisson_2 in fit_rpbnb_tmb()).
+  # blocks above). When `object$boundary_tests` is present (from
+  # rpbnb(boundary_tests = TRUE, engine = "tmb") or a manually attached
+  # rpbnb_tmb_boundary_tests() result), that boundary-corrected LR test fills
+  # LR/df/p instead of leaving the gap unfilled -- mirrors the classic
+  # engine's .natural_scale_table() (R/methods.R).
   cat("--- Dispersion (m1, m2) ---\n")
   sdr <- object$sdreport
   disp_se <- c(NA_real_, NA_real_)
@@ -184,15 +194,42 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
       }
     }
   }
+  bt <- object$boundary_tests
+  bt_row <- function(param) {
+    if (is.null(bt)) return(NULL)
+    hit <- which(bt$Parameter == param)
+    if (!length(hit)) return(NULL)
+    bt[hit[1L], , drop = FALSE]
+  }
+  disp_lr <- vapply(c("m1", "m2"), function(p) {
+    b <- bt_row(p); if (is.null(b)) NA_real_ else b$LR
+  }, numeric(1))
+  disp_df <- vapply(c("m1", "m2"), function(p) {
+    b <- bt_row(p); if (is.null(b)) NA_integer_ else b$df
+  }, integer(1))
+  disp_p <- vapply(c("m1", "m2"), function(p) {
+    b <- bt_row(p); if (is.null(b)) NA_real_ else b$p.value
+  }, numeric(1))
   disp <- data.frame(
     Parameter  = c("m1", "m2"),
     Estimate   = c(object$m1, object$m2),
     `Std. Error` = disp_se,
+    LR = disp_lr, df = disp_df,
+    `Pr(>chisq)` = disp_p,
+    Signif = .signif_stars(disp_p),
     row.names = NULL, check.names = FALSE
   )
   .print_tbl(disp, digits)
-  cat("No Wald z/p: the null (m = 0, the Poisson limit) is a boundary. Use\n",
-      "poisson_1/poisson_2 + lr_test(boundary = TRUE) to test it.\n", sep = "")
+  if (any(!is.na(disp_lr))) {
+    cat("LR/df/Pr(>chisq) for rows with a boundary-corrected LR test (H0:\n",
+        "m = 0, 50:50 chi-square mixture; see rpbnb_tmb_boundary_tests()).\n", sep = "")
+  }
+  if (any(is.na(disp_lr))) {
+    cat("No Wald z/p and no boundary LR test for the row(s) above without\n",
+        "one; the null (m = 0, the Poisson limit) is a boundary. Use\n",
+        "rpbnb_tmb_boundary_tests() (or rpbnb(boundary_tests = TRUE)) to\n",
+        "test it.\n", sep = "")
+  }
   cat("\n")
 
   # ---- Dependence parameter (from sdreport) ----

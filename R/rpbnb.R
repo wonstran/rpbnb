@@ -41,29 +41,39 @@
 #' vector is needed directly. The scaling actually used is stored on the fit
 #' as `$scaling` (a named list of `c(center=, scale=)`) and `$continuous_vars`.
 #'
-#' # Boundary LR tests (`engine = "classic"` only)
+#' # Boundary LR tests
 #'
-#' `boundary_tests = TRUE` runs [rpbnb_boundary_tests()] on the fit as soon as
-#' it converges (against the same data the fit itself used -- the standardized
-#' copy, when `standardize = TRUE`) and attaches the result as `$boundary_tests`.
-#' The random-coefficient SDs and the NB2 dispersions (`m1`, `m2`) have a null
-#' that sits on the boundary of the parameter space, so an ordinary Wald `z`/`p`
-#' does not test it; [rpbnb_boundary_tests()] runs the valid boundary-corrected
-#' LR test instead by refitting each restricted model. `summary()`/`print()`
-#' then show that test's `LR`/`df`/`p` for those rows in the natural-scale
-#' block, in place of the `NA` they would otherwise carry. Only supported for
-#' `engine = "classic"` ([rpbnb_boundary_tests()] requires an `rpbnb_fit`); it
-#' is an error under `engine = "tmb"`. A [message()] reports how many
-#' restricted refits are about to run (one per random-coefficient SD, one per
-#' estimated NB2 dispersion) before they start, unless `control$print_level`
-#' is `0`; suppress it with [suppressMessages()] if needed.
+#' `boundary_tests = TRUE` runs a boundary-corrected LR test on the fit as
+#' soon as it converges (against the same data the fit itself used -- the
+#' standardized copy, when `standardize = TRUE`) and attaches the result as
+#' `$boundary_tests`. The random-coefficient SDs and the NB2 dispersions
+#' (`m1`, `m2`) have a null that sits on the boundary of the parameter space,
+#' so an ordinary Wald `z`/`p` does not test it; the boundary test refits
+#' each restricted model instead. `summary()`/`print()` then show that test's
+#' `LR`/`df`/`p` for those rows in the natural-scale block, in place of the
+#' `NA` they would otherwise carry.
 #'
-#' Each restricted refit costs roughly as much as the original fit (more for a
-#' [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
-#' timing note), so this defaults to `FALSE`. For finer control -- testing only
-#' `"sd"` or only `"dispersion"`, or reusing one boundary-test run across
-#' several summaries -- call [rpbnb_boundary_tests()] directly on the fit and
-#' assign its result to `fit$boundary_tests` (with `standardize = TRUE`,
+#' Which parameters get tested depends on `engine`:
+#' * `engine = "classic"` calls [rpbnb_boundary_tests()], which tests both
+#'   the random-coefficient SDs and the NB2 dispersions.
+#' * `engine = "tmb"` calls [rpbnb_tmb_boundary_tests()], which tests only
+#'   the NB2 dispersions -- the TMB engine has no equivalent of the classic
+#'   engine's common-random-numbers trick for zeroing one random
+#'   coefficient's draws, so its random-coefficient SD rows still carry `NA`
+#'   (see [rpbnb_tmb_boundary_tests()]'s "Which parameters this tests"
+#'   section for why, and the workaround).
+#'
+#' A [message()] reports how many restricted refits are about to run before
+#' they start, unless `control$print_level` is `0`; suppress it with
+#' [suppressMessages()] if needed.
+#'
+#' Each restricted refit costs roughly as much as the original fit (more for
+#' a [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
+#' timing note), so this defaults to `FALSE`. For finer control -- testing
+#' only `"sd"` or only `"dispersion"` under `engine = "classic"`, or reusing
+#' one boundary-test run across several summaries -- call
+#' [rpbnb_boundary_tests()]/[rpbnb_tmb_boundary_tests()] directly on the fit
+#' and assign its result to `fit$boundary_tests` (with `standardize = TRUE`,
 #' reconstruct the fitting-scale data first: `rpbnb:::.apply_scaling(data,
 #' fit$scaling)`).
 #'
@@ -102,12 +112,12 @@
 #' @param continuous_vars Optional character vector overriding automatic
 #'   continuous-predictor detection when `standardize = TRUE`. Must be columns
 #'   of `data`; ignored when `standardize = FALSE`.
-#' @param boundary_tests Run [rpbnb_boundary_tests()] after fitting and attach
-#'   the result as `$boundary_tests`, so `summary()`/`print()` show a
-#'   boundary-corrected LR test (rather than `NA`) for the random-coefficient
-#'   SDs and NB2 dispersions (see "Boundary LR tests" above). `engine =
-#'   "classic"` only; default `FALSE` (each restricted refit costs roughly
-#'   another full fit).
+#' @param boundary_tests Run [rpbnb_boundary_tests()] (`engine = "classic"`)
+#'   or [rpbnb_tmb_boundary_tests()] (`engine = "tmb"`) after fitting and
+#'   attach the result as `$boundary_tests`, so `summary()`/`print()` show a
+#'   boundary-corrected LR test (rather than `NA`) for the tested rows (see
+#'   "Boundary LR tests" above for which parameters each engine tests).
+#'   Default `FALSE` (each restricted refit costs roughly another full fit).
 #' @param control An `rpbnb_control()` object when `engine = "classic"`, or an
 #'   `rpbnb_tmb_control()` object when `engine = "tmb"`. Defaults to the right
 #'   one for the chosen engine. The two are not interchangeable and are never
@@ -210,14 +220,6 @@ rpbnb <- function(formula_1, formula_2, data,
     }
   }
 
-  # rpbnb_boundary_tests() only accepts an rpbnb_fit (from fit_rpbnb()); check
-  # this up front rather than after paying for the fit.
-  if (isTRUE(boundary_tests) && engine != "classic") {
-    stop("boundary_tests = TRUE requires engine = \"classic\": ",
-         "rpbnb_boundary_tests() only accepts an rpbnb_fit (from fit_rpbnb()), ",
-         "not the TMB engine's rpbnb_tmb_fit.", call. = FALSE)
-  }
-
   # Dependence structures the two engines do not share.
   if (engine == "classic" && identical(dependence, "independence")) {
     stop("engine = \"classic\" does not implement dependence = \"independence\" ",
@@ -271,24 +273,38 @@ rpbnb <- function(formula_1, formula_2, data,
 
   # Boundary LR tests (see "Boundary LR tests" above). `data` is already the
   # standardized copy at this point when standardize = TRUE, matching what
-  # `fit` was actually estimated on -- rpbnb_boundary_tests() refits restricted
-  # models against it and needs that to be the same design. compute_se is
-  # forced off for the restricted refits: the LR test needs only logLik and
-  # df, not their standard errors.
+  # `fit` was actually estimated on -- both boundary-test functions refit
+  # restricted models against it and need that to be the same design.
+  # engine = "classic" tests random-coefficient SDs too; engine = "tmb" tests
+  # only the NB2 dispersions (see rpbnb_tmb_boundary_tests()'s docs for why).
   if (isTRUE(boundary_tests)) {
-    bt_control <- control
-    bt_control$compute_se <- FALSE
+    n_sd   <- if (engine == "classic") {
+      length(fit$rand_idx1) + length(fit$rand_idx2)
+    } else {
+      0L
+    }
+    n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
+    n_tot  <- n_sd + n_disp
     if (is.null(control$print_level) || control$print_level > 0) {
-      n_sd   <- length(fit$rand_idx1) + length(fit$rand_idx2)
-      n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
-      n_tot  <- n_sd + n_disp
       message(sprintf(
-        "rpbnb(): running boundary LR tests (%d restricted refit%s: %d random-coefficient SD%s, %d NB2 dispersion%s)...",
+        "rpbnb(): running boundary LR tests (%d restricted refit%s: %s%d NB2 dispersion%s)...",
         n_tot, if (n_tot == 1L) "" else "s",
-        n_sd, if (n_sd == 1L) "" else "s",
+        if (engine == "classic") {
+          sprintf("%d random-coefficient SD%s, ", n_sd, if (n_sd == 1L) "" else "s")
+        } else {
+          ""
+        },
         n_disp, if (n_disp == 1L) "" else "s"))
     }
-    fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data, control = bt_control)
+    if (engine == "classic") {
+      # compute_se is forced off for the restricted refits: the LR test needs
+      # only logLik and df, not their standard errors.
+      bt_control <- control
+      bt_control$compute_se <- FALSE
+      fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data, control = bt_control)
+    } else {
+      fit$boundary_tests <- rpbnb_tmb_boundary_tests(fit, data = data)
+    }
   }
   fit
 }
