@@ -163,18 +163,40 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L)
 
   # ---- Dispersion parameters (natural scale from fit object) ----
+  # m1/m2 are ADREPORTed in the template (src/rpbnb_tmb.cpp), so their
+  # delta-method Std. Error is already in `sdreport` -- read it the same way
+  # the dependence block below does, rather than leaving it unset. No z/p
+  # column: m = 0 (the Poisson limit) is a boundary null, so an ordinary Wald
+  # ratio does not test it (same reasoning as the random-coefficient scale
+  # blocks above); a Poisson-restricted refit + lr_test(boundary = TRUE) is
+  # the valid test (poisson_1/poisson_2 in fit_rpbnb_tmb()).
   cat("--- Dispersion (m1, m2) ---\n")
+  sdr <- object$sdreport
+  disp_se <- c(NA_real_, NA_real_)
+  if (!is.null(sdr)) {
+    sdr_sum_disp <- suppressWarnings(try(summary(sdr, "report"), silent = TRUE))
+    if (!inherits(sdr_sum_disp, "try-error")) {
+      for (i in seq_along(c("m1", "m2"))) {
+        nm_i <- c("m1", "m2")[i]
+        if (nm_i %in% rownames(sdr_sum_disp)) {
+          disp_se[i] <- sdr_sum_disp[nm_i, "Std. Error"]
+        }
+      }
+    }
+  }
   disp <- data.frame(
-    Parameter = c("m1", "m2"),
-    Estimate  = c(object$m1, object$m2),
-    row.names = NULL
+    Parameter  = c("m1", "m2"),
+    Estimate   = c(object$m1, object$m2),
+    `Std. Error` = disp_se,
+    row.names = NULL, check.names = FALSE
   )
   .print_tbl(disp, digits)
+  cat("No Wald z/p: the null (m = 0, the Poisson limit) is a boundary. Use\n",
+      "poisson_1/poisson_2 + lr_test(boundary = TRUE) to test it.\n", sep = "")
   cat("\n")
 
   # ---- Dependence parameter (from sdreport) ----
   cat("--- Dependence ---\n")
-  sdr <- object$sdreport
   dep <- object$dependence
   dep_name <- "z_dep"
   if (inherits(dep, "rpbnb_copula")) {
