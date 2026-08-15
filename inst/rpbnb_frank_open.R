@@ -63,7 +63,7 @@ boundary_tests <- TRUE
 # copula fit leaves fit$lambda/fit$bounds NULL and carries fit$cop_family plus a
 # z_theta coefficient -- so the diagnostics and DEPENDENCE sections branch on
 # fit$cop_family rather than assuming lambda exists.
-dependence <- copula("normal")
+dependence <- copula("frank")
 
 # setwd() is at the project root; file.path() builds the platform-native
 # separator, so this resolves on both Windows and POSIX.

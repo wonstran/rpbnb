@@ -36,7 +36,7 @@ n_cores <- 20L
 draws <- 500L
 boundary_tests <- TRUE
 # Same knob as rpbnb_frank_open.R: "famoye" or a copula() object.
-dependence <- copula("frank")
+dependence <- copula("normal")
 
 data <- read.csv(file.path("inst", "extdata", "export_open_all.csv"))
 cat("Observations :", nrow(data), "\n")

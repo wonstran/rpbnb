@@ -234,6 +234,61 @@ test_that("rpbnb(boundary_tests = TRUE) works for both engines without a hard er
   )
 })
 
+.empty_boundary_tests <- structure(
+  data.frame(Parameter = character(0), LR = numeric(0), df = integer(0),
+             p.value = numeric(0), Signif = character(0),
+             stringsAsFactors = FALSE),
+  class = c("rpbnb_boundary_tests", "data.frame"))
+
+test_that("rpbnb(engine = \"tmb\") passes boundary_draws through to rpbnb_tmb_boundary_tests()", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+
+  # Mocked one level above the restricted refits (rpbnb_tmb_boundary_tests()
+  # itself, not fit_rpbnb_tmb()) so the main fit -- a real fit_rpbnb_tmb()
+  # call -- is unaffected and this only observes what rpbnb() forwards.
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    rpbnb_tmb_boundary_tests = function(fit, data, ..., draws = fit$draws) {
+      captured <<- draws
+      .empty_boundary_tests
+    }
+  )
+  fit <- rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb",
+              draws = 20, seed = 7, boundary_tests = TRUE, boundary_draws = 77,
+              control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  expect_identical(captured, 77)
+  expect_identical(fit$boundary_tests, .empty_boundary_tests)
+})
+
+test_that("rpbnb(engine = \"tmb\", boundary_draws = NULL) defaults to the fit's own draws", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    rpbnb_tmb_boundary_tests = function(fit, data, ..., draws = fit$draws) {
+      captured <<- draws
+      .empty_boundary_tests
+    }
+  )
+  fit <- rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb",
+              draws = 20, seed = 7, boundary_tests = TRUE,
+              control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  expect_identical(fit$draws, 20L)
+  expect_identical(captured, 20L)
+})
+
+test_that("rpbnb(engine = \"classic\", boundary_draws = ) errors: no draws knob to honor", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  expect_error(
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
+         draws = 20, seed = 7, boundary_tests = TRUE, boundary_draws = 50),
+    "only supported for engine = \"tmb\""
+  )
+})
+
 test_that("$boundary_tests is absent when boundary_tests = FALSE (the default)", {
   skip_on_cran()
   d <- .tmb_boundary_fixture()
@@ -242,4 +297,132 @@ test_that("$boundary_tests is absent when boundary_tests = FALSE (the default)",
   expect_null(fit$boundary_tests)
   out <- capture.output(summary(fit))
   expect_true(any(grepl("no boundary LR test", out)))
+})
+
+test_that("default control (control = NULL) reuses the original fit's n_cores", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  # Simulate a fit that was originally requested with n_cores = 3, without
+  # actually needing 3 cores to be available in the test environment.
+  fit$parallel$requested <- 3L
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., control) {
+      captured <<- control$n_cores
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured, 3L)
+})
+
+test_that("default control falls back to n_cores = 1 when $parallel is absent", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  fit$parallel <- NULL  # simulate an older fit predating the stored field
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., control) {
+      captured <<- control$n_cores
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured, 1L)
+})
+
+test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every refit", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., force_parallel_gaussian) {
+      captured <<- force_parallel_gaussian
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured, FALSE)
+})
+
+test_that("force_parallel_gaussian = TRUE is forwarded to every refit", {
+  skip_on_cran()
+  # This is the flag's actual reason for existing: a Gaussian-copula fit's
+  # own force_parallel_gaussian = TRUE does NOT propagate here on its own
+  # (fit does not record it), so rpbnb_tmb_boundary_tests() needs it passed
+  # again -- otherwise every restricted refit silently re-caps to one thread.
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., force_parallel_gaussian) {
+      captured <<- force_parallel_gaussian
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(
+    rpbnb_tmb_boundary_tests(fit, d, force_parallel_gaussian = TRUE),
+    "stop-early-for-test"
+  )
+  expect_identical(captured, TRUE)
+})
+
+test_that("draws defaults to fit$draws and is overridable", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., draws) {
+      captured <<- draws
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured, fit$draws)
+
+  captured2 <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., draws) {
+      captured2 <<- draws
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d, draws = 50), "stop-early-for-test")
+  expect_identical(captured2, 50)
+})
+
+test_that("a message announces each restricted refit, unless print_level = 0", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  msgs <- testthat::capture_messages(
+    bt <- rpbnb_tmb_boundary_tests(
+      fit, d,
+      control = rpbnb_tmb_control(print_level = 1L, n_cores = 1L, max_workload = Inf))
+  )
+  expect_true(any(grepl("Boundary LR test: m1", msgs, fixed = TRUE)))
+  expect_true(any(grepl("Boundary LR test: m2", msgs, fixed = TRUE)))
+
+  expect_no_message(
+    rpbnb_tmb_boundary_tests(
+      fit, d,
+      control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L, max_workload = Inf)),
+    message = "Boundary LR test"
+  )
 })

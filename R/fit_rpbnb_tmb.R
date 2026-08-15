@@ -559,11 +559,54 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     rel.tol = control$reltol,
     trace = max(0, control$print_level - 1)
   )
-  opt <- stats::nlminb(
-    start = obj$par,
-    objective = obj$fn,
-    gradient = obj$gr,
-    control = nlminb_control
+  # nlminb (PORT) raises a hard R error -- not a warning, and not a finite
+  # sentinel returned to the caller -- the moment its trust region steps into
+  # a parameter vector where obj$fn()/obj$gr() comes back non-finite ("NA/NaN
+  # function evaluation" / "NA/NaN gradient evaluation"), even after many
+  # productive iterations first. The restart loop below already tolerates
+  # that failure mode (its stats::nlminb() call is wrapped in try()) because
+  # it always has a prior `opt` to fall back to; this FIRST call has no such
+  # fallback, so the same failure here would abort the whole fit -- on a
+  # multi-hour truck-data run under a Clayton/kimeldorf copula, discarding
+  # everything nlminb had already accomplished over one bad trial step deep
+  # in its line search.
+  #
+  # TMB's obj$env$last.par.best tracks the parameter vector with the lowest
+  # finite objective seen by obj$fn() across the object's lifetime (updated
+  # inside MakeADFun's own fn() closure, for both the no-random-effects path
+  # this "sml" method takes and the Laplace path "laplace" takes), regardless
+  # of what happens on later, worse, or non-finite evaluations. Recovering
+  # there and handing the result to the restart loop below resumes the search
+  # from its best solid footing instead of losing the run outright; the
+  # recovered `opt` is marked convergence = 1 (not converged) so summary()/
+  # print() and the restart loop's own gradient check treat it exactly like
+  # any other stalled fit rather than a false success.
+  opt <- tryCatch(
+    stats::nlminb(
+      start = obj$par,
+      objective = obj$fn,
+      gradient = obj$gr,
+      control = nlminb_control
+    ),
+    error = function(e) {
+      recovered <- obj$env$last.par.best
+      if (!grepl("NA/NaN", conditionMessage(e), fixed = TRUE) ||
+          is.null(recovered) || !all(is.finite(recovered))) {
+        stop(e)
+      }
+      recovered_obj <- try(obj$fn(recovered), silent = TRUE)
+      if (inherits(recovered_obj, "try-error") ||
+          !is.finite(recovered_obj)) {
+        stop(e)
+      }
+      list(par = recovered, objective = recovered_obj, convergence = 1L,
+           iterations = 0L, evaluations = 0L,
+           message = paste0(
+             "nlminb aborted (", conditionMessage(e), "); recovered at ",
+             "obj$env$last.par.best, the best finite objective seen before ",
+             "the abort. Not converged -- see restarts/max_abs_gradient."
+           ))
+    }
   )
 
   # nlminb reports "relative convergence (4)" from its RELATIVE FUNCTION test,

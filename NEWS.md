@@ -49,6 +49,182 @@ That source tree is now superseded; everything it provided is available here.
   `fit_rpbnb()`'s `rpbnb_fit` already stores) — needed to reconstruct a
   restricted refit without the caller re-supplying them by hand, and useful
   for any other refit-based tooling built on a TMB fit going forward.
+* `rpbnb_tmb_boundary_tests()`'s default `control` (when the caller passes
+  none) now reuses the original fit's `n_cores` (`fit$parallel$requested`)
+  instead of hardcoding `n_cores = 1`, so the restricted refits get the same
+  thread budget the full fit was given — subject to the same Gaussian-copula
+  single-thread safety cap, re-applied per refit exactly as it was on the
+  original fit. Fits from before this field was stored fall back to `1`.
+  The default `print_level` is now `1` (was `0`), so each restricted refit
+  is no longer silent.
+* `rpbnb_tmb_boundary_tests()` now reports a `message()` ("Boundary LR
+  test: `<parameter>`...") before each restricted refit starts (suppressed
+  when `control$print_level` is `0`), matching the summary message
+  `rpbnb(boundary_tests = TRUE)` already prints before the whole batch.
+* `rpbnb_tmb_boundary_tests()` gains a `draws` argument for the restricted
+  refits, defaulting to `fit$draws` (unchanged behavior). Lets a caller
+  raise (or lower) simulation draws for the boundary tests alone, without
+  refitting `fit` itself at a different `draws`. A non-default value still
+  shares `fit$seed` but no longer reproduces `fit`'s exact simulated
+  log-likelihood surface, so the LR statistic then also reflects simulation
+  noise beyond the restriction under test — the default remains the
+  statistically clean choice.
+* `rpbnb()` gains a `boundary_draws` argument (`engine = "tmb"` only) that
+  forwards to `rpbnb_tmb_boundary_tests()`'s new `draws` argument above, so
+  the boundary tests folded in via `boundary_tests = TRUE` can use a
+  different `draws` than the main fit without a separate manual
+  `rpbnb_tmb_boundary_tests()` call. `NULL` (default) keeps prior behavior
+  (the main fit's `draws`). An error under `engine = "classic"`: that
+  engine's `rpbnb_boundary_tests()` reuses the full fit's exact stored draw
+  matrix rather than regenerating draws from a count, so there is nothing
+  for `boundary_draws` to override there.
+* `summary.rpbnb_tmb_fit()`'s "--- Dependence ---" block now reports an
+  ordinary Wald `z value`/`Pr(>|z|)`/significance stars for the dependence
+  parameter (`theta` for Frank/Kimeldorf, `rho` for the Gaussian copula,
+  `lam` for Famoye), not just `Estimate`/`Std. Error` as before — mirroring
+  the classic engine's `summary.rpbnb_fit()`, which has always computed this
+  (`R/methods.R`, `add_dispersion()`'s copula/lambda rows). By design (same
+  as the classic engine) this is always an ordinary Wald test, never a
+  boundary-corrected LR test: the dependence null is interior for Frank
+  (`theta` unrestricted) and the Gaussian copula (`rho` in `(-1, 1)`); for
+  Kimeldorf/Clayton (`theta > 0`) the null is technically a boundary case,
+  but both engines deliberately test it the same (ordinary Wald) way so they
+  do not disagree about what they report.
+* Fixed: `summary.rpbnb_tmb_fit()` printed its "Random-coefficient scales"
+  explanatory note (the `sd`/`w`/`s` legend, plus the LR/df/`Pr(>chisq)`
+  footnote) once per equation when both equations had random coefficients —
+  identical text, back to back. It now prints once, after both equations'
+  tables.
+* Fixed: `fit_rpbnb_tmb()` (and therefore `rpbnb(engine = "tmb")`) could
+  abort outright with `Error in stats::nlminb(...) : NA/NaN gradient
+  evaluation` (or `NA/NaN function evaluation`), discarding an entire
+  in-progress fit, if the optimizer's very first `nlminb()` call stepped into
+  a non-finite region deep in its search — `nlminb()` raises this as a hard R
+  error rather than returning a sentinel, and only the *restart* loop's
+  `nlminb()` calls were already guarded against it. Observed on the truck
+  data under a Kimeldorf (Clayton) copula after nearly an hour of otherwise
+  productive optimization. The first call is now wrapped the same way: on
+  that specific error, it recovers at `obj$env$last.par.best` (TMB's own
+  running best-finite-objective parameter vector) and hands control to the
+  existing restart loop from there, marked not-converged, instead of losing
+  the run. When even that recovery point is non-finite (never observed a
+  finite objective at all -- the failure mode below), `fit_rpbnb_tmb()`
+  still re-raises rather than fabricate a result.
+* Fixed: `rpbnb_tmb_boundary_tests()` (and therefore
+  `rpbnb(boundary_tests = TRUE)` under `engine = "tmb"`) could lose an
+  entire batch of restricted refits to the same `nlminb()` abort, even after
+  the `fit_rpbnb_tmb()` fix above, when a restricted refit's warm start
+  itself (the full fit's coefficients with one boundary parameter pinned) is
+  non-finite at every point `nlminb()` tries -- there is then no finite
+  `obj$env$last.par.best` to recover to. Observed on the truck data's `m1`
+  dispersion test under a Kimeldorf copula: the very first outer gradient
+  evaluation came back `NaN`. `test_row()` already had a well-defined
+  "restricted fit did not converge" path (`NA` for that row, with a
+  `warning()`) for an ordinary non-convergent refit; each restricted refit
+  is now wrapped in `tryCatch()` so specifically that `"NA/NaN ..."` abort
+  is funneled into that same path (`convergence = NA`) instead of
+  propagating and losing every other refit in the batch. Any other error
+  (a real bug, a bad argument) still propagates as an ordinary error rather
+  than being relabelled "did not converge".
+* Fixed the root cause behind the `m1`/`m2` NaN above rather than only
+  degrading gracefully around it: the template's exact `m = 0` (Poisson)
+  branch (`poisson_1`/`poisson_2 = TRUE`, `src/rpbnb_tmb.cpp`) computed
+  `ppois()`/`dpois()` in LINEAR space and logged the result afterward. For a
+  random-coefficient draw that pushes `mu` far enough from a small observed
+  count -- ordinary in count data, where most observations are small -- both
+  `ppois()` and `dpois()` underflow to an exact linear-space `0.0` before
+  `log()` ever runs, so a Kimeldorf/Clayton cell probability's internal ratio
+  (`log_pmf - log_cdf`, in `clayton_cell_prob()`'s `log_ratio()`) can end up
+  subtracting two `-Inf`s -- an `Inf - Inf` indeterminate form, `NaN` by
+  construction, which then poisons the whole taped objective (every free
+  parameter's gradient goes `NaN` at once, not just ones near that
+  observation, since `NaN` propagates through the sum-of-observations
+  reduction wherever it appears). This is exactly the failure mode the NB2
+  branch's `nb2_cdf_pair()` was already hardened against; the exact-Poisson
+  branch just never got the same treatment when it was added. New
+  `pois_cdf_pair()` mirrors `nb2_cdf_pair()`'s log-space `log_add_exp`
+  accumulation (simpler, since Poisson has no dispersion parameter to carry)
+  and replaces the linear-then-log `ppois()`/`dpois()` calls in both margins'
+  exact-Poisson branch. Confirmed on the truck data: the `m1` boundary
+  refit's objective, `NaN` at the very first evaluation before this fix, is
+  now finite (`10709.73`) with a fully finite gradient, and the boundary LR
+  test reports a real `LR`/`df`/`Pr(>chisq)` instead of `NA`.
+
+* Fixed: **a Poisson margin's Gaussian-copula cell probability collapsed in
+  the tails.** Gaussian is the only family that must pass its margins through
+  `qnorm()` (singular at 0 and 1), and it clamped the marginal CDF to
+  `[1e-15, 1-1e-15]` before doing so. When both corners of a cell landed past
+  the same clamp the integration strip collapsed to *zero width*, returning
+  probability 0 — floored to `1e-300` (690.8 nats) — and, because a clamp is
+  a `CondExp` step, that cell then contributed **exactly zero gradient**.
+  `gaussian_cell_prob()`'s own comment had recorded this as a known
+  limitation needing "a separately accumulated survival function"; this is
+  that function, for the case that most needs it.
+  - A Poisson margin's corners are now taken from whichever tail is still
+    representable: `q = +qnorm(F)` normally, and `q = -qnorm(S)` once `F`
+    passes `1 - 1e-10`, with `S = P(Y > y) = pgamma(mu, y+1)` computed
+    **directly** (an already-differentiable TMB atomic) rather than as
+    `1 - F`. The second corner follows from `S(y-1) = S(y) + P(Y = y)`, an
+    addition of positive quantities, so it cannot cancel. The key observation
+    is that `1e-15` was never the real limit: a probability near *zero* is
+    representable to ~1e-308, and only a probability near *one* loses its
+    information (a double's spacing at 1 is 1.1e-16).
+  - **NB2 margins deliberately keep the old clamp**, and with it the old
+    limitation. The NB2 survival is `pbeta(mu/(mu+r), y+1, r)`, whose shape
+    `r = 1/m` runs away exactly when the data wants a Poisson margin (the
+    dispersion collapses toward 0, and `log_m`'s clamp allows `r` up to
+    `exp(20) = 4.85e8`). `pbeta`'s *value* is exact even at `r = 1e9`
+    (checked against `pnbinom`: relative error 0), but its derivative with
+    respect to `r` is ~1e-13 there — and since `CondExp` evaluates *both* of
+    its branches, that call sat on the tape for every cell whether or not the
+    survival was selected. With it present, a polished fit came back with a
+    **non-finite** `max|gradient|` and the free dispersion stopped collapsing
+    on Poisson-generated data (`m1` 0.018, `m2` 0.034, against `< 1e-3`
+    before and a true value of 0). Narrowing the switch so that essentially
+    no cell selected it barely moved those numbers, which is what identified
+    the call's mere *presence* rather than its selection as the cause. The
+    residual NB2 exposure is small: 0.05% of observation-draw cells and 0.4%
+    of observations on the truck data, against the 2.69% and 16.4% a
+    Poisson-pinned margin reached.
+  - Validated against the invariant that pins it down without an external
+    reference — the strip must carry exactly the marginal mass,
+    `Phi(q(y)) - Phi(q(y-1)) == P(Y = y)` — to a worst relative error of
+    **4.2e-13** over cells whose pmf spans 1.4e-296 to 0.37, where 35 of
+    those same 55 cells collapsed outright before. Where the old and new
+    forms disagree (`F > 1 - 1e-11`) that round trip also says which is
+    right: **1.2e-14** relative error against **9.3e-4**. Where the old form
+    was sound the two agree to 4e-10 over 5,000 random cells.
+  - What it was costing, measured on the truck data's `m1` boundary LR test
+    (margin 1 pinned Poisson against counts to 242) under a Gaussian copula:
+    **2.69%** of observation-draw cells and **16.4%** of observations
+    collapsed, against 0.05%/0.4% with that margin left NB2 — and 0.000% for
+    the `m2` test, whose margin (`C_HV`, 78% zeros) never saturates, which is
+    why `m2` succeeded while `m1` did not. The objective was a step function:
+    1,285 nats of swing over parameter steps of `2e-4`, with the AD gradient
+    disagreeing with a central finite difference by ~100% (51 vs 5,094; -479
+    vs -1.6e6) on the coordinates that move `mu1`, against exact agreement on
+    those that do not. `nlminb` stopped at `false convergence (8)` — PORT's
+    code for "converging to a noncritical point; gradients possibly wrong, or
+    the function discontinuous", which is literally what it was handed. After
+    the fix, at the same parameter point: objective 18671.47 → **11143.02**
+    (the floored mass restored), **0 of 29** coordinates disagreeing with
+    finite differences, and the scan's slope jumps falling from 1.28e7 to
+    **3.02**.
+  - Residual limitation for the Poisson margin, 293 decades further out than
+    the one it replaces: if the *small* tail itself underflows (`S < 1e-300`
+    upper, `F < 1e-300` lower) both corners still floor and the cell
+    collapses. The lower-tail half is in principle recoverable —
+    `nb2_cdf_pair()`/`pois_cdf_pair()` already return an accurate `log F` —
+    but needs a log-scale `qnorm`, which TMB does not provide (its `qnorm`
+    atomic has no `log_p` argument). The truck data's largest count is 242,
+    where the survival is 4e-228 and nowhere near this floor.
+  - `y == 0` keeps the historical `qnorm(1e-15) = -7.94` sentinel rather than
+    the more nearly-correct `qnorm(1e-300) = -37.05`. Its lower corner is a
+    true `-infinity` and the mass between the two is immaterial (1e-300
+    against 1e-15), but `gaussian_cell_prob()` spends a *fixed* quadrature
+    node budget on `[q(a'), q(a)]`, so the deeper sentinel made that interval
+    about five times wider for every zero count — and zeros are most of a
+    count sample — for no gain in accuracy.
 
 ## New feature: `fit_rpbnb_tmb(force_parallel_gaussian = )`
 

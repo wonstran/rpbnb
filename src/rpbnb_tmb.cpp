@@ -181,6 +181,53 @@ void nb2_cdf_pair(int y, Type mu, Type r,
   log_pmf_y = log_term;
 }
 
+// Poisson analog of nb2_cdf_pair() above, for the exact m = 0 branch
+// (poisson_1/poisson_2 = TRUE): same log-space log_add_exp recursion, same
+// return convention (log_cdf_ym1 left at log P(Y = 0) for y = 0, unread by
+// every caller, which all gate on the observed count instead).
+//
+// This replaces computing ppois()/dpois() in LINEAR space and logging the
+// result afterward, which was the previous implementation and is exactly the
+// failure nb2_cdf_pair() above was written to avoid: for mu far enough from y
+// -- a random-coefficient draw that pushes mu to, say, 1e12 against a small
+// observed count, ordinary here since most counts in count data are small --
+// ppois()/dpois() underflow to an exact linear-space 0.0 before log() ever
+// runs, so BOTH the CDF-at-(y-1) and the PMF-at-y can come back as -Inf at
+// once. clayton_cell_prob()'s log_ratio() then computes their difference
+// (log_pmf_u - log_um), an Inf - Inf subtraction, which is NaN by
+// construction and poisons the whole taped objective (every free parameter's
+// gradient becomes NaN, not just the ones near that one observation, because
+// NaN propagates through the sum-of-observations reduction whatever it
+// touches). Observed on the truck data's `m1` boundary LR test under a
+// Kimeldorf copula: the very first outer gradient evaluation came back NaN.
+// Accumulating in log space the same way nb2_cdf_pair() does means the
+// linear-space cdf_y/cdf_ym1/pmf_y returned here (exp() of the log
+// accumulators) are never the ones a NaN could come from -- they underflow to
+// an honest 0.0 without ever standing in for a genuine -Inf log the way a
+// direct ppois()/dpois() call would.
+template<class Type>
+void pois_cdf_pair(int y, Type mu,
+                   Type &cdf_y, Type &cdf_ym1, Type &pmf_y,
+                   Type &log_cdf_y, Type &log_cdf_ym1, Type &log_pmf_y) {
+  Type log_mu = log(mu);
+  Type log_term = -mu;  // log P(Y = 0)
+  Type log_cum = log_term;
+  Type lcm1 = log_term;
+  cdf_ym1 = Type(0);
+  for (int k = 1; k <= y; k++) {
+    lcm1 = log_cum;
+    // log P(Y = k) = log P(Y = k - 1) + log(mu) - log(k)
+    log_term += log_mu - log(Type(k));
+    log_cum = log_add_exp(log_cum, log_term);
+  }
+  if (y > 0) cdf_ym1 = exp(lcm1);
+  cdf_y = exp(log_cum);
+  pmf_y = exp(log_term);
+  log_cdf_y = log_cum;
+  log_cdf_ym1 = lcm1;
+  log_pmf_y = log_term;
+}
+
 // Frank's joint probability of the cell (a', a] x (b', b], evaluated as ONE
 // log1p rather than as the second difference
 // C(a,b) - C(a',b) - C(a,b') + C(a',b').
@@ -505,10 +552,11 @@ Type clayton_cell_prob(Type log_a, Type log_am, Type log_pmf_a,
 // -0.999.  That is not a corner of the domain: a truck subset fits at
 // rho = 0.9977.  See the constant for the measured effect.
 //
-// One residual is left, deliberately.  At rho = 0.9999 with mu = 1 the grid
-// still loses about 5 nats, and no panel layout moves it -- 7, 10 and 12
-// panels all give the same number, so it is the margins reaching the
-// safe_qnorm() clamp, not the quadrature.  See the closing paragraph.
+// One residual was left here deliberately.  At rho = 0.9999 with mu = 1 the
+// grid lost about 5 nats, and no panel layout moved it -- 7, 10 and 12 panels
+// all gave the same number, so it was the margins reaching the old 1e-15
+// quantile clamp, not the quadrature.  That clamp is gone; see the closing
+// paragraph and gauss_corner_quantiles().
 //
 // Dividing by rho needs |rho| bounded away from zero.  The floor only affects
 // where the cut points land, and at |rho| = 1e-6 they land 1e6 quantiles away
@@ -516,15 +564,16 @@ Type clayton_cell_prob(Type log_a, Type log_am, Type log_pmf_a,
 // panel spans [q(a'), q(a)] -- which is right, because at rho = 0 the bracket
 // is constant in z and one panel resolves it exactly.
 //
-// Remaining limitation, deliberately not papered over: when a and a' are close
-// enough that the safe_qnorm() clamp maps both to the same point (245 of the
-// 3,487 truck cells at the starting values), q(a) == q(a') and this returns 0,
-// which the caller floors.  Gaussian must pass through qnorm(), which is
-// singular at 1, so once the NB2 CDF reaches the clamp the cell cannot be
-// recovered from the CDF at all -- that would take a separately accumulated
-// survival function.  Frank and Clayton are not affected because their
-// generators stay analytic at u = 1.  Unlike the second difference, this at
-// least fails to zero rather than to a negative number.
+// The limitation this comment used to close on -- that a saturated marginal
+// CDF put q(a) and q(a') on the same point and returned 0, "which would take a
+// separately accumulated survival function" to fix -- is fixed, and by exactly
+// that means.  The corners now reach this function already computed from
+// whichever tail is representable, so a saturated CDF no longer collapses the
+// interval; see gauss_corner_quantiles() at the end of this file, which also
+// records what the collapse was costing (it is what stalled the truck data's
+// m1 boundary refit at nlminb "false convergence (8)").  This function is
+// unchanged by that work: it still receives four quantiles and a rho, and
+// still assumes only that they are ordered.
 template<class Type>
 Type gaussian_cell_prob(Type qa, Type qam, Type qb, Type qbm, Type rho) {
   Type sig2 = Type(1.0) - rho * rho;
@@ -635,6 +684,174 @@ vector<Type> gauss_cell_vec(vector<Type> x) {
   return y;
 }
 REGISTER_ATOMIC(gauss_cell_vec)
+
+// Normal quantiles of one margin's two cell corners, each computed from
+// whichever tail is still representable in double precision.
+//
+// Gaussian is the only family that has to pass its margins through qnorm(),
+// which is singular at 0 and at 1, so it is the only one whose cell can be
+// destroyed by the marginal CDF saturating.  The previous form clamped the CDF
+// to [1e-15, 1 - 1e-15] and took qnorm() of that, which collapses the cell to
+// ZERO WIDTH -- q(a) == q(a') exactly -- whenever both corners land past the
+// same clamp.  The caller then floors the probability at 1e-300, and worse, a
+// clamp is a CondExp step, so such a cell contributes exactly zero gradient.
+//
+// That is not a corner case.  On the truck data's m1 boundary refit (margin 1
+// pinned Poisson against counts running to 242) it hit 2.69% of
+// observation-draw cells and 16.4% of observations -- against 0.05% and 0.4%
+// with the same margin left NB2 -- and it is what stalled nlminb at "false
+// convergence (8)".  Along the b1 coefficients the objective swung 1,285 nats
+// over steps of 2e-4 while the AD gradient, blind to every clamped cell,
+// disagreed with a central finite difference by ~100% (51 against 5,094; -479
+// against -1.6e6) -- next to exact agreement for the parameters that do not
+// move mu1.  PORT's code 8 says precisely this: converging to a noncritical
+// point, gradients possibly wrong or the function discontinuous.
+//
+// This is the "separately accumulated survival function" the old comment on
+// gaussian_cell_prob() called for, and the observation that makes it cheap is
+// that 1e-15 was never the real limit.  A probability near ZERO is
+// representable to ~1e-308; only a probability near ONE loses its information,
+// because a double's spacing at 1 is 1.1e-16.  So each corner stays exact as
+// long as it is expressed through the SMALL quantity:
+//
+//   F(y) <= 1/2 :  q = +qnorm(F)      F is itself small and exact
+//   F(y) >  1/2 :  q = -qnorm(S)      S = P(Y > y), never formed as 1 - F
+//
+// and in the upper tail the second corner follows from
+//
+//   S(y-1) = P(Y > y-1) = S(y) + P(Y = y)
+//
+// an ADDITION of two positive quantities, so it cannot cancel -- unlike the
+// 1 - F it replaces.  S comes from the margin's exact upper-tail special
+// function, both of which TMB already carries as differentiable atomics:
+//
+//   Poisson : P(Y > y) = pgamma(mu, y+1)
+//   NB2     : P(Y > y) = pbeta(mu/(mu+r), y+1, r)
+//
+// Validated against the only invariant that pins it down without an external
+// reference -- the strip must carry exactly the marginal mass,
+// Phi(q(y)) - Phi(q(y-1)) == P(Y = y) -- to a worst relative error of 4.2e-13
+// over cells whose pmf spans 1.4e-296 to 0.37, where 35 of those same 55 cells
+// collapsed outright under the old clamp.  Where the two forms disagree
+// (F > 1 - 1e-11) that round trip also says which is right: 1.2e-14 relative
+// error here against 9.3e-4 for qnorm(F).  Where the old form was sound they
+// agree to 4e-10 over 5,000 random cells.
+//
+// The branch is applied to the ARGUMENT and a SIGN rather than to two finished
+// quantiles, for the same reason gaussian_cell_prob() does it with its pnorm
+// calls: CppAD::CondExp evaluates both of its value branches, so choosing
+// afterwards would put four qnorm() calls on the tape per margin instead of
+// two.
+//
+// y == 0 is settled off the tape.  Its lower corner is a true -infinity (no
+// mass below zero), and in the upper-tail branch S(-1) is exactly 1, so
+// qnorm() would hand the quadrature +Inf and it would then form Inf - Inf.
+// The sentinel is qnorm(1e-300) = -37.0471, which is what the lower branch
+// computes there anyway, so the two branches agree at y = 0.
+//
+// Residual limitation, 293 decades further out than the one it replaces: if
+// the SMALL tail itself underflows -- S < 1e-300 upper, F < 1e-300 lower --
+// both corners floor to the sentinel and the cell collapses as before.  The
+// lower-tail half of that is in principle recoverable, since nb2_cdf_pair()
+// and pois_cdf_pair() already return an accurate log F; it needs a log-scale
+// qnorm, which TMB does not provide (its qnorm atomic has no log_p argument).
+// The truck data's largest count is 242, where the survival is 4e-228 --
+// nowhere near this floor, against 2.69% of cells reaching the old one.
+// Both thresholds below are deliberately conservative, and the first version of
+// this function got both wrong in the same way -- by rerouting cells that were
+// never broken.  Recorded because the failure was silent in the values and
+// showed up only as a changed OPTIMUM:
+//
+// SWITCHING ON F > 1/2 rather than on F near 1.  qnorm(F) is perfectly accurate
+// until F approaches 1; the survival is needed only once F saturates.  On the
+// convergence-polish fixture (counts around mu = 1.5) the halfway switch routed
+// 67.6% of cells onto the survival path while 0.0% of them needed it, which put
+// the strip's absolute position on pbeta/pgamma while its width still came from
+// the CDF accumulator's pmf.  The values agree to ~1e-16 -- pbeta is exact even
+// at r = 1e9, so this was not an accuracy failure -- but the two are no longer
+// the SAME arithmetic, and on Poisson-generated data the free dispersion then
+// stopped collapsing (m1 0.014, m2 0.029, against < 1e-3 before and a true
+// value of 0) and the polished gradient came back non-finite.  So the switch is
+// at 1 - 1e-10: below it nothing changes at all.
+//
+// SENDING y == 0 TO qnorm(1e-300) = -37.05.  Its lower corner is a true
+// -infinity, so -37.05 is strictly closer to right than the -7.94 it replaced,
+// and the mass between them (1e-300 against 1e-15) is immaterial to the cell.
+// It is not immaterial to the QUADRATURE: gaussian_cell_prob() spends a fixed
+// node budget on [q(a'), q(a)], so this made that interval about five times
+// wider for every zero count -- and zeros are most of a count sample -- for no
+// gain in mass.  y == 0 therefore keeps the old sentinel.  Nothing is lost by
+// that: the case is structural (there is no mass below zero), not a saturated
+// CDF, so it is not what this function exists to repair.
+//
+// Note the asymmetry is self-correcting for y > 0, which is why only y == 0
+// needs the special case: if F(y-1) is deep enough to floor, F(y) is deep too,
+// so both corners move together and the interval stays narrow.
+//
+// `use_sf` restricts the whole mechanism to POISSON margins, and it is a plain
+// bool -- pois1/pois2 are fixed by the caller's arguments, not by parameters --
+// so for an NB2 margin the survival call disappears from the tape entirely and
+// that path is bit-identical to what it was before this function existed.
+//
+// That restriction is not conservatism for its own sake; it is the third thing
+// the first version of this function got wrong, and the one that cost the most
+// to find.  The NB2 survival is pbeta(mu/(mu+r), y+1, r), and r = 1/m runs away
+// exactly when the data wants a Poisson margin: the convergence-polish fixture
+// drives m to ~1e-6, so r ~ 1e6, and log_m's own clamp allows r up to
+// exp(20) = 4.85e8.  pbeta's VALUE is exact even at r = 1e9 (checked against
+// pnbinom: relative error 0), so this is not the accuracy failure it looks
+// like -- but its derivative with respect to r is ~1e-13 there, and because
+// CppAD::CondExp evaluates both of its branches, that call sat on the tape for
+// every cell whether or not the survival was selected.  With it present the
+// polished fit came back with a NON-FINITE max|gradient| and the free
+// dispersion stopped collapsing on Poisson-generated data (m1 0.018, m2 0.034
+// against < 1e-3 before, true value 0); narrowing the switch from F > 1/2 to
+// F > 1 - 1e-10, so that essentially no cell selected it, changed those numbers
+// hardly at all -- which is what identified the mere PRESENCE of the call,
+// rather than its selection, as the cause.
+//
+// The Poisson margin needs no such guard: pgamma(mu, y+1) carries one
+// parameter, no shape that can run away, and it is the case the dispersion
+// boundary tests actually pin.  An NB2 margin keeps the old 1e-15 clamp and so
+// keeps the old limitation with it -- measured at 0.05% of observation-draw
+// cells and 0.4% of observations on the truck data, against the 2.69% and 16.4%
+// that a Poisson-pinned margin reached.
+template<class Type>
+void gauss_corner_quantiles(Type F_y, Type F_ym, Type pmf, Type sf,
+                            bool y_zero, bool use_sf, Type &q_y, Type &q_ym) {
+  const Type TINY(1e-300);
+  const Type ZERO_Q(-7.941345);       // qnorm(1e-15), the historical floor
+  const Type NEAR_ONE(1.0 - 1e-10);   // only past here has F lost its tail
+  const Type NEAR_ONE_P(1.0 - 1e-16); // keeps qnorm's argument below 1
+
+  auto vmax = [](Type u, Type v) { return CppAD::CondExpGt(u, v, u, v); };
+  auto vmin = [](Type u, Type v) { return CppAD::CondExpLt(u, v, u, v); };
+
+  if (!use_sf) {
+    // Exactly the historical path, clamp and all.
+    auto clamped = [&](Type p) {
+      return qnorm(vmin(vmax(p, Type(1e-15)), Type(1.0 - 1e-15)));
+    };
+    q_y  = clamped(F_y);
+    q_ym = clamped(F_ym);
+    return;
+  }
+
+  // Upper corner is the larger probability in BOTH branches (F_y > F_ym, and
+  // S(y-1) = S(y) + pmf > S(y)), so the sign flip preserves q_y > q_ym.
+  // sf + pmf is S(y-1) and cannot exceed 1 in exact arithmetic; it is capped
+  // anyway because sf and pmf reach here from different computations and
+  // qnorm() of anything at or above 1 is +Inf.
+  Type p_y  = CppAD::CondExpGt(F_y, NEAR_ONE, vmax(sf, TINY),
+                                              vmax(F_y,  TINY));
+  Type p_ym = CppAD::CondExpGt(F_y, NEAR_ONE, vmin(vmax(sf + pmf, TINY),
+                                                   NEAR_ONE_P),
+                                              vmax(F_ym, TINY));
+  Type sgn  = CppAD::CondExpGt(F_y, NEAR_ONE, Type(-1), Type(1));
+
+  q_y  = sgn * qnorm(p_y);
+  q_ym = y_zero ? ZERO_Q : sgn * qnorm(p_ym);
+}
 
 template<class Type>
 Type objective_function<Type>::operator() () {
@@ -930,24 +1147,12 @@ Type objective_function<Type>::operator() () {
         Type a1, a1m, b1, b1m, pmf1, pmf2;
         Type la1, la1m, lpmf1, lb1, lb1m, lpmf2;
         if (pois1) {
-          a1 = ppois(Y1(i), mu1);
-          a1m = y1_zero ? Type(0) : ppois(Y1(i) - Type(1), mu1);
-          pmf1 = dpois(Y1(i), mu1, false);
-          la1 = log(a1);
-          // a1m is exactly 0 when y = 0; log() of it is never read, because
-          // every consumer selects that case on y1_zero.
-          la1m = y1_zero ? Type(0) : log(a1m);
-          lpmf1 = log(pmf1);
+          pois_cdf_pair(Y1_int(i), mu1, a1, a1m, pmf1, la1, la1m, lpmf1);
         } else {
           nb2_cdf_pair(Y1_int(i), mu1, r1, a1, a1m, pmf1, la1, la1m, lpmf1);
         }
         if (pois2) {
-          b1 = ppois(Y2(i), mu2);
-          b1m = y2_zero ? Type(0) : ppois(Y2(i) - Type(1), mu2);
-          pmf2 = dpois(Y2(i), mu2, false);
-          lb1 = log(b1);
-          lb1m = y2_zero ? Type(0) : log(b1m);
-          lpmf2 = log(pmf2);
+          pois_cdf_pair(Y2_int(i), mu2, b1, b1m, pmf2, lb1, lb1m, lpmf2);
         } else {
           nb2_cdf_pair(Y2_int(i), mu2, r2, b1, b1m, pmf2, lb1, lb1m, lpmf2);
         }
@@ -960,17 +1165,28 @@ Type objective_function<Type>::operator() () {
         if (family == FAM_FRANK) {
           p_obs = frank_cell_prob(a1, a1m, pmf1, b1, b1m, pmf2, theta);
         } else if (family == FAM_GAUSSIAN) {
-          auto safe_qnorm = [](Type p) -> Type {
-            p = CppAD::CondExpLt(p, Type(1e-15), Type(1e-15), p);
-            p = CppAD::CondExpGt(p, Type(1.0 - 1e-15),
-                                 Type(1.0 - 1e-15), p);
-            return qnorm(p);
-          };
+          // Upper-tail survival, taken from the margin's own special function
+          // rather than as 1 - CDF.  Only the Gaussian branch needs it (it is
+          // the only family that must pass through qnorm(), singular at 1);
+          // see gauss_corner_quantiles() for the full argument, and note that
+          // computing it here rather than in nb2_cdf_pair()/pois_cdf_pair()
+          // keeps its cost off Frank, Clayton and Famoye entirely.
+          //
+          // Poisson margins only -- pois1/pois2 are ordinary bools, so an NB2
+          // margin puts no survival call on the tape at all.  See
+          // gauss_corner_quantiles() for why the NB2 form (pbeta, whose shape
+          // r = 1/m runs to 1e8 as the dispersion collapses) has to stay off
+          // it: its presence alone, selected or not, cost a finite gradient.
+          Type sf1 = pois1 ? pgamma(mu1, Type(Y1_int(i) + 1)) : Type(0);
+          Type sf2 = pois2 ? pgamma(mu2, Type(Y2_int(i) + 1)) : Type(0);
+          Type qa, qam, qb, qbm;
+          gauss_corner_quantiles(a1, a1m, pmf1, sf1, y1_zero, pois1, qa, qam);
+          gauss_corner_quantiles(b1, b1m, pmf2, sf2, y2_zero, pois2, qb, qbm);
           vector<Type> qcell(5);
-          qcell(0) = safe_qnorm(a1);
-          qcell(1) = safe_qnorm(a1m);
-          qcell(2) = safe_qnorm(b1);
-          qcell(3) = safe_qnorm(b1m);
+          qcell(0) = qa;
+          qcell(1) = qam;
+          qcell(2) = qb;
+          qcell(3) = qbm;
           qcell(4) = rho;
           p_obs = gauss_cell_vec(qcell)(0);
         } else {

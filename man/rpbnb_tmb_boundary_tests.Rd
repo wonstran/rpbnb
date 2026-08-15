@@ -8,7 +8,9 @@ rpbnb_tmb_boundary_tests(
   fit,
   data,
   control = NULL,
-  which = c("sd", "dispersion")
+  which = c("sd", "dispersion"),
+  draws = fit$draws,
+  force_parallel_gaussian = FALSE
 )
 }
 \arguments{
@@ -22,11 +24,32 @@ same data. With \code{standardize = TRUE}, pass the standardized data
 a manual call needs \code{rpbnb:::.apply_scaling(data, fit$scaling)}).}
 
 \item{control}{An \code{\link[=rpbnb_tmb_control]{rpbnb_tmb_control()}} for the restricted refits.
-Defaults to \code{rpbnb_tmb_control(print_level = 0, n_cores = 1, max_workload = Inf)}. \code{draws}/\code{seed}/\code{method} are taken from \code{fit}, not
-\code{control}.}
+Defaults to \code{rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = Inf)} -- the same \code{n_cores} the
+original fit was called with (1 if \code{fit} predates the stored
+\verb{$parallel} field). \code{seed}/\code{method} are taken from \code{fit}, not \code{control}.}
 
 \item{which}{Which boundary parameters to test: \code{"sd"}, \code{"dispersion"}, or
 both (the default).}
+
+\item{draws}{Number of Halton simulation draws for the restricted refits.
+Defaults to \code{fit$draws} -- the same number \code{fit} itself used. Raising
+this trades refit cost for precision without needing to refit \code{fit} at
+a higher \code{draws}; lowering it is cheaper but noisier. A value other
+than \code{fit$draws} still shares \code{fit$seed} (so the Halton sequence's
+\emph{prefix} is identical) but no longer draws the exact same simulated
+log-likelihood surface as \code{fit}, so the LR statistic picks up simulation
+noise beyond the restriction under test -- prefer the default unless you
+have a specific reason to diverge.}
+
+\item{force_parallel_gaussian}{Opt-in override of the Gaussian-copula
+single-thread safety cap (see \code{?fit_rpbnb_tmb}), forwarded to every
+restricted refit. Default \code{FALSE}. This is intentionally a separate
+argument rather than something read off \code{fit}: \code{fit} does not record
+whether the original fit used the override, so passing
+\code{force_parallel_gaussian = TRUE} here is required even when the
+original \code{fit_rpbnb_tmb()}/\code{rpbnb()} call also passed it -- otherwise
+every refit silently falls back to one thread regardless of
+\code{control$n_cores}.}
 }
 \value{
 An object of class \code{rpbnb_boundary_tests} -- the same class
@@ -52,9 +75,9 @@ are the parameters whose null lies on the boundary of the parameter space
 \details{
 Each test refits a properly nested restricted model, otherwise identical
 to \code{fit} (same formulas, random-coefficient specification, dependence,
-draws, seed, and estimator), warm-started from \code{fit$coef} and run with
-\code{inference = "none"} since the LR test needs only \code{logLik} and the
-parameter count.
+seed, and estimator, and by default the same \code{draws}), warm-started
+from \code{fit$coef} and run with \code{inference = "none"} since the LR test
+needs only \code{logLik} and the parameter count.
 
 \strong{Dispersions} are restricted with \code{poisson_1}/\code{poisson_2 = TRUE}, the
 template's exact \code{m = 0} branch.
@@ -74,6 +97,10 @@ the two simulated log-likelihoods differ only by the restriction under
 test. Dropping the name instead would renumber the remaining coefficients'
 Halton dimensions, and the LR statistic would absorb that reshuffling as
 extra simulation noise.
+
+A \code{\link[=message]{message()}} (\code{"Boundary LR test: <parameter>..."}) reports each
+restricted refit right before it starts, unless \code{control$print_level} is
+\code{0}; suppress it with \code{\link[=suppressMessages]{suppressMessages()}} if needed.
 }
 \examples{
 \donttest{

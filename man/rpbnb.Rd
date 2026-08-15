@@ -20,6 +20,7 @@ rpbnb(
   standardize = FALSE,
   continuous_vars = NULL,
   boundary_tests = FALSE,
+  boundary_draws = NULL,
   control = NULL,
   ...
 )
@@ -59,6 +60,12 @@ attach the result as \verb{$boundary_tests}, so \code{summary()}/\code{print()} 
 boundary-corrected LR test (rather than \code{NA}) for the tested rows (see
 "Boundary LR tests" above for which parameters each engine tests).
 Default \code{FALSE} (each restricted refit costs roughly another full fit).}
+
+\item{boundary_draws}{Number of Halton simulation draws for the boundary
+tests' restricted refits, \code{engine = "tmb"} only. \code{NULL} (default) uses
+the main fit's \code{draws}. Ignored when \code{boundary_tests} is not \code{TRUE}
+(nothing to apply it to); an error if supplied under \code{engine = "classic"} while \code{boundary_tests = TRUE} (see "Boundary LR tests"
+above -- that engine has no \code{draws} to override).}
 
 \item{control}{An \code{rpbnb_control()} object when \code{engine = "classic"}, or an
 \code{rpbnb_tmb_control()} object when \code{engine = "tmb"}. Defaults to the right
@@ -148,14 +155,28 @@ A \code{\link[=message]{message()}} reports how many restricted refits are about
 they start, unless \code{control$print_level} is \code{0}; suppress it with
 \code{\link[=suppressMessages]{suppressMessages()}} if needed.
 
+\code{force_parallel_gaussian} (\code{engine = "tmb"} only, passed via \code{...}) is
+forwarded to every restricted refit, so a Gaussian-copula fit's boundary
+tests honor \code{control$n_cores} the same way the original fit did instead
+of silently re-capping each refit to one thread -- see
+\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s own \code{force_parallel_gaussian} argument for
+why this needs forwarding at all (the fit object does not record whether
+the override was used).
+
 Each restricted refit costs roughly as much as the original fit (more for
 a \code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s
-timing note), so this defaults to \code{FALSE}. For finer control -- testing
-only \code{"sd"} or only \code{"dispersion"} (both engines take a \code{which} argument),
-or reusing one boundary-test run across several summaries -- call
-\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}/\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} directly on the fit
-and assign its result to \code{fit$boundary_tests} (with \code{standardize = TRUE},
-reconstruct the fitting-scale data first: \code{rpbnb:::.apply_scaling(data, fit$scaling)}).
+timing note), so this defaults to \code{FALSE}. \code{boundary_draws} (\code{engine = "tmb"} only) sets a \code{draws} for those refits other than the main fit's --
+e.g. more draws for a more precise boundary test without re-fitting the
+whole model at that \code{draws}. It has no classic-engine counterpart:
+\code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} reuses the full fit's exact stored draw matrix
+(zeroing a column) rather than regenerating draws from a count, so passing
+\code{boundary_draws} under \code{engine = "classic"} is an error. For finer control
+still -- testing only \code{"sd"} or only \code{"dispersion"} (both engines take a
+\code{which} argument), or reusing one boundary-test run across several
+summaries -- call \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}/\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}
+directly on the fit and assign its result to \code{fit$boundary_tests} (with
+\code{standardize = TRUE}, reconstruct the fitting-scale data first:
+\code{rpbnb:::.apply_scaling(data, fit$scaling)}).
 }
 
 \section{Which arguments go with which engine}{
@@ -165,6 +186,7 @@ reconstruct the fitting-scale data first: \code{rpbnb:::.apply_scaling(data, fit
    \code{inference}, \code{keep}, \code{method}, \code{force_parallel_gaussian} \tab error \tab yes \cr
    \code{offset()} in a formula \tab yes \tab error \cr
    \code{dependence = "independence"} \tab error \tab yes \cr
+   \code{boundary_draws} (non-\code{NULL}) \tab error \tab yes \cr
    \code{control} class \tab \code{rpbnb_control} \tab \code{rpbnb_tmb_control} \cr
    optimizer \tab \code{maxLik::maxLik(method = "BFGS")} \tab \code{stats::nlminb} + restarts \cr
 }

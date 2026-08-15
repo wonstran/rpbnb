@@ -184,3 +184,61 @@ test_that("TMB summary labels random-coefficient scales by distribution", {
   expect_false(any(grepl("Signif", block, fixed = TRUE)))
   expect_false(any(grepl("Pr(>|z|)", block, fixed = TRUE)))
 })
+
+test_that("TMB summary prints the random-coefficient-scales note once, not per equation", {
+  skip_on_cran()
+  # Random coefficients in BOTH equations used to trigger scale_block() twice,
+  # each printing its own copy of the identical explanatory note -- a
+  # regression guard against that duplication coming back.
+  set.seed(42)
+  n <- 300
+  x1 <- rnorm(n)
+  u1 <- rnorm(n, 0, 0.5)
+  u2 <- rnorm(n, 0, 0.5)
+  mu1 <- exp(0.3 + (0.4 + u1) * x1)
+  mu2 <- exp(0.2 + (0.3 + u2) * x1)
+  d <- data.frame(y1 = rnbinom(n, mu = mu1, size = 2),
+                  y2 = rnbinom(n, mu = mu2, size = 2), x1 = x1)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d,
+                       random_1 = "x1", random_2 = "x1",
+                       draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  out <- capture.output(summary(fit))
+  expect_true(any(grepl("Random-coefficient scales (equation 1)", out, fixed = TRUE)))
+  expect_true(any(grepl("Random-coefficient scales (equation 2)", out, fixed = TRUE)))
+  expect_equal(sum(grepl("^Note: sd = standard deviation", out)), 1L)
+})
+
+test_that("TMB summary reports an ordinary Wald z/p for the dependence parameter", {
+  skip_on_cran()
+  # Unlike the scale/dispersion blocks (boundary nulls, no ordinary Wald
+  # test), the dependence parameter's null is interior for Frank -- an
+  # ordinary Wald z/p is valid, mirroring the classic engine's
+  # add_dispersion() treatment of copula native params (R/methods.R).
+  set.seed(42)
+  n <- 250
+  x1 <- rnorm(n, mean = 50, sd = 10)
+  mu1 <- exp(0.5 + 0.02 * x1)
+  mu2 <- exp(0.2 + 0.01 * x1)
+  d <- data.frame(y1 = rnbinom(n, mu = mu1, size = 2),
+                  y2 = rnbinom(n, mu = mu2, size = 2), x1 = x1)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, dependence = copula("frank"),
+                       draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  expect_identical(fit$optimizer$convergence, 0L)
+
+  out <- capture.output(summary(fit))
+  start <- grep("--- Dependence ---", out, fixed = TRUE)
+  expect_length(start, 1L)
+  block <- out[start:length(out)]
+  expect_true(any(grepl("theta", block, fixed = TRUE)))
+  expect_true(any(grepl("z value", block, fixed = TRUE)))
+  expect_true(any(grepl("Pr(>|z|)", block, fixed = TRUE)))
+  expect_true(any(grepl("Signif", block, fixed = TRUE)))
+
+  # The table must actually carry finite values, not just the headers.
+  sdr_sum <- summary(fit$sdreport, "report")
+  dep_val <- sdr_sum["theta", "Estimate"]
+  dep_se  <- sdr_sum["theta", "Std. Error"]
+  expect_true(is.finite(dep_val) && is.finite(dep_se) && dep_se > 0)
+})

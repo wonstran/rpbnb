@@ -65,15 +65,29 @@
 #' they start, unless `control$print_level` is `0`; suppress it with
 #' [suppressMessages()] if needed.
 #'
+#' `force_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
+#' forwarded to every restricted refit, so a Gaussian-copula fit's boundary
+#' tests honor `control$n_cores` the same way the original fit did instead
+#' of silently re-capping each refit to one thread -- see
+#' [rpbnb_tmb_boundary_tests()]'s own `force_parallel_gaussian` argument for
+#' why this needs forwarding at all (the fit object does not record whether
+#' the override was used).
+#'
 #' Each restricted refit costs roughly as much as the original fit (more for
 #' a [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
-#' timing note), so this defaults to `FALSE`. For finer control -- testing
-#' only `"sd"` or only `"dispersion"` (both engines take a `which` argument),
-#' or reusing one boundary-test run across several summaries -- call
-#' [rpbnb_boundary_tests()]/[rpbnb_tmb_boundary_tests()] directly on the fit
-#' and assign its result to `fit$boundary_tests` (with `standardize = TRUE`,
-#' reconstruct the fitting-scale data first: `rpbnb:::.apply_scaling(data,
-#' fit$scaling)`).
+#' timing note), so this defaults to `FALSE`. `boundary_draws` (`engine =
+#' "tmb"` only) sets a `draws` for those refits other than the main fit's --
+#' e.g. more draws for a more precise boundary test without re-fitting the
+#' whole model at that `draws`. It has no classic-engine counterpart:
+#' [rpbnb_boundary_tests()] reuses the full fit's exact stored draw matrix
+#' (zeroing a column) rather than regenerating draws from a count, so passing
+#' `boundary_draws` under `engine = "classic"` is an error. For finer control
+#' still -- testing only `"sd"` or only `"dispersion"` (both engines take a
+#' `which` argument), or reusing one boundary-test run across several
+#' summaries -- call [rpbnb_boundary_tests()]/[rpbnb_tmb_boundary_tests()]
+#' directly on the fit and assign its result to `fit$boundary_tests` (with
+#' `standardize = TRUE`, reconstruct the fitting-scale data first:
+#' `rpbnb:::.apply_scaling(data, fit$scaling)`).
 #'
 #' # Which arguments go with which engine
 #'
@@ -83,6 +97,7 @@
 #' | `inference`, `keep`, `method`, `force_parallel_gaussian` | error | yes |
 #' | `offset()` in a formula | yes | error |
 #' | `dependence = "independence"` | error | yes |
+#' | `boundary_draws` (non-`NULL`) | error | yes |
 #' | `control` class | `rpbnb_control` | `rpbnb_tmb_control` |
 #' | optimizer | `maxLik::maxLik(method = "BFGS")` | `stats::nlminb` + restarts |
 #'
@@ -116,6 +131,12 @@
 #'   boundary-corrected LR test (rather than `NA`) for the tested rows (see
 #'   "Boundary LR tests" above for which parameters each engine tests).
 #'   Default `FALSE` (each restricted refit costs roughly another full fit).
+#' @param boundary_draws Number of Halton simulation draws for the boundary
+#'   tests' restricted refits, `engine = "tmb"` only. `NULL` (default) uses
+#'   the main fit's `draws`. Ignored when `boundary_tests` is not `TRUE`
+#'   (nothing to apply it to); an error if supplied under `engine =
+#'   "classic"` while `boundary_tests = TRUE` (see "Boundary LR tests"
+#'   above -- that engine has no `draws` to override).
 #' @param control An `rpbnb_control()` object when `engine = "classic"`, or an
 #'   `rpbnb_tmb_control()` object when `engine = "tmb"`. Defaults to the right
 #'   one for the chosen engine. The two are not interchangeable and are never
@@ -153,7 +174,7 @@ rpbnb <- function(formula_1, formula_2, data,
                   dependence = "famoye",
                   poisson_1 = FALSE, poisson_2 = FALSE,
                   standardize = FALSE, continuous_vars = NULL,
-                  boundary_tests = FALSE,
+                  boundary_tests = FALSE, boundary_draws = NULL,
                   control = NULL,
                   ...) {
   engine <- match.arg(engine)
@@ -272,9 +293,9 @@ rpbnb <- function(formula_1, formula_2, data,
   # Boundary LR tests (see "Boundary LR tests" above). `data` is already the
   # standardized copy at this point when standardize = TRUE, matching what
   # `fit` was actually estimated on -- both boundary-test functions refit
-  # restricted models against it and need that to be the same design.
-  # engine = "classic" tests random-coefficient SDs too; engine = "tmb" tests
-  # only the NB2 dispersions (see rpbnb_tmb_boundary_tests()'s docs for why).
+  # restricted models against it and need that to be the same design. Both
+  # engines test every random-coefficient scale and every unrestricted NB2
+  # dispersion.
   if (isTRUE(boundary_tests)) {
     n_sd   <- length(fit$rand_idx1) + length(fit$rand_idx2)
     n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
@@ -287,13 +308,29 @@ rpbnb <- function(formula_1, formula_2, data,
         n_disp, if (n_disp == 1L) "" else "s"))
     }
     if (engine == "classic") {
+      # No `draws` knob to honor here: rpbnb_boundary_tests() reuses the full
+      # fit's exact stored draw matrix (zeroing a column) rather than
+      # regenerating draws from a count, unlike the TMB engine below.
+      if (!is.null(boundary_draws)) {
+        stop("`boundary_draws` is only supported for engine = \"tmb\": the ",
+             "classic engine's rpbnb_boundary_tests() reuses the full fit's ",
+             "exact stored draw matrix rather than regenerating draws from a ",
+             "count, so there is no `draws` to override.", call. = FALSE)
+      }
       # compute_se is forced off for the restricted refits: the LR test needs
       # only logLik and df, not their standard errors.
       bt_control <- control
       bt_control$compute_se <- FALSE
       fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data, control = bt_control)
     } else {
-      fit$boundary_tests <- rpbnb_tmb_boundary_tests(fit, data = data)
+      # force_parallel_gaussian is tmb-only and reaches the main fit through
+      # `dots` (validated above); the boundary refits need it forwarded
+      # explicitly too, since rpbnb_tmb_boundary_tests() has no way to read
+      # it back off `fit` -- see its own force_parallel_gaussian argument doc.
+      fit$boundary_tests <- rpbnb_tmb_boundary_tests(
+        fit, data = data,
+        draws = if (is.null(boundary_draws)) fit$draws else boundary_draws,
+        force_parallel_gaussian = isTRUE(dots$force_parallel_gaussian))
     }
   }
   fit

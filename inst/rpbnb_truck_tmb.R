@@ -2,10 +2,11 @@
 # =============================================================================
 # rpbnb() (engine = "tmb", standardize = TRUE) on the open-section truck-crash
 # data. The TMB counterpart of inst/rpbnb_truck.R: same data, formulas,
-# random-coefficient specification, dependence, and draws, dispatched through
-# the SAME rpbnb() front end -- only `engine` differs. Comparing the two
-# scripts' output is comparing the two engines on an otherwise identical
-# specification.
+# dependence, and draws, dispatched through the SAME rpbnb() front end --
+# only `engine` differs, plus MPD_ME's random coefficient below is Uniform
+# here rather than rpbnb_truck.R's Normal (see the random_1 comment). Aside
+# from that one distribution, comparing the two scripts' output is comparing
+# the two engines on an otherwise identical specification.
 #
 # boundary_tests = TRUE works under engine = "tmb" too
 # (rpbnb_tmb_boundary_tests()), covering the same parameters the classic
@@ -15,19 +16,23 @@
 # classic engine zeroes that coefficient's draw column, the TMB engine pins
 # its log_sd and maps it out of the free parameters.
 #
+# boundary_draws below is rpbnb()'s pass-through to
+# rpbnb_tmb_boundary_tests()'s own `draws` argument, so the restricted
+# refits can use a different `draws` than the main fit without a separate
+# manual rpbnb_tmb_boundary_tests() call. Their default control reuses the
+# main fit's n_cores (fit$parallel$requested), so the refits get the same
+# thread budget as the main fit. rpbnb() also forwards force_parallel_gaussian
+# (set below) to the boundary refits -- needed here since dependence is a
+# Gaussian copula (see below): without it, every restricted refit would
+# re-cap itself to one thread regardless of n_cores, same as the main fit
+# would without the override (see ?fit_rpbnb_tmb, `force_parallel_gaussian`).
+#
 # method = "sml" is used below (not TMB's memory-saving "laplace") so the
 # comparison against rpbnb_truck.R holds the ESTIMATOR fixed and varies only
 # the engine (Rcpp/OpenMP maxLik BFGS vs TMB automatic differentiation +
 # nlminb). inst/tmb_rpbnb_frank_open.R uses "laplace" instead -- see its
 # header for why (memory scales with n rather than n * draws) if that
 # trade-off is what's being compared instead.
-#
-# The boundary-test refits always run single-threaded regardless of
-# force_parallel_gaussian below: rpbnb_tmb_boundary_tests() does not accept
-# or propagate that override, so it is not silently multiplied across
-# several restricted refits. Slower than the main fit per refit, but safe by
-# the same reasoning as the default cap itself (see ?fit_rpbnb_tmb,
-# `force_parallel_gaussian`).
 #
 # rpbnb_frank_open.R's header explains WHY this data needs standardizing:
 # SR40_MI3 and MPD_ME are strictly positive and bounded away from zero, so as
@@ -53,16 +58,23 @@ setwd("C:\\Users\\zwang9\\repos\\rpbnb")
 # per-draw Gaussian-copula kernel, so peak working set grows roughly linearly
 # in draws rather than the pre-checkpoint quadratic blow-up that comment
 # documents).
-n_cores <- 8L
-draws <- 500L
+n_cores <- 16L
+draws <- 300L
 method <- "sml"
 # Same knob as rpbnb_truck.R: "famoye" or a copula() object. Kept identical
 # between the two scripts so their output is directly comparable.
-dependence <- copula("frank")
+dependence <- copula("normal") #copula("kimeldorf")
 # One restricted refit per random-coefficient scale (3 here) plus one per
-# dispersion (2), all single-threaded (see the header), so this adds real
-# time on top of the main fit.
+# dispersion (2), each run at boundary_draws (see the header), so this adds
+# real time on top of the main fit.
 boundary_tests <- TRUE
+# rpbnb(boundary_draws = )'s own knob for the restricted refits -- NULL would
+# fall back to the main fit's `draws` (500 here); set independently so the
+# restricted refits can trade precision for speed (fewer draws, cheaper) or
+# vice versa (more draws) without re-running the main fit at a different
+# `draws`. Left equal to `draws` here so this script's boundary LR statistics
+# stay directly comparable to rpbnb_truck.R's (same draws throughout).
+boundary_draws <- 200L
 
 data <- read.csv(file.path("inst", "extdata", "export_open_all.csv"))
 cat("Observations :", nrow(data), "\n")
@@ -79,11 +91,15 @@ cat(sprintf("=== rpbnb(engine = \"tmb\", method = \"%s\") on truck all crashes (
 cat("Dependence   :", dep_desc, "\n")
 cat("Cores asked  :", n_cores, "\n")
 cat("Draws        :", draws, "\n")
+cat("Boundary draws:", if (boundary_tests) boundary_draws else "n/a (boundary_tests = FALSE)", "\n")
 
-# Same formulas and random-coefficient specification as rpbnb_truck.R /
-# rpbnb_frank_open.R: random slopes on SR40_MI3 and MPD_ME in eq 1, SR40_MI3
-# only in eq 2 (weakly identified there; kept only to match the other two
-# scripts so all three fit the exact same model).
+# Same formulas as rpbnb_truck.R / rpbnb_frank_open.R: random slopes on
+# SR40_MI3 and MPD_ME in eq 1, SR40_MI3 only in eq 2 (weakly identified
+# there; kept only to match the other two scripts so all three fit the exact
+# same model). Random-coefficient DISTRIBUTIONS differ from those scripts,
+# though: MPD_ME is Uniform here (random_1 below), not Normal -- see its
+# comment for why that changes the summary()/boundary-test row label
+# (w1:MPD_ME, a half-width, not sd1:MPD_ME).
 f1 <- ALL_3  ~ SR40_MI3 + MPD_ME + LNAADT_3 + IRI_ME + G_ABG2 + SP50LE + ACCPNTS + SIGNAL1 + NEAR_SIG + CS_MINAB + DP10_ME + RUT_L
 f2 <- C_HV ~ SR40_MI3 + MPD_ME + LNAADT_3 + IRI_ME + SP50LE + ACCPNTS + SIGNAL1 + NEAR_SIG + CS_MINAB + DP10_ME
 
@@ -96,11 +112,17 @@ t_fit <- system.time(
     formula_2      = f2,
     data           = data,
     engine         = "tmb",
+    # MPD_ME as Uniform rather than the default Normal: list form lets each
+    # variable pick its own distribution ("normal"/"lognormal"/"uniform"/
+    # "triangular" -- see ?fit_rpbnb_tmb's random_1/random_2 or
+    # R/rand_dist.R's registry). SR40_MI3 spelled out as "normal" rather than
+    # left as a bare name for the same reason MPD_ME needs the list form: one
+    # random_1 argument, so every entry uses the same (named list) syntax.
     random_1       = c("SR40_MI3", "MPD_ME"),
     random_2       = c("SR40_MI3"),
     dependence     = dependence,
     seed           = 20240712,
-    draws          = draws,
+    #draws          = draws,
     standardize    = TRUE,
     method         = method,
     # No max_workload override beyond Inf: the guard's default calibration
@@ -108,6 +130,7 @@ t_fit <- system.time(
     # it engaged would block the fit rather than just warn.
     force_parallel_gaussian = TRUE,
     boundary_tests = boundary_tests,
+    #boundary_draws = boundary_draws,
     control        = rpbnb_tmb_control(
       print_level  = 1,
       n_cores      = n_cores,
@@ -174,18 +197,19 @@ if (length(diagnostics)) {
 # The dependence parameter (lambda, or the copula's native theta and Kendall's
 # tau, from ADREPORT) is part of summary()'s own "--- Dependence ---" section,
 # so this script has no separate DEPENDENCE block either. With
-# boundary_tests = TRUE, BOTH the "Random-coefficient scales" blocks and the
-# "Dispersion (m1, m2)" block carry a real LR/df/Pr(>chisq) instead of NA --
-# see the NEWS.md entry "rpbnb_tmb_boundary_tests()".
+# fit$boundary_tests attached above, BOTH the "Random-coefficient scales"
+# blocks and the "Dispersion (m1, m2)" block carry a real LR/df/Pr(>chisq)
+# instead of NA -- see the NEWS.md entry "rpbnb_tmb_boundary_tests()".
 sep(); cat("MODEL SUMMARY (original covariate units, boundary LR tests)\n"); sep()
 print(summary(fit))
 cat("\n")
 
 # ---- Boundary LR tests (standalone table) -----------------------------------
 # fit$boundary_tests is the same rpbnb_tmb_boundary_tests() result already
-# folded into the summary above (attached automatically by
-# boundary_tests = TRUE); printed again here on its own for the raw LR/df/p
-# table with its Signif stars, matching rpbnb_truck.R's equivalent section.
+# folded into the summary above (attached automatically by boundary_tests =
+# TRUE, run at boundary_draws draws via rpbnb()'s boundary_draws argument);
+# printed again here on its own for the raw LR/df/p table with its Signif
+# stars, matching rpbnb_truck.R's equivalent section.
 if (!is.null(fit$boundary_tests)) {
   sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
   print(fit$boundary_tests)
@@ -193,7 +217,7 @@ if (!is.null(fit$boundary_tests)) {
   sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
   cat("Skipped (boundary_tests = FALSE). Set boundary_tests <- TRUE at the top\n")
   cat("of this script to run them (folded into the rpbnb() call above via\n")
-  cat("boundary_tests = TRUE).\n")
+  cat("boundary_tests = TRUE, at boundary_draws draws).\n")
 }
 cat("\n")
 

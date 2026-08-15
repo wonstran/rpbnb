@@ -156,6 +156,12 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
     if (!length(hit)) return(NULL)
     bt_all[hit[1L], , drop = FALSE]
   }
+  # Printed once after BOTH equations' blocks (not per-equation): with random
+  # coefficients in both equations, the note is identical either way, and
+  # printing it twice back to back added noise rather than information.
+  any_scale_shown <- FALSE
+  any_scale_lr    <- FALSE
+  any_scale_no_lr <- FALSE
   scale_block <- function(idx, eq) {
     if (!length(idx)) return(invisible(NULL))
     cat("--- Random-coefficient scales (equation ", eq, ") ---\n", sep = "")
@@ -184,15 +190,23 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
       check.names = FALSE
     )
     .print_tbl(tbl, digits)
+    cat("\n")
+    any_scale_shown <<- TRUE
+    any_scale_lr    <<- any_scale_lr    || any(!is.na(lr_v))
+    any_scale_no_lr <<- any_scale_no_lr || any(is.na(lr_v))
+  }
+  scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L)
+  scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L)
+  if (any_scale_shown) {
     cat("Note: sd = standard deviation, w = half-width (uniform/triangular),\n",
         "      s = lognormal log-scale. These are the distributions' own scale\n",
         "      parameters, not all standard deviations.\n", sep = "")
-    if (any(!is.na(lr_v))) {
+    if (any_scale_lr) {
       cat("      LR/df/Pr(>chisq): boundary-corrected LR test (H0: scale = 0,\n",
           "      50:50 chi-square mixture; see rpbnb_tmb_boundary_tests()).\n",
           sep = "")
     }
-    if (any(is.na(lr_v))) {
+    if (any_scale_no_lr) {
       cat("      No Wald z/p or boundary LR test for the row(s) without one:\n",
           "      the null (scale = 0) is a boundary. Use\n",
           "      rpbnb_tmb_boundary_tests() (or rpbnb(boundary_tests = TRUE)).\n",
@@ -200,8 +214,6 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
     }
     cat("\n")
   }
-  scale_block(grep("^(log_sd1|log_s1|log_w1):", nm), 1L)
-  scale_block(grep("^(log_sd2|log_s2|log_w2):", nm), 2L)
 
   # ---- Dispersion parameters (natural scale from fit object) ----
   # m1/m2 are ADREPORTed in the template (src/rpbnb_tmb.cpp), so their
@@ -267,6 +279,19 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   cat("\n")
 
   # ---- Dependence parameter (from sdreport) ----
+  # Ordinary Wald z/p, unlike the scale/dispersion blocks above: the
+  # dependence parameter's null (no association) sits in the INTERIOR of its
+  # admissible range for Frank (theta in R) and the Gaussian copula (rho in
+  # (-1, 1)), where a two-sided Wald test is valid. Kimeldorf (Clayton)
+  # constrains theta > 0, so theta = 0 is technically a boundary null there
+  # too -- this deliberately mirrors the classic engine's design (R/methods.R,
+  # add_dispersion()'s dependence rows), which always uses the ordinary Wald
+  # test for the dependence parameter regardless of family rather than
+  # boundary-testing it, so the two engines do not disagree about what they
+  # report. dep_val/dep_se are ADREPORTed natural-scale quantities, so the SE
+  # already reflects TMB's own delta-method transform -- no extra
+  # transformation is needed here (contrast the scale blocks above, which
+  # apply their own delta method to a log-scale estimate).
   cat("--- Dependence ---\n")
   dep <- object$dependence
   dep_name <- "z_dep"
@@ -280,8 +305,18 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
     if (!inherits(sdr_sum, "try-error") && dep_name %in% rownames(sdr_sum)) {
       dep_val <- sdr_sum[dep_name, "Estimate"]
       dep_se  <- sdr_sum[dep_name, "Std. Error"]
-      cat("  ", dep_name, " =", format(dep_val, digits = if (digits >= 0) digits else 6),
-          "  Std. Error =", format(dep_se, digits = if (digits >= 0) digits else 6), "\n")
+      dep_z <- dep_val / dep_se
+      dep_p <- 2 * pnorm(-abs(dep_z))
+      dep_tbl <- data.frame(
+        Parameter = dep_name,
+        Estimate = dep_val,
+        `Std. Error` = dep_se,
+        `z value` = dep_z,
+        `Pr(>|z|)` = dep_p,
+        Signif = .signif_stars(dep_p),
+        row.names = NULL, check.names = FALSE
+      )
+      .print_tbl(dep_tbl, digits)
     } else {
       cat("  (dependence parameter not in sdreport)\n")
     }
