@@ -3,7 +3,7 @@
 # metadata from DESCRIPTION. Run from anywhere (it locates the package root
 # itself); ref/ is a plain output directory, not an R-reserved one.
 
-pkg_root <- "C:/Users/litabook/repos/rpbnb"
+pkg_root <- "C:/Users/zwang9/repos/rpbnb"
 setwd(pkg_root)
 
 # Read DESCRIPTION for metadata
@@ -32,7 +32,7 @@ tryCatch(
     system(
       sprintf(
         '"%s/bin/R.exe" CMD Rd2pdf --output=%s .',
-        "C:/Program Files/R/R-4.5.1", pdf_out
+        "C:/Program Files/R/R-4.6.1", pdf_out
       )
     )
 

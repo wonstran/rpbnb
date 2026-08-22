@@ -219,13 +219,22 @@ test_that("the control default calls through to rpbnb_tmb_max_workload()", {
   # calibration constant directly. That stopped being the general case once
   # the default started auto-detecting memory; this test now asserts the
   # actual current contract instead, on both paths that default can take.
+  #
+  # Since the two control constructors merged, max_workload is resolved lazily:
+  # the constructor leaves it NULL and .resolve_control(control, "tmb") calls
+  # rpbnb_tmb_max_workload(). That is deliberate -- only the TMB engine reads
+  # the field, and computing it eagerly would make every maxLik fit probe
+  # system memory (and possibly warn) for a number it never uses.
   testthat::local_mocked_bindings(
     .detect_available_memory_gib = function() 10
   )
+  expect_null(rpbnb_tmb_control()$max_workload)
   expect_identical(
-    rpbnb_tmb_control()$max_workload,
+    rpbnb:::.resolve_control(rpbnb_tmb_control(), "tmb")$max_workload,
     rpbnb_tmb_max_workload()
   )
+  # ... and a classic fit never triggers the probe at all.
+  expect_null(rpbnb:::.resolve_control(rpbnb_tmb_control(), "classic")$max_workload)
 })
 
 test_that("the control default falls back to the calibration constant when detection fails", {
@@ -233,7 +242,7 @@ test_that("the control default falls back to the calibration constant when detec
     .detect_available_memory_gib = function() NA_real_
   )
   expect_warning(
-    result <- rpbnb_tmb_control()$max_workload,
+    result <- rpbnb:::.resolve_control(rpbnb_tmb_control(), "tmb")$max_workload,
     "Could not detect"
   )
   expect_identical(result, .calibration_default_workload())

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,7 +49,7 @@
 <span>  dispersion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>m1 <span class="op">=</span> <span class="fl">0.5</span>, m2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>  lambda <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  covariates <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">1234</span></span>
+<span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -67,8 +67,12 @@ equation; must include "(Intercept)".</p></dd>
 
 
 <dt id="arg-random-random-">random_1, random_2<a class="anchor" aria-label="anchor" href="#arg-random-random-"></a></dt>
-<dd><p>Named lists giving random coefficients, e.g.
-<code>list(x1 = list(sd = 0.5))</code>. Means come from <code>beta1</code>/<code>beta2</code>.</p></dd>
+<dd><p>Named lists giving random coefficients. Each value
+is a list with <code>dist</code> (one of "normal", "lognormal", "uniform",
+"triangular"; default "normal"), <code>scale</code> (or <code>sd</code>) for the dispersion, and
+<code>sign</code> (-1/1, lognormal only). Means come from <code>beta1</code>/<code>beta2</code>; for a
+lognormal coefficient the <code>beta</code> entry is the log-location and the realized
+coefficient is <code>sign * exp(log_location + scale * z)</code>.</p></dd>
 
 
 <dt id="arg-dispersion">dispersion<a class="anchor" aria-label="anchor" href="#arg-dispersion"></a></dt>
@@ -85,7 +89,9 @@ columns are generated for every non-intercept name.</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>Random seed.</p></dd>
+<dd><p>Optional random seed. If <code>NULL</code> (default) the RNG is left
+untouched and draws continue from the caller's current stream, so repeated
+calls yield distinct datasets; supply an integer for reproducible output.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -117,11 +123,11 @@ columns are generated for every non-intercept name.</p></dd>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

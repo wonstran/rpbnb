@@ -230,7 +230,12 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
       dlam_dz <- (object$bounds[2] - object$bounds[1]) * (1 - 2 * eps) * sig * (1 - sig)
       lam_se <- abs(dlam_dz) * se_of("z_lambda")
     }
-    add_dispersion("lambda (dependence)", object$lambda, lam_se)
+    # `boundary_param = "lam"` only matters when the caller asked for the
+    # dependence LR test (which = "dependence"); without such a row this
+    # behaves exactly as before and keeps the ordinary Wald z/p, which is
+    # valid here -- lambda = 0 is an INTERIOR null.
+    add_dispersion("lambda (dependence)", object$lambda, lam_se,
+                   boundary_param = "lam")
   }
 
   # Copula models have z_theta; report native param and Kendall's tau
@@ -242,7 +247,12 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     dn_dz <- dnative_dz(fam, z)
     nat_se <- if (is.finite(se_z)) abs(dn_dz) * se_z else NA_real_
     param_label <- switch(fam, frank="theta (Frank)", normal="rho (Gaussian)", kimeldorf="theta (Clayton)")
-    add_dispersion(param_label, nat, nat_se)
+    # As for lambda above: picks up the dependence LR test when one was run,
+    # otherwise unchanged. Kendall's tau below is a monotone transform of the
+    # same parameter and is deliberately left on its Wald row -- one LR row per
+    # restriction, not one per way of displaying it.
+    add_dispersion(param_label, nat, nat_se,
+                   boundary_param = .dep_boundary_param(fam))
     td <- copula_tau_and_deriv(fam, z)
     tau_se <- if (is.finite(se_z)) abs(td$dtau_dz) * se_z else NA_real_
     add_dispersion("Kendall's tau", td$tau, tau_se)
@@ -289,8 +299,11 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   has_lr <- any(lr_tested)
   untested <- is.na(tab$z) & !lr_tested
   if (has_lr) {
-    cat("Note: LR/df/p for rows with a boundary-corrected LR test (H0:\n",
-        "      parameter = 0, 50:50 chi-square mixture; see rpbnb_boundary_tests()).\n",
+    cat("Note: LR/df/p for rows with a likelihood-ratio test (H0: parameter = 0;\n",
+        "      see rpbnb_boundary_tests()). Scale and dispersion nulls sit on the\n",
+        "      boundary and use the 50:50 chi-square mixture; a dependence row's\n",
+        "      null is interior (except Clayton) and uses chi-square(1). Where an\n",
+        "      LR test is shown the Wald z is suppressed -- one test per row.\n",
         sep = "")
   }
   if (any(untested)) {
@@ -329,6 +342,7 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
 print.bnb_fit <- function(x, digits = 4, ...) {
   cat("Bivariate NB (", x$dependence, ") fit\n", sep = "")
   cat("Call: "); print(x$call)
+  .print_control_ignored(x)
 
   coef_matrix <- .coef_matrix(x)
   split_coef <- .split_coef_by_equation(coef_matrix)
@@ -361,13 +375,16 @@ summary.bnb_fit <- function(object, ...) {
                  logLik = as.numeric(object$logLik), AIC = object$AIC,
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
                  dependence = object$dependence, call = object$call,
-                 formula_1 = object$formula_1, formula_2 = object$formula_2),
+                 formula_1 = object$formula_1, formula_2 = object$formula_2,
+                 control_ignored = object$control_ignored,
+                 control_engine = object$control_engine),
             class = "summary.bnb_fit")
 }
 
 #' @export
 print.summary.bnb_fit <- function(x, digits = 4, ...) {
   cat("Bivariate NB (", x$dependence, ") - summary\n", sep = "")
+  .print_control_ignored(x)
 
   split_coef <- .split_coef_by_equation(x$coefficients)
 
@@ -553,6 +570,7 @@ print.rpbnb_fit <- function(x, digits = 4, ...) {
       ", draw_type = ", x$draw_type, ")\n", sep = "")
   cat("Call: "); print(x$call)
   .print_standardize_note(x)
+  .print_control_ignored(x)
 
   coef_matrix <- .coef_matrix(x)
   split_coef <- .split_coef_by_equation(coef_matrix)
@@ -585,7 +603,9 @@ summary.rpbnb_fit <- function(object, ...) {
                  BIC = object$BIC, nobs = object$nobs, npar = object$npar,
                  draws = object$draws, call = object$call,
                  formula_1 = object$formula_1, formula_2 = object$formula_2,
-                 scaling = object$scaling, continuous_vars = object$continuous_vars),
+                 scaling = object$scaling, continuous_vars = object$continuous_vars,
+                 control_ignored = object$control_ignored,
+                 control_engine = object$control_engine),
             class = "summary.rpbnb_fit")
 }
 
@@ -593,6 +613,7 @@ summary.rpbnb_fit <- function(object, ...) {
 print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
   cat("Random-parameter bivariate NB - summary (draws = ", x$draws, ")\n", sep = "")
   .print_standardize_note(x)
+  .print_control_ignored(x)
 
   split_coef <- .split_coef_by_equation(x$coefficients)
 

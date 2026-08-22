@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,6 +44,13 @@
 
       <dl><dt>
 
+          <code><a href="rpbnb.html">rpbnb()</a></code>
+
+        </dt>
+        <dd>Fit a random-parameter bivariate NB model with either engine</dd>
+
+        <dt>
+
           <code><a href="fit_bnb.html">fit_bnb()</a></code>
 
         </dt>
@@ -51,28 +58,116 @@
 
         <dt>
 
+          <code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>
+
+        </dt>
+        <dd>Fit a bivariate random-parameter negative binomial model</dd>
+
+        <dt>
+
           <code><a href="copula.html">copula()</a></code>
 
         </dt>
-        <dd>Specify a copula dependence structure for fit_bnb()</dd>
+        <dd>Specify a copula dependence structure</dd>
 
         <dt>
 
           <code><a href="rpbnb_control.html">rpbnb_control()</a></code>
 
         </dt>
-        <dd>Control parameters for rpbnb estimators</dd>
+        <dd>Control parameters for every rpbnb estimator</dd>
 
         <dt>
 
-          <code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>
+          <code><a href="rpbnb_threads.html">rpbnb_threads()</a></code>
 
         </dt>
-        <dd>Fit a bivariate random-parameter negative binomial model</dd>
+        <dd>Number of CPU threads available for the multithreaded likelihood</dd>
+      </dl></div><div class="section level2">
+      <h2 id="tmb-engine">TMB engine<a class="anchor" aria-label="anchor" href="#tmb-engine"></a></h2>
+
+      <div class="section-desc"><p>The automatic-differentiation engine, reachable either directly or via rpbnb(engine = “tmb”). Adds a Laplace approximation and dependence profiling. Shares rpbnb_control() with the classic engine above (rpbnb_tmb_control() is a retained alias for the same object).</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>
+
+        </dt>
+        <dd>Fit a bivariate random-parameter negative binomial model (TMB)</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_control.html">rpbnb_tmb_control()</a></code>
+
+        </dt>
+        <dd>Control parameters for the TMB engine (alias of <code><a href="../reference/rpbnb_control.html">rpbnb_control()</a></code>)</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_dependence_profile.html">rpbnb_tmb_dependence_profile()</a></code>
+
+        </dt>
+        <dd>Confidence interval for a fitted dependence parameter</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_marginal_effects.html">rpbnb_tmb_marginal_effects()</a></code>
+
+        </dt>
+        <dd>Marginal effects for a rpbnb_tmb model</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_elasticities.html">rpbnb_tmb_elasticities()</a></code>
+
+        </dt>
+        <dd>Elasticities for a rpbnb_tmb model</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_max_workload.html">rpbnb_tmb_max_workload()</a></code>
+
+        </dt>
+        <dd>Compute a TMB workload budget from a memory figure</dd>
+      </dl></div><div class="section level2">
+      <h2 id="boundary-and-likelihood-ratio-tests">Boundary and likelihood-ratio tests<a class="anchor" aria-label="anchor" href="#boundary-and-likelihood-ratio-tests"></a></h2>
+
+      <div class="section-desc"><p>Tests for the parameters (random-coefficient scales, NB2 dispersions, the dependence parameter) whose null hides on or near a boundary of the parameter space, where an ordinary Wald z/p does not apply.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="lr_test.html">lr_test()</a></code>
+
+        </dt>
+        <dd>Likelihood-ratio test between two nested model fits</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_boundary_tests.html">rpbnb_boundary_tests()</a></code>
+
+        </dt>
+        <dd>Boundary-corrected LR tests for all boundary parameters of an rpbnb_fit</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_tmb_boundary_tests.html">rpbnb_tmb_boundary_tests()</a></code>
+
+        </dt>
+        <dd>Boundary-corrected LR tests for an rpbnb_tmb_fit's boundary parameters</dd>
       </dl></div><div class="section level2">
       <h2 id="post-estimation">Post-estimation<a class="anchor" aria-label="anchor" href="#post-estimation"></a></h2>
 
-      <div class="section-desc"><p>Marginal effects, goodness-of-fit, and elasticities</p></div>
+      <div class="section-desc"><p>Marginal effects, elasticities, goodness-of-fit, and residual diagnostics</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -88,6 +183,13 @@
 
         <dt>
 
+          <code><a href="bnb_elasticities.html">bnb_elasticities()</a></code>
+
+        </dt>
+        <dd>Elasticities and semi-elasticities for a bivariate NB model</dd>
+
+        <dt>
+
           <code><a href="bnb_gof.html">bnb_gof()</a></code>
 
         </dt>
@@ -95,10 +197,66 @@
 
         <dt>
 
-          <code><a href="bnb_elasticities.html">bnb_elasticities()</a></code>
+          <code><a href="bnb_residual_checks.html">bnb_residual_checks()</a></code>
 
         </dt>
-        <dd>Elasticities and semi-elasticities for a bivariate NB model</dd>
+        <dd>Residual checks for a bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_marginal_effects.html">rpbnb_marginal_effects()</a></code>
+
+        </dt>
+        <dd>Marginal effects for a random-parameter bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="rpbnb_elasticities.html">rpbnb_elasticities()</a></code>
+
+        </dt>
+        <dd>Elasticities and semi-elasticities for a random-parameter bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="predict.rpbnb_tmb_fit.html">predict(<i>&lt;rpbnb_tmb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Predict from a fitted bivariate count model</dd>
+
+        <dt>
+
+          <code><a href="summary.rpbnb_tmb_fit.html">summary(<i>&lt;rpbnb_tmb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Summarize a fitted TMB-engine rpbnb model</dd>
+
+        <dt>
+
+          <code><a href="residuals.bnb_fit.html">residuals(<i>&lt;bnb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Residuals for a bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="residuals.rpbnb_fit.html">residuals(<i>&lt;rpbnb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Residuals for a random-parameter bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="plot.bnb_fit.html">plot(<i>&lt;bnb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Residual diagnostic plots for a bivariate NB model</dd>
+
+        <dt>
+
+          <code><a href="plot.rpbnb_fit.html">plot(<i>&lt;rpbnb_fit&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Residual diagnostic plots for a random-parameter bivariate NB model</dd>
       </dl></div><div class="section level2">
       <h2 id="simulation">Simulation<a class="anchor" aria-label="anchor" href="#simulation"></a></h2>
 
@@ -122,6 +280,20 @@
 
         </dt>
         <dd>Simulate data from a random-parameter bivariate NB process</dd>
+
+        <dt>
+
+          <code><a href="simulate_rpbnb_copula.html">simulate_rpbnb_copula()</a></code>
+
+        </dt>
+        <dd>Simulate data from a copula RP-BNB process</dd>
+
+        <dt>
+
+          <code><a href="simulate_rpbnb_tmb.html">simulate_rpbnb_tmb()</a></code>
+
+        </dt>
+        <dd>Simulate data from a bivariate NB process</dd>
       </dl></div><div class="section level2">
       <h2 id="package">Package<a class="anchor" aria-label="anchor" href="#package"></a></h2>
 
@@ -134,21 +306,21 @@
 
       <dl><dt>
 
-          <code><a href="rpbnb-package.html">rpbnb</a></code> <code><a href="rpbnb-package.html">rpbnb-package</a></code>
+          <code><a href="rpbnb-package.html">rpbnb-package</a></code>
 
         </dt>
-        <dd>rpbnb: Bivariate and Random-Parameter Negative Binomial Regression</dd>
+        <dd>rpbnb: Random-Parameter Bivariate Negative Binomial Regression</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

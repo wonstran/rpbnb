@@ -2,16 +2,16 @@
 
 ## Authors
 
-- **Project Author**. Author, maintainer.
+- **Zhenyu Wang**. Author, maintainer.
 
 ## Citation
 
-Author P (2026). *rpbnb: Bivariate and Random-Parameter Negative
-Binomial Regression*. R package version 0.1.0.
+Wang Z (2026). *rpbnb: Random-Parameter Bivariate Negative Binomial
+Regression*. R package version 0.4.1.
 
     @Manual{,
-      title = {rpbnb: Bivariate and Random-Parameter Negative Binomial Regression},
-      author = {Project Author},
+      title = {rpbnb: Random-Parameter Bivariate Negative Binomial Regression},
+      author = {Zhenyu Wang},
       year = {2026},
-      note = {R package version 0.1.0},
+      note = {R package version 0.4.1},
     }

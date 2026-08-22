@@ -39,7 +39,10 @@ converged objective (the frozen-bounds gradient makes the objective
 start-sensitive and neither start dominates).}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. The famoye and copula estimators
-both use BFGS, the only optimizer \code{control$method} accepts.}
+both use BFGS, the only optimizer \code{control$method} accepts. One control
+object serves every estimator in the package; settings this one does not
+read -- \code{se_method}, \code{n_cores}, \code{halton_burn}, \code{draws_hessian}, and the TMB
+knobs -- are ignored and listed by \code{print()}/\code{summary()} of the fit.}
 
 \item{poisson_1, poisson_2}{Fit the corresponding margin at its exact Poisson
 limit (NB2 dispersion \code{m = 0}) instead of estimating the dispersion. The

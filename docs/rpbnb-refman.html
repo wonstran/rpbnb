@@ -1,8 +1,9 @@
 <!DOCTYPE html><html lang="en"><head><title>Help for package rpbnb</title>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.css">
-<script type="text/javascript">
+<script>
 const macros = { "\\R": "\\textsf{R}", "\\mbox": "\\text", "\\code": "\\texttt"};
 function processMathHTML() {
     var l = document.getElementsByClassName('reqn');
@@ -11,22 +12,44 @@ function processMathHTML() {
 }</script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.js"
     onload="processMathHTML();"></script>
-<link rel="stylesheet" type="text/css" href="C:/PROGRA~1/R/R-45~1.1/doc/html/R-nav.css" />
-</head><body><div class="container"><nav class="package" aria-label="Topic Navigation">
+<link rel="stylesheet" type="text/css" href="C:/PROGRA~1/R/R-46~1.1/doc/html/R-nav.css">
+</head><body><div class="container"><h1>Package {rpbnb}</h1><hr><nav class="package" aria-label="Topic Navigation">
 <div class="dropdown-menu">
-<h1>Package {rpbnb}</h1>
+<img class="toplogo" src="C:/PROGRA~1/R/R-46~1.1/doc/html/Rlogo.svg" alt="[logo]">
 <h2>Contents</h2>
 <ul class="menu">
-<li><a href='#rpbnb-package'><p>rpbnb: Bivariate and Random-Parameter Negative Binomial Regression</p></a></li>
-<li><a href='#bnb_elasticities'><p>Elasticities and semi-elasticities for a bivariate NB model</p></a></li>
-<li><a href='#bnb_gof'><p>Goodness of fit for a bivariate NB model</p></a></li>
-<li><a href='#bnb_marginal_effects'><p>Marginal effects for a bivariate NB model</p></a></li>
-<li><a href='#copula'><p>Specify a copula dependence structure for fit_bnb()</p></a></li>
-<li><a href='#fit_bnb'><p>Fit a bivariate negative binomial regression model</p></a></li>
-<li><a href='#fit_rpbnb'><p>Fit a bivariate random-parameter negative binomial model</p></a></li>
-<li><a href='#rpbnb_control'><p>Control parameters for rpbnb estimators</p></a></li>
-<li><a href='#simulate_bnb'><p>Simulate data from the Famoye/Sarmanov bivariate NB distribution</p></a></li>
-<li><a href='#simulate_rpbnb'><p>Simulate data from a random-parameter bivariate NB process</p></a></li>
+<li><a href='#rpbnb-package'>rpbnb-package</a></li>
+<li><a href='#bnb_elasticities'>bnb_elasticities</a></li>
+<li><a href='#bnb_gof'>bnb_gof</a></li>
+<li><a href='#bnb_marginal_effects'>bnb_marginal_effects</a></li>
+<li><a href='#bnb_residual_checks'>bnb_residual_checks</a></li>
+<li><a href='#copula'>copula</a></li>
+<li><a href='#fit_bnb'>fit_bnb</a></li>
+<li><a href='#fit_rpbnb'>fit_rpbnb</a></li>
+<li><a href='#fit_rpbnb_tmb'>fit_rpbnb_tmb</a></li>
+<li><a href='#lr_test'>lr_test</a></li>
+<li><a href='#plot.bnb_fit'>plot.bnb_fit</a></li>
+<li><a href='#plot.rpbnb_fit'>plot.rpbnb_fit</a></li>
+<li><a href='#predict.rpbnb_tmb_fit'>predict.rpbnb_tmb_fit</a></li>
+<li><a href='#residuals.bnb_fit'>residuals.bnb_fit</a></li>
+<li><a href='#residuals.rpbnb_fit'>residuals.rpbnb_fit</a></li>
+<li><a href='#rpbnb'>rpbnb</a></li>
+<li><a href='#rpbnb_boundary_tests'>rpbnb_boundary_tests</a></li>
+<li><a href='#rpbnb_control'>rpbnb_control</a></li>
+<li><a href='#rpbnb_elasticities'>rpbnb_elasticities</a></li>
+<li><a href='#rpbnb_marginal_effects'>rpbnb_marginal_effects</a></li>
+<li><a href='#rpbnb_threads'>rpbnb_threads</a></li>
+<li><a href='#rpbnb_tmb_boundary_tests'>rpbnb_tmb_boundary_tests</a></li>
+<li><a href='#rpbnb_tmb_control'>rpbnb_tmb_control</a></li>
+<li><a href='#rpbnb_tmb_dependence_profile'>rpbnb_tmb_dependence_profile</a></li>
+<li><a href='#rpbnb_tmb_elasticities'>rpbnb_tmb_elasticities</a></li>
+<li><a href='#rpbnb_tmb_marginal_effects'>rpbnb_tmb_marginal_effects</a></li>
+<li><a href='#rpbnb_tmb_max_workload'>rpbnb_tmb_max_workload</a></li>
+<li><a href='#simulate_bnb'>simulate_bnb</a></li>
+<li><a href='#simulate_rpbnb'>simulate_rpbnb</a></li>
+<li><a href='#simulate_rpbnb_copula'>simulate_rpbnb_copula</a></li>
+<li><a href='#simulate_rpbnb_tmb'>simulate_rpbnb_tmb</a></li>
+<li><a href='#summary.rpbnb_tmb_fit'>summary.rpbnb_tmb_fit</a></li>
 </ul>
 </div>
 <hr>
@@ -39,19 +62,31 @@ function processMathHTML() {
 </tr>
 <tr>
 <td>Title:</td>
-<td>Bivariate and Random-Parameter Negative Binomial Regression</td>
+<td>Random-Parameter Bivariate Negative Binomial Regression</td>
 </tr>
 <tr>
 <td>Version:</td>
-<td>0.1.0</td>
+<td>0.4.1</td>
+</tr>
+<tr>
+<td>Author:</td>
+<td>Zhenyu Wang [aut, cre]</td>
+</tr>
+<tr>
+<td>Maintainer:</td>
+<td>Zhenyu Wang &lt;wonstran@hotmail.com&gt;</td>
 </tr>
 <tr>
 <td>Description:</td>
-<td>Maximum-likelihood estimation of the Famoye/Sarmanov bivariate
-    negative binomial (NB2) regression model and maximum-simulated-likelihood
-    estimation of a bivariate random-parameter negative binomial model, with a
-    normal random-coefficient data simulator, diagnostics, and standard model
-    methods.</td>
+<td>Maximum-likelihood estimation of bivariate negative binomial
+    (NB2) regression models with Famoye/Sarmanov or discrete-copula
+    (Frank, Gaussian, or Clayton) dependence, and maximum-simulated-likelihood
+    estimation of a bivariate random-parameter negative binomial model under
+    either dependence structure, with a random-coefficient data simulator,
+    diagnostics, and standard model methods. Two estimation engines are
+    provided: an OpenMP/Rcpp maximum-simulated-likelihood engine and a TMB
+    automatic-differentiation engine that additionally offers a Laplace
+    approximation, with a common front end.</td>
 </tr>
 <tr>
 <td>License:</td>
@@ -73,14 +108,28 @@ maxLik,
 numDeriv,
 randtoolbox,
 MASS,
-pbivnorm</td>
+pbivnorm,
+Rcpp,
+parallel,
+graphics,
+TMB</td>
+</tr>
+<tr>
+<td>LinkingTo:</td>
+<td>Rcpp,
+TMB,
+RcppEigen</td>
 </tr>
 <tr>
 <td>Suggests:</td>
-<td>testthat (&ge; 3.0.0),
+<td>testthat (&ge; 3.1.5),
 knitr,
 rmarkdown,
-parallel</td>
+pkgload</td>
+</tr>
+<tr>
+<td>SystemRequirements:</td>
+<td>GNU make</td>
 </tr>
 <tr>
 <td>Config/testthat/edition:</td>
@@ -102,36 +151,44 @@ parallel</td>
 <td>Config/roxygen2/version:</td>
 <td>8.0.0</td>
 </tr>
-<tr>
-<td>Author:</td>
-<td>Project Author [aut, cre]</td>
-</tr>
 </table>
-<hr>
-<h2 id='rpbnb-package'>rpbnb: Bivariate and Random-Parameter Negative Binomial Regression</h2><span id='topic+rpbnb'></span><span id='topic+rpbnb-package'></span>
+<hr><span id='rdfile+rpbnb-package'></span>
+<h2 id='rpbnb-package'>rpbnb: Random-Parameter Bivariate Negative Binomial Regression</h2><span id='topic+rpbnb-package'></span>
 
 <h3>Description</h3>
 
-<p>Maximum-likelihood estimation of the Famoye/Sarmanov bivariate negative
-binomial model and maximum-simulated-likelihood estimation of a bivariate
-random-parameter negative binomial model.
+<p>Maximum-likelihood estimation of bivariate negative binomial models with
+Famoye/Sarmanov or discrete-copula (Frank, Gaussian, Clayton) dependence
+(see <code><a href="#topic+fit_bnb">fit_bnb()</a></code>, <code><a href="#topic+copula">copula()</a></code>), and maximum-simulated-likelihood estimation
+of a bivariate random-parameter negative binomial model under either
+dependence structure.
+</p>
+
+
+<h3>Details</h3>
+
+<p>Two estimation engines are available for the random-parameter model:
+<code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> (Rcpp/OpenMP simulated likelihood, <code>maxLik</code> BFGS, supports
+<code>offset()</code>) and <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> (TMB automatic differentiation, <code>nlminb</code>,
+adds a Laplace approximation and dependence profiling). <code><a href="#topic+rpbnb">rpbnb()</a></code> is a common
+front end that dispatches to either.
 </p>
 
 
 <h3>Author(s)</h3>
 
-<p><strong>Maintainer</strong>: Project Author <a href="mailto:wonstran@gmail.com">wonstran@gmail.com</a>
+<p><strong>Maintainer</strong>: Zhenyu Wang <a href="mailto:wonstran@hotmail.com">wonstran@hotmail.com</a>
 </p>
 <p>Authors:
 </p>
 
 <ul>
-<li><p> Project Author <a href="mailto:wonstran@gmail.com">wonstran@gmail.com</a>
+<li><p> Zhenyu Wang <a href="mailto:wonstran@hotmail.com">wonstran@hotmail.com</a>
 </p>
 </li></ul>
 
 
-<hr>
+<hr><span id='rdfile+bnb_elasticities'></span>
 <h2 id='bnb_elasticities'>Elasticities and semi-elasticities for a bivariate NB model</h2><span id='topic+bnb_elasticities'></span>
 
 <h3>Description</h3>
@@ -206,14 +263,20 @@ fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
 bnb_elasticities(fit, which = "both", type = "AME")
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+bnb_gof'></span>
 <h2 id='bnb_gof'>Goodness of fit for a bivariate NB model</h2><span id='topic+bnb_gof'></span>
 
 <h3>Description</h3>
 
 <p>Reports log-likelihood, AIC, BIC, and four pseudo-R-squared measures
 (McFadden, McFadden adjusted, Cox-Snell, Nagelkerke) relative to an
-intercept-only null model refit with the same dependence structure.
+intercept-only null model refit with the same dependence structure (copula
+fits rebuild the copula from <code>fit$cop_family</code>). A margin fitted with an
+<code>offset()</code> keeps that offset in the null (an intercept-plus-offset model), so
+the null shares the full model's exposure/sampling structure and the
+pseudo-R-squared values remain comparable. Pseudo-R-squared values are
+returned raw and are not clamped to <code style="white-space: pre;">&#8288;[0, 1]&#8288;</code>; a negative value flags a full
+model that fits worse than the null.
 </p>
 
 
@@ -257,7 +320,7 @@ fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
 bnb_gof(fit)
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+bnb_marginal_effects'></span>
 <h2 id='bnb_marginal_effects'>Marginal effects for a bivariate NB model</h2><span id='topic+bnb_marginal_effects'></span>
 
 <h3>Description</h3>
@@ -317,6 +380,14 @@ binary effects use <code class="reqn">E[Y|x_j=1] - E[Y|x_j=0]</code>.
 </table>
 
 
+<h3>Details</h3>
+
+<p>For a model fitted with an <code>offset()</code>, absolute marginal effects scale with
+the fitted mean <code class="reqn">\mu = \exp(x'\beta + \text{offset})</code>: AME uses each
+observation's training offset, and MEM uses the mean training offset.
+</p>
+
+
 <h3>Value</h3>
 
 <p>A data frame (single margin) or a named list of data frames (both),
@@ -333,18 +404,82 @@ fit &lt;- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
 bnb_marginal_effects(fit, which = "y1", type = "AME")
 </code></pre>
 
-<hr>
-<h2 id='copula'>Specify a copula dependence structure for fit_bnb()</h2><span id='topic+copula'></span>
+<hr><span id='rdfile+bnb_residual_checks'></span>
+<h2 id='bnb_residual_checks'>Residual checks for a bivariate NB model</h2><span id='topic+bnb_residual_checks'></span>
 
 <h3>Description</h3>
 
-<p>Specify a copula dependence structure for fit_bnb()
+<p>Formal residual diagnostics for a <code><a href="#topic+fit_bnb">fit_bnb()</a></code> or <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> fit: a
+normality test on the randomized quantile residuals (Shapiro-Wilk for
+<code>n &lt;= 5000</code>, else Kolmogorov-Smirnov vs N(0,1)); the NB2 dispersion statistic
+(<code>sum(pearson^2) / (n - k)</code>) per margin; the cross-margin RQR correlation (a
+check that the Famoye/copula dependence captured the association); an outlier
+count/index list (<code style="white-space: pre;">&#8288;|RQR| &gt; outlier_z&#8288;</code>); and a composite misspecification
+verdict combining these signals.
 </p>
 
 
 <h3>Usage</h3>
 
-<pre><code class='language-R'>copula(family = c("frank", "normal", "kimeldorf"))
+<pre><code class='language-R'>bnb_residual_checks(
+  fit,
+  seed = NULL,
+  outlier_z = 3,
+  digits = 4,
+  print_output = TRUE
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="bnb_residual_checks_+3A_fit">fit</code></td>
+<td>
+<p>A <code>bnb_fit</code> or <code>rpbnb_fit</code> object.</p>
+</td></tr>
+<tr><td><code id="bnb_residual_checks_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed for the RQR randomization.</p>
+</td></tr>
+<tr><td><code id="bnb_residual_checks_+3A_outlier_z">outlier_z</code></td>
+<td>
+<p>Absolute-RQR threshold flagging an outlier (default 3).</p>
+</td></tr>
+<tr><td><code id="bnb_residual_checks_+3A_digits">digits</code></td>
+<td>
+<p>Decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="bnb_residual_checks_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>Invisibly, an object of class <code>bnb_residual_checks</code>.
+</p>
+
+<hr><span id='rdfile+copula'></span>
+<h2 id='copula'>Specify a copula dependence structure</h2><span id='topic+copula'></span>
+
+<h3>Description</h3>
+
+<p>Pass the result as the <code>dependence</code> argument to <code><a href="#topic+fit_bnb">fit_bnb()</a></code> or
+<code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> to estimate a discrete-copula bivariate NB model instead of
+the default Famoye/Sarmanov dependence, or as the <code>copula</code> argument to
+<code><a href="#topic+simulate_rpbnb_copula">simulate_rpbnb_copula()</a></code> to simulate from one. The joint pmf is built from
+the two NB2 marginal CDFs and the chosen copula CDF (rectangle
+differencing); see the package vignette for the &quot;Copula dependence&quot;
+section.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>copula(family = c("frank", "normal", "kimeldorf"), par = NULL)
 </code></pre>
 
 
@@ -353,7 +488,15 @@ bnb_marginal_effects(fit, which = "y1", type = "AME")
 <table role = "presentation">
 <tr><td><code id="copula_+3A_family">family</code></td>
 <td>
-<p>One of <code>"frank"</code>, <code>"normal"</code>, or <code>"kimeldorf"</code> (Clayton).</p>
+<p>One of <code>"frank"</code>, <code>"normal"</code> (Gaussian), or <code>"kimeldorf"</code>
+(Clayton).</p>
+</td></tr>
+<tr><td><code id="copula_+3A_par">par</code></td>
+<td>
+<p>Optional native dependence parameter (Frank's theta, the
+Gaussian rho, or Clayton's theta) used by <code><a href="#topic+simulate_rpbnb_copula">simulate_rpbnb_copula()</a></code> to
+generate data. Ignored by <code><a href="#topic+fit_bnb">fit_bnb()</a></code> and <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>, which estimate
+the parameter from the data.</p>
 </td></tr>
 </table>
 
@@ -367,11 +510,11 @@ bnb_marginal_effects(fit, which = "y1", type = "AME")
 <h3>Examples</h3>
 
 <pre><code class='language-R'>copula("frank")
-copula("normal")
+copula("normal", par = 0.3)
 copula("kimeldorf")
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+fit_bnb'></span>
 <h2 id='fit_bnb'>Fit a bivariate negative binomial regression model</h2><span id='topic+fit_bnb'></span>
 
 <h3>Description</h3>
@@ -388,7 +531,9 @@ copula("kimeldorf")
   data,
   dependence = c("independence", "famoye"),
   start = NULL,
-  control = rpbnb_control()
+  control = rpbnb_control(),
+  poisson_1 = FALSE,
+  poisson_2 = FALSE
 )
 </code></pre>
 
@@ -398,7 +543,11 @@ copula("kimeldorf")
 <table role = "presentation">
 <tr><td><code id="fit_bnb_+3A_formula_1">formula_1</code>, <code id="fit_bnb_+3A_formula_2">formula_2</code></td>
 <td>
-<p>Model formulas for the two count outcomes.</p>
+<p>Model formulas for the two count outcomes. An
+equation-specific <code>offset()</code> term (e.g. <code>y ~ x + offset(log(exposure))</code>) is
+supported on every dependence path: the offset enters that margin's linear
+predictor additively (mean <code style="white-space: pre;">&#8288;exp(x'beta + offset)&#8288;</code>) during estimation, and is
+carried through the stored fitted means and both <code>predict()</code> methods.</p>
 </td></tr>
 <tr><td><code id="fit_bnb_+3A_data">data</code></td>
 <td>
@@ -407,16 +556,41 @@ copula("kimeldorf")
 <tr><td><code id="fit_bnb_+3A_dependence">dependence</code></td>
 <td>
 <p>Dependence structure: &quot;independence&quot; (two univariate NB2
-margins) or &quot;famoye&quot; (Famoye/Sarmanov bivariate NB).</p>
+margins), &quot;famoye&quot; (Famoye/Sarmanov bivariate NB), or a <code><a href="#topic+copula">copula()</a></code> object
+(Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
+parameter is estimated).</p>
 </td></tr>
 <tr><td><code id="fit_bnb_+3A_start">start</code></td>
 <td>
-<p>Optional starting parameter vector.</p>
+<p>Optional starting parameter vector. May be positional (length
+equal to the number of parameters) or named; a named vector is reordered to
+the canonical parameter order and a named partial vector is merged into the
+defaults (unknown or duplicate names are rejected). When <code>start</code> is <code>NULL</code>,
+the famoye path uses a multi-start policy: it optimizes from both an all-zero
+mean-coefficient start and marginal <code>glm.nb</code> starts and keeps the better
+converged objective (the frozen-bounds gradient makes the objective
+start-sensitive and neither start dominates).</p>
 </td></tr>
 <tr><td><code id="fit_bnb_+3A_control">control</code></td>
 <td>
-<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. The famoye estimator uses BFGS;
-<code>control$method</code> is currently honored only by the optimizer's internal setup.</p>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. The famoye and copula estimators
+both use BFGS, the only optimizer <code>control$method</code> accepts. One control
+object serves every estimator in the package; settings this one does not
+read &ndash; <code>se_method</code>, <code>n_cores</code>, <code>halton_burn</code>, <code>draws_hessian</code>, and the TMB
+knobs &ndash; are ignored and listed by <code>print()</code>/<code>summary()</code> of the fit.</p>
+</td></tr>
+<tr><td><code id="fit_bnb_+3A_poisson_1">poisson_1</code>, <code id="fit_bnb_+3A_poisson_2">poisson_2</code></td>
+<td>
+<p>Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion <code>m = 0</code>) instead of estimating the dispersion. The
+margin's <code>log_m</code> is held fixed, so it is not a free parameter and the fit is
+a properly nested restriction of the NB model &ndash; pair it with <code><a href="#topic+lr_test">lr_test()</a></code>
+(<code>boundary = TRUE</code>) to test for overdispersion. This is the exact <code>m = 0</code>
+restriction at any fitted mean: the margin's log-pmf is <code>dpois</code> and its
+Famoye dependence constant is <code>exp(-d*mu)</code> (the <code>m -&gt; 0</code> limit), not an NB2
+at a tiny pinned dispersion. The famoye and independence paths are both
+exact (the independence path fits a Poisson GLM margin). Not supported with
+a <code><a href="#topic+copula">copula()</a></code> dependence.</p>
 </td></tr>
 </table>
 
@@ -433,9 +607,19 @@ margins) or &quot;famoye&quot; (Famoye/Sarmanov bivariate NB).</p>
 fit &lt;- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
                dependence = "famoye")
 summary(fit)
+
+# Overdispersion test for margin 1 (H0: m1 = 0, Poisson)
+fit_p1 &lt;- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                  dependence = "famoye", poisson_1 = TRUE)
+lr_test(fit_p1, fit, boundary = TRUE)
+
+# Gaussian copula dependence instead of Famoye/Sarmanov
+fit_cop &lt;- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                   dependence = copula("normal"))
+fit_cop$cop_tau  # estimated Kendall's tau
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+fit_rpbnb'></span>
 <h2 id='fit_rpbnb'>Fit a bivariate random-parameter negative binomial model</h2><span id='topic+fit_rpbnb'></span>
 
 <h3>Description</h3>
@@ -458,7 +642,12 @@ name via <code>random_1</code> / <code>random_2</code>.
   draw_type = "halton",
   seed = 1234,
   start = NULL,
-  control = rpbnb_control()
+  control = rpbnb_control(),
+  dependence = "famoye",
+  poisson_1 = FALSE,
+  poisson_2 = FALSE,
+  .fixed = NULL,
+  .opt_draws = NULL
 )
 </code></pre>
 
@@ -468,7 +657,11 @@ name via <code>random_1</code> / <code>random_2</code>.
 <table role = "presentation">
 <tr><td><code id="fit_rpbnb_+3A_formula_1">formula_1</code>, <code id="fit_rpbnb_+3A_formula_2">formula_2</code></td>
 <td>
-<p>Model formulas for the two count outcomes.</p>
+<p>Model formulas for the two count outcomes. An
+equation-specific <code>offset()</code> term (e.g. <code>y ~ x + offset(log(exposure))</code>) is
+supported: the offset enters that margin's linear predictor additively
+(integrated mean <code style="white-space: pre;">&#8288;E[exp(x'beta + offset)]&#8288;</code>) during estimation and is carried
+through the stored fitted means and <code>predict()</code>.</p>
 </td></tr>
 <tr><td><code id="fit_rpbnb_+3A_data">data</code></td>
 <td>
@@ -476,9 +669,11 @@ name via <code>random_1</code> / <code>random_2</code>.
 </td></tr>
 <tr><td><code id="fit_rpbnb_+3A_random_1">random_1</code>, <code id="fit_rpbnb_+3A_random_2">random_2</code></td>
 <td>
-<p>Character vectors of coefficient names (matching
-<code>model.matrix</code> columns) to treat as normal random coefficients in each
-equation. NULL means all-fixed for that equation.</p>
+<p>Random coefficients per equation. Either a character
+vector of <code>model.matrix</code> column names (all Normal), or a named list whose
+values are a distribution name (<code>"normal"</code>, <code>"lognormal"</code>, <code>"uniform"</code>,
+<code>"triangular"</code>) or a list <code>list(dist = ..., sign = ...)</code> (<code>sign</code> is -1/1 and
+lognormal-only). NULL means all-fixed for that equation.</p>
 </td></tr>
 <tr><td><code id="fit_rpbnb_+3A_draws">draws</code></td>
 <td>
@@ -498,16 +693,68 @@ equation. NULL means all-fixed for that equation.</p>
 </td></tr>
 <tr><td><code id="fit_rpbnb_+3A_control">control</code></td>
 <td>
-<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. Estimation uses BFGS;
-<code>control$method</code> is not currently honored by <code>fit_rpbnb</code> (the
-simulated-likelihood objective returns an aggregate gradient).</p>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object. Estimation uses BFGS, the only
+optimizer <code>control$method</code> accepts. One control object serves every
+estimator in the package; settings this one does not read &ndash; the TMB knobs
+(<code>gradtol</code>, <code>restarts</code>, <code>max_threads</code>, <code>max_workload</code>, <code>parallel_tape</code>),
+<code>hessian</code>, and <code>draws_hessian</code> &ndash; are ignored and listed by
+<code>print()</code>/<code>summary()</code> of the fit rather than rejected.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_dependence">dependence</code></td>
+<td>
+<p>Dependence structure: &quot;famoye&quot; (default; Famoye/Sarmanov)
+or an <code><a href="#topic+copula">copula()</a></code> object for copula dependence (Frank / Gaussian /
+Clayton). Both paths use the multithreaded (OpenMP) C++ simulated
+likelihood; the copula path is more numerically expensive per evaluation
+(discrete-copula pmf + per-draw NB CDF corners), so fits typically take
+noticeably longer than the Famoye path at comparable <code>draws</code>/<code>n</code>. Random
+coefficients on 0/1 dummy regressors are weakly identified under the
+copula path (NB dispersion trades off against the random-coefficient
+scale); prefer random coefficients on continuous regressors.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_poisson_1">poisson_1</code>, <code id="fit_rpbnb_+3A_poisson_2">poisson_2</code></td>
+<td>
+<p>Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion <code>m = 0</code>): the margin's <code>log_m</code> is held fixed, so it is
+not a free parameter and the fit is a properly nested restriction of the NB
+model. Pair with <code><a href="#topic+lr_test">lr_test()</a></code> (<code>boundary = TRUE</code>) to test a margin for
+overdispersion (<code>H0: m = 0</code>). The simulated likelihood uses the exact <code>m = 0</code>
+branch &ndash; the per-draw margin log-pmf is <code>dpois</code> and its Famoye dependence
+constant is <code>exp(-d*mu)</code> &ndash; so it is accurate at any fitted mean, not a
+fixed-dispersion approximation. Supported with both Famoye/Sarmanov and
+<code><a href="#topic+copula">copula()</a></code> dependence (the copula path uses the same exact m = 0 branch).</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_.fixed">.fixed</code></td>
+<td>
+<p>Internal. A named numeric vector of parameters (in the
+optimization/log-scale parameterization) to pin at the supplied values and
+hold fixed during estimation. Used by <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> to construct
+scale-zero (SD boundary) restricted fits; not intended for direct use.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_+3A_.opt_draws">.opt_draws</code></td>
+<td>
+<p>Internal. A list <code>list(Z1, Z2)</code> of uniform Halton draw
+matrices to use verbatim instead of generating them, so a restricted refit
+reuses a full fit's draws (common random numbers). Used by
+<code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code>; not intended for direct use.</p>
 </td></tr>
 </table>
 
 
 <h3>Value</h3>
 
-<p>An object of class <code>rpbnb_fit</code>.
+<p>An object of class <code>rpbnb_fit</code>. Under Famoye dependence three fields
+describe the admissible lambda interval: <code>bounds</code> is the interval the
+optimized likelihood actually used, frozen at the starting values (its
+width also feeds <code>summary()</code>'s delta-method standard error for lambda);
+<code>bounds_at_optimum</code> is the interval admissible at the fitted parameters,
+recomputed after optimization for validation only; and
+<code>lambda_admissible</code> records whether <code>lambda</code> — the fitted value, mapped
+through <code>bounds</code> — lies inside <code>bounds_at_optimum</code>. <code>FALSE</code> means the
+optimizer escaped the valid region (a warning is raised) and the fit
+should be re-run from starting values closer to the optimum. For normal
+or lognormal random coefficients loaded in both margins the bound is the
+constant <code>c(-1, 1)</code>, the two intervals coincide, and escape cannot occur.
 </p>
 
 
@@ -521,31 +768,1222 @@ simulated-likelihood objective returns an aggregate gradient).</p>
 fit &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
                  draws = 100, control = rpbnb_control(compute_se = FALSE))
 coef(fit)
+
+
+# Copula dependence instead of Famoye/Sarmanov (slower; fewer draws here
+# for a quick example -- use more in practice)
+sim_cop &lt;- simulate_rpbnb_copula(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.3)),
+  dispersion = c(m1 = 0.4, m2 = 0.5),
+  copula = copula("normal", par = 0.5), seed = 1)
+fit_cop &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim_cop$data, random_1 = "x1",
+                     dependence = copula("normal"), draws = 100,
+                     control = rpbnb_control(compute_se = FALSE))
+tanh(coef(fit_cop)[["z_theta"]])  # estimated copula rho
+
 </code></pre>
 
-<hr>
-<h2 id='rpbnb_control'>Control parameters for rpbnb estimators</h2><span id='topic+rpbnb_control'></span>
+<hr><span id='rdfile+fit_rpbnb_tmb'></span>
+<h2 id='fit_rpbnb_tmb'>Fit a bivariate random-parameter negative binomial model (TMB)</h2><span id='topic+fit_rpbnb_tmb'></span>
 
 <h3>Description</h3>
 
-<p>Control parameters for rpbnb estimators
+<p>Maximum simulated likelihood via TMB (Template Model Builder) with
+automatic differentiation. Supports Famoye/Sarmanov and discrete-copula
+(Frank, Gaussian, Clayton) dependence.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>fit_rpbnb_tmb(
+  formula_1,
+  formula_2,
+  data,
+  random_1 = NULL,
+  random_2 = NULL,
+  draws = 400L,
+  seed = 1234L,
+  start = NULL,
+  dependence = "famoye",
+  control = rpbnb_tmb_control(),
+  inference = c("full", "diag", "none"),
+  keep = c("postfit", "compact", "full"),
+  poisson_1 = FALSE,
+  poisson_2 = FALSE,
+  method = c("sml", "laplace"),
+  force_parallel_gaussian = FALSE,
+  .fixed = NULL
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="fit_rpbnb_tmb_+3A_formula_1">formula_1</code>, <code id="fit_rpbnb_tmb_+3A_formula_2">formula_2</code></td>
+<td>
+<p>Model formulas for the two count outcomes.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_data">data</code></td>
+<td>
+<p>A data frame.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_random_1">random_1</code>, <code id="fit_rpbnb_tmb_+3A_random_2">random_2</code></td>
+<td>
+<p>Random coefficient specs per equation. NULL (all
+fixed), character vector (all Normal), or named list with per-variable
+distribution specs (<code>"normal"</code>, <code>"lognormal"</code>, <code>"uniform"</code>,
+<code>"triangular"</code>).</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_draws">draws</code></td>
+<td>
+<p>Number of Halton simulation draws. Under
+<code>method = "sml"</code> this sets the simulation grid the likelihood is
+averaged over, and tape size scales with <code>nrow(data) * draws</code>. Under
+<code>method = "laplace"</code> it does not affect the likelihood or the tape,
+but still sizes the Halton grid used for the frozen Famoye lambda bounds
+and for the post-estimation averaging in <code>predict()</code> and the
+marginal-effect functions.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_seed">seed</code></td>
+<td>
+<p>Random seed for draws.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_start">start</code></td>
+<td>
+<p>Optional starting parameter vector (named or positional).</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_dependence">dependence</code></td>
+<td>
+<p>Dependence structure: &quot;famoye&quot;, &quot;independence&quot;, or a
+<code>copula()</code> object for copula dependence.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object (<code>rpbnb_tmb_control()</code> is a
+retained alias that returns the same object). One control object serves
+every estimator in the package; settings this engine does not read &ndash;
+<code>se_method</code>, <code>hessian</code>, <code>compute_se</code>, <code>method</code>,
+<code>hess_eps</code>, <code>hess_r</code>, <code>draws_hessian</code> &ndash; are ignored and
+listed by <code>print()</code>/<code>summary()</code> of the fit rather than rejected.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_inference">inference</code></td>
+<td>
+<p>Inference storage: <code>"full"</code> for a full covariance,
+<code>"diag"</code> for standard errors only, or <code>"none"</code> to skip Hessian
+calculations. In diagonal mode, <code>vcov()</code> returns <code>NA</code> for
+covariance cross-terms.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_keep">keep</code></td>
+<td>
+<p>Retained fit state: <code>"postfit"</code> keeps data needed for
+marginal effects, <code>"compact"</code> keeps estimates only, and
+<code>"full"</code> also retains the TMB objective and responses. Low-level
+diagnostics that access <code>fit$obj</code> require <code>"full"</code>.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_poisson_1">poisson_1</code>, <code id="fit_rpbnb_tmb_+3A_poisson_2">poisson_2</code></td>
+<td>
+<p>Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion m = 0, held fixed). Available for every dependence
+structure, copulas included. This is the remedy for a dispersion that
+collapses toward zero on its own: at m ~ 1e-7 the NB2 size 1/m is ~1e7 and
+the marginal CDF is computed as a difference of logarithms agreeing to
+eleven digits, which leaves the value intact but the curvature &ndash; and so
+the standard errors &ndash; numerically worthless. Pinning the limit removes
+the parameter instead of estimating it into that regime.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_method">method</code></td>
+<td>
+<p>Estimator for the random-coefficient integral. <code>"sml"</code>
+(default) uses simulated maximum likelihood over Halton draws.
+<code>"laplace"</code> uses TMB's Laplace approximation with a sparse Hessian
+over one latent vector per observation, which removes <code>draws</code> from
+the memory cost and makes tape size scale with <code>nrow(data)</code> alone.
+</p>
+<p>The two are different approximations to the same integral. They agree
+asymptotically but need not agree closely on any given dataset, so a
+Laplace fit is not a drop-in reproduction of an SML fit. <code>"laplace"</code>
+supports <code>"normal"</code> and <code>"lognormal"</code> random coefficients only,
+and requires at least one random coefficient.
+</p>
+<p><code>summary()</code> reports AIC and BIC for either estimator, but under
+<code>"laplace"</code> they are computed from an approximated marginal
+likelihood rather than the exact one, so an AIC from a Laplace fit is not
+meaningful to compare against an AIC from an SML fit of the same model.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_force_parallel_gaussian">force_parallel_gaussian</code></td>
+<td>
+<p>Opt-in override of the Gaussian-copula
+(<code>dependence = copula("normal")</code>) single-thread safety cap. Default
+<code>FALSE</code>: whenever <code>control$n_cores &gt; 1</code> or
+<code>control$parallel_tape</code> is requested together with a Gaussian
+copula, the request is silently capped to one thread with a
+<code>warning()</code> instead of being honored. This is not a performance
+knob &ndash; it exists because evaluating a Gaussian-copula TMB object built
+with more than one OpenMP thread has reliably crashed the R process
+(SIGSEGV) on the first objective evaluation, a defect in the registered
+Gaussian atomic (<code>REGISTER_ATOMIC(gauss_cell_vec)</code> in
+<code>src/rpbnb_tmb.cpp</code>) that is not fixed by the existing
+<code>#pragma omp critical</code> force-init. Frank and Clayton copulas are
+unaffected at any thread count and never see this cap.
+</p>
+<p>Setting <code>force_parallel_gaussian = TRUE</code> honors the requested
+thread count instead of capping it, with a <code>warning()</code> naming the
+crash risk explicitly. This is an escape hatch for someone who has read
+this paragraph and still wants to try it (e.g. to test whether a
+particular TMB/OpenMP build is actually affected) &ndash; it does not fix the
+underlying defect, and a crash under this override can still corrupt
+memory and lose unsaved work in the R session. Ignored for every other
+dependence structure.</p>
+</td></tr>
+<tr><td><code id="fit_rpbnb_tmb_+3A_.fixed">.fixed</code></td>
+<td>
+<p>Internal. A named numeric vector of parameters (in the
+optimization parameterization, e.g. <code>c("log_sd1:x" = -20)</code>) to pin
+at the supplied values and hold fixed during estimation, so they leave
+the free-parameter count and <code>logLik()</code>'s <code>df</code>. Used by
+<code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests</a>()</code> to construct scale-zero
+restricted fits; not intended for direct use. The classic engine's
+<code><a href="#topic+fit_rpbnb">fit_rpbnb</a>()</code> carries an identically named argument.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_tmb_fit</code>. The <code>sdreport</code> field
+is a compact package-owned summary and does not retain a second TMB tape.
+</p>
+<p><code>optimizer</code> is the <code>nlminb()</code> return value, with three fields
+added: <code>restarts</code> counts how many times the solve was restarted from
+its own answer to clear <code>control$gradtol</code>, <code>max_abs_gradient</code> is
+the score norm actually achieved, and <code>gradient_tolerance</code> is the
+threshold it was judged against. <code>convergence</code> and <code>message</code>
+come from nlminb's relative <em>function</em> test and can report success at
+a point that is not stationary, so <code>max_abs_gradient</code> is the field to
+check before trusting a standard error.
+</p>
+<p><code>method</code> records which estimator produced the fit, echoing the
+<code>method</code> argument (<code>"sml"</code> or <code>"laplace"</code>). Both
+<code>print()</code> and <code>summary()</code> display it, so two fits of the same
+model under different estimators are distinguishable in their printed
+output.
+</p>
+<p><code>boundary_report</code> is a character vector naming the reported
+quantities whose estimates are pinned against an implementation bound &ndash;
+the frozen Famoye interval, the Frank overflow guard, or an <code>exp()</code>
+clamp &ndash; or whose delta-method derivative has collapsed numerically. Those
+estimates are set by the implementation rather than identified by the
+data, so their standard errors and covariances are reported as <code>NA</code>
+and a warning is raised. An empty vector means no such constraint bound.
+</p>
+<p><code>boundary_sides</code> names, for each entry of <code>boundary_report</code>,
+which end was reached: <code>"lower"</code>, <code>"upper"</code>, or
+<code>"degenerate"</code> when the derivative collapsed rather than a bound
+being hit. The two sides call for opposite remedies &ndash; a lower dispersion
+clamp means the margin is effectively Poisson, an upper one means it is
+degenerately over-dispersed &ndash; so this is retained on the fit rather than
+only mentioned in the warning.
+</p>
+<p><code>lambda_bounds</code> is a named numeric vector <code>c(lower =, upper =)</code>
+giving the admissible Famoye dependence interval, and <code>NULL</code> for
+every other dependence structure. The bounds <em>used by the likelihood</em>
+are computed once at the starting values and held fixed for the whole fit.
+A <code>lam</code> estimate at either end is therefore an artefact of the
+starting values rather than a property of the data, which is why the field
+is exposed.
+<code><a href="#topic+rpbnb_tmb_dependence_profile">rpbnb_tmb_dependence_profile</a></code> reports a likelihood-based
+interval where the delta-method standard error collapses to <code>NA</code>, but
+for Famoye that interval is mapped through this same frozen box and so
+cannot escape it: widen the box by refitting from better starting values
+before treating such an interval as informative.
+</p>
+<p><code>lambda_bounds_at_optimum</code> is the interval admissible at the
+<em>fitted</em> parameters, recomputed after optimization for validation
+only — it never enters the likelihood. <code>lambda_admissible</code> records
+whether the fitted <code>lam</code> (mapped through the frozen
+<code>lambda_bounds</code>, i.e. the value the objective actually used) lies
+inside it; <code>FALSE</code> means the optimizer left the region where the
+joint pmf is a valid probability model, a warning was raised, and the fit
+should not be interpreted — refit from starting values closer to the
+optimum. When the bound is parameter-independent (normal or lognormal
+coefficients loaded in both margins, where it is the constant
+<code>c(-1, 1)</code>), the two intervals coincide and the flag is trivially
+<code>TRUE</code>. Both fields are <code>NULL</code>/<code>NA</code> outside Famoye
+dependence.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>## Not run: 
+sim &lt;- simulate_rpbnb_tmb(n = 300,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, draws = 100)
+coef(fit)
+
+## End(Not run)
+</code></pre>
+
+<hr><span id='rdfile+lr_test'></span>
+<h2 id='lr_test'>Likelihood-ratio test between two nested model fits</h2><span id='topic+lr_test'></span>
+
+<h3>Description</h3>
+
+<p>Compares a restricted fit against a full (nesting) fit by the likelihood-ratio
+statistic. Works for any <code><a href="#topic+fit_bnb">fit_bnb()</a></code> / <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> objects, since both carry
+a <code>logLik()</code> with a <code>"df"</code> attribute equal to the number of estimated
+parameters.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>lr_test(restricted, full, boundary = FALSE)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="lr_test_+3A_restricted">restricted</code></td>
+<td>
+<p>The smaller (restricted) fit &ndash; fewer estimated parameters.</p>
+</td></tr>
+<tr><td><code id="lr_test_+3A_full">full</code></td>
+<td>
+<p>The larger (full) fit that nests <code>restricted</code>.</p>
+</td></tr>
+<tr><td><code id="lr_test_+3A_boundary">boundary</code></td>
+<td>
+<p>Logical. When the restriction pins a variance/dispersion-type
+parameter (a random-coefficient SD, or NB2 dispersion <code>m</code>) to its zero
+boundary, the null distribution is not a plain chi-square. Set <code>boundary = TRUE</code> to use the 50:50 mixture of <code>chisq(df)</code> and <code>chisq(df - 1)</code> (Self &amp;
+Liang, 1987); for a single boundary parameter (<code>df = 1</code>) this halves the
+naive p-value. Default <code>FALSE</code> (ordinary interior restriction, e.g. dropping
+a fixed covariate). The mixture is exact only for a single parameter on the
+boundary; simultaneous boundary restrictions of several parameters need
+different weights and are not handled.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>The restricted model is one you fit yourself with a term removed &ndash; for
+example dropping a name from <code>random_1</code> (testing a random-coefficient SD), or
+a plain NB / independence fit (testing an NB2 dispersion). This is the
+statistically appropriate replacement for the Wald z/p that the natural-scale
+summary suppresses on positive scale/dispersion parameters.
+</p>
+<p>A likelihood-ratio test requires two <em>maximized</em> likelihoods. When either
+argument is a package fit (<code>bnb_fit</code> / <code>rpbnb_fit</code>) that records a failed
+optimization (<code>convergence$converged = FALSE</code>), <code>lr_test()</code> errors rather than
+returning a p-value from an unfinished fit &ndash; the sign of the statistic cannot
+establish convergence. Generic objects that only carry a <code>logLik()</code> (no
+convergence record) are still accepted, but their convergence cannot be
+validated and is the caller's responsibility.
+</p>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_lrtest</code> with the LR <code>statistic</code>, degrees of
+freedom <code>df</code>, <code>p.value</code>, the two log-likelihoods and their df, and the
+<code>boundary</code> flag. Has a <code>print</code> method.
+</p>
+
+
+<h3>Famoye caveat for bounded random-coefficient distributions</h3>
+
+<p>Each Famoye fit maximizes its likelihood over an admissible lambda
+interval frozen at that fit's own starting values. With normal or
+lognormal random coefficients loaded in both margins the interval is the
+constant <code>c(-1, 1)</code> for every fit, so the comparison is unaffected. With
+uniform or triangular coefficients (or a single varying margin) the bound
+moves with the parameters, so two fits frozen at different starting
+values maximize over slightly different lambda ranges and the LR
+statistic inherits that second-order discrepancy. Check
+<code>lambda_admissible</code> on both fits before relying on a comparison in that
+regime.
+</p>
+
+
+<h3>References</h3>
+
+<p>Self, S. G. and Liang, K.-Y. (1987). Asymptotic properties of
+maximum likelihood estimators and likelihood ratio tests under nonstandard
+conditions. <em>JASA</em> 82(398), 605&ndash;610.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+ctrl &lt;- rpbnb_control(compute_se = FALSE)
+full &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                  draws = 100, control = ctrl)
+rest &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                  draws = 100, control = ctrl)   # no random coefficient
+lr_test(rest, full, boundary = TRUE)             # test sd(x1) = 0
+</code></pre>
+
+<hr><span id='rdfile+plot.bnb_fit'></span>
+<h2 id='plot.bnb_fit'>Residual diagnostic plots for a bivariate NB model</h2><span id='topic+plot.bnb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Four base-graphics panels per margin: residuals-vs-fitted, a normal QQ plot of
+the randomized quantile residuals, a histogram of the RQR with an N(0,1)
+overlay, and a scale-location plot. The QQ and histogram panels always use
+RQR (only these are approximately N(0,1) under a correct count model).
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'bnb_fit'
+plot(
+  x,
+  margin = c("both", "y1", "y2"),
+  which = 1:4,
+  resid_type = "quantile",
+  seed = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="plot.bnb_fit_+3A_x">x</code></td>
+<td>
+<p>A <code>bnb_fit</code> object from <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="plot.bnb_fit_+3A_margin">margin</code></td>
+<td>
+<p>Which margin to plot: <code>"both"</code> (default), <code>"y1"</code>, or <code>"y2"</code>.</p>
+</td></tr>
+<tr><td><code id="plot.bnb_fit_+3A_which">which</code></td>
+<td>
+<p>Integer subset of panels <code>1:4</code> (1 = residuals-vs-fitted,
+2 = QQ, 3 = histogram, 4 = scale-location).</p>
+</td></tr>
+<tr><td><code id="plot.bnb_fit_+3A_resid_type">resid_type</code></td>
+<td>
+<p>Residual type for panels 1 and 4: <code>"quantile"</code> (default),
+<code>"pearson"</code>, <code>"deviance"</code>, or <code>"response"</code>.</p>
+</td></tr>
+<tr><td><code id="plot.bnb_fit_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed for the RQR randomization.</p>
+</td></tr>
+<tr><td><code id="plot.bnb_fit_+3A_...">...</code></td>
+<td>
+<p>Unused.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p><code>NULL</code>, invisibly (called for the side effect of drawing).
+</p>
+
+<hr><span id='rdfile+plot.rpbnb_fit'></span>
+<h2 id='plot.rpbnb_fit'>Residual diagnostic plots for a random-parameter bivariate NB model</h2><span id='topic+plot.rpbnb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Four base-graphics panels per margin, as for <code><a href="#topic+plot.bnb_fit">plot.bnb_fit()</a></code>, built on the
+mixture-based randomized quantile residuals. <code>resid_type = "deviance"</code> is not
+available for <code>rpbnb_fit</code>.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'rpbnb_fit'
+plot(
+  x,
+  margin = c("both", "y1", "y2"),
+  which = 1:4,
+  resid_type = "quantile",
+  seed = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="plot.rpbnb_fit_+3A_x">x</code></td>
+<td>
+<p>An <code>rpbnb_fit</code> object from <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="plot.rpbnb_fit_+3A_margin">margin</code></td>
+<td>
+<p>Which margin to plot: <code>"both"</code> (default), <code>"y1"</code>, or <code>"y2"</code>.</p>
+</td></tr>
+<tr><td><code id="plot.rpbnb_fit_+3A_which">which</code></td>
+<td>
+<p>Integer subset of panels <code>1:4</code>.</p>
+</td></tr>
+<tr><td><code id="plot.rpbnb_fit_+3A_resid_type">resid_type</code></td>
+<td>
+<p>Residual type for panels 1 and 4: <code>"quantile"</code> (default),
+<code>"pearson"</code>, or <code>"response"</code>.</p>
+</td></tr>
+<tr><td><code id="plot.rpbnb_fit_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed for the RQR randomization.</p>
+</td></tr>
+<tr><td><code id="plot.rpbnb_fit_+3A_...">...</code></td>
+<td>
+<p>Unused.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p><code>NULL</code>, invisibly.
+</p>
+
+<hr><span id='rdfile+predict.rpbnb_tmb_fit'></span>
+<h2 id='predict.rpbnb_tmb_fit'>Predict from a fitted bivariate count model</h2><span id='topic+predict.rpbnb_tmb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Predictions integrate over the retained simulation draws when random
+coefficients are present. Link predictions are the log of the integrated
+response mean, so <code>exp(predict(fit, type = "link"))</code> equals response
+predictions.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'rpbnb_tmb_fit'
+predict(
+  object,
+  newdata = NULL,
+  type = c("response", "link"),
+  which = c("both", "y1", "y2"),
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="predict.rpbnb_tmb_fit_+3A_object">object</code></td>
+<td>
+<p>A fitted <code>rpbnb_tmb_fit</code> object.</p>
+</td></tr>
+<tr><td><code id="predict.rpbnb_tmb_fit_+3A_newdata">newdata</code></td>
+<td>
+<p>Optional data frame. If omitted, the retained fitting design
+is used; compact fits require <code>newdata</code>.</p>
+</td></tr>
+<tr><td><code id="predict.rpbnb_tmb_fit_+3A_type">type</code></td>
+<td>
+<p>Either <code>"response"</code> or <code>"link"</code>.</p>
+</td></tr>
+<tr><td><code id="predict.rpbnb_tmb_fit_+3A_which">which</code></td>
+<td>
+<p>Return both margins or only <code>"y1"</code> or <code>"y2"</code>.</p>
+</td></tr>
+<tr><td><code id="predict.rpbnb_tmb_fit_+3A_...">...</code></td>
+<td>
+<p>Reserved for future use.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A two-column numeric matrix for <code>which = "both"</code>, otherwise a
+numeric vector.
+</p>
+
+<hr><span id='rdfile+residuals.bnb_fit'></span>
+<h2 id='residuals.bnb_fit'>Residuals for a bivariate NB model</h2><span id='topic+residuals.bnb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Per-margin residuals for a fixed-coefficient <code><a href="#topic+fit_bnb">fit_bnb()</a></code> model. Each margin is
+NB2 with fitted mean <code>mu</code> and dispersion <code>m</code> (<code>size = 1/m</code>). <code>"quantile"</code>
+returns randomized quantile residuals (Dunn &amp; Smyth 1996), which are
+approximately N(0,1) under a correct model and are the recommended residual
+for normality-style diagnostics on count data.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'bnb_fit'
+residuals(
+  object,
+  type = c("quantile", "pearson", "deviance", "response"),
+  margin = c("both", "y1", "y2"),
+  seed = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="residuals.bnb_fit_+3A_object">object</code></td>
+<td>
+<p>A <code>bnb_fit</code> object from <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="residuals.bnb_fit_+3A_type">type</code></td>
+<td>
+<p>Residual type: <code>"quantile"</code> (default), <code>"pearson"</code>, <code>"deviance"</code>,
+or <code>"response"</code>.</p>
+</td></tr>
+<tr><td><code id="residuals.bnb_fit_+3A_margin">margin</code></td>
+<td>
+<p>Which margin: <code>"both"</code> (default), <code>"y1"</code>, or <code>"y2"</code>.</p>
+</td></tr>
+<tr><td><code id="residuals.bnb_fit_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed for the quantile-residual randomization
+(ignored for other types); does not disturb the caller's RNG stream.</p>
+</td></tr>
+<tr><td><code id="residuals.bnb_fit_+3A_...">...</code></td>
+<td>
+<p>Unused.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A numeric vector for a single margin, or a two-column data frame
+(<code>y1</code>, <code>y2</code>) for <code>margin = "both"</code>.
+</p>
+
+<hr><span id='rdfile+residuals.rpbnb_fit'></span>
+<h2 id='residuals.rpbnb_fit'>Residuals for a random-parameter bivariate NB model</h2><span id='topic+residuals.rpbnb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Per-margin residuals for an <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> model. Each margin is a mixture of
+NB2 distributions over the random-coefficient draws. <code>"quantile"</code> returns
+randomized quantile residuals (Dunn &amp; Smyth 1996) from the exact mixture
+predictive CDF (the recommended residual); <code>"pearson"</code> uses the exact mixture
+marginal variance. <code>"deviance"</code> is not defined for the mixture and errors.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'rpbnb_fit'
+residuals(
+  object,
+  type = c("quantile", "pearson", "deviance", "response"),
+  margin = c("both", "y1", "y2"),
+  seed = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="residuals.rpbnb_fit_+3A_object">object</code></td>
+<td>
+<p>An <code>rpbnb_fit</code> object from <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="residuals.rpbnb_fit_+3A_type">type</code></td>
+<td>
+<p>Residual type: <code>"quantile"</code> (default), <code>"pearson"</code>, or
+<code>"response"</code>. <code>"deviance"</code> is not supported for <code>rpbnb_fit</code>.</p>
+</td></tr>
+<tr><td><code id="residuals.rpbnb_fit_+3A_margin">margin</code></td>
+<td>
+<p>Which margin: <code>"both"</code> (default), <code>"y1"</code>, or <code>"y2"</code>.</p>
+</td></tr>
+<tr><td><code id="residuals.rpbnb_fit_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed for the quantile-residual randomization;
+does not disturb the caller's RNG stream.</p>
+</td></tr>
+<tr><td><code id="residuals.rpbnb_fit_+3A_...">...</code></td>
+<td>
+<p>Unused.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A numeric vector for a single margin, or a two-column data frame
+(<code>y1</code>, <code>y2</code>) for <code>margin = "both"</code>.
+</p>
+
+<hr><span id='rdfile+rpbnb'></span>
+<h2 id='rpbnb'>Fit a random-parameter bivariate NB model with either engine</h2><span id='topic+rpbnb'></span>
+
+<h3>Description</h3>
+
+<p>A common front end over the package's two estimation engines. <code>engine = "classic"</code> calls <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> (Rcpp/OpenMP simulated likelihood, <code>maxLik</code> BFGS);
+<code>engine = "tmb"</code> calls <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> (TMB automatic differentiation,
+<code>nlminb</code> with restart polish). Both fitters remain exported and can be called
+directly; with <code>standardize = FALSE</code> (the default) this wrapper adds nothing
+to the fit itself and returns exactly what the chosen fitter returns.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb(
+  formula_1,
+  formula_2,
+  data,
+  engine = c("classic", "tmb"),
+  random_1 = NULL,
+  random_2 = NULL,
+  draws = 400,
+  seed = 1234,
+  start = NULL,
+  dependence = "famoye",
+  poisson_1 = FALSE,
+  poisson_2 = FALSE,
+  standardize = FALSE,
+  continuous_vars = NULL,
+  boundary_tests = FALSE,
+  boundary_draws = NULL,
+  control = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_+3A_formula_1">formula_1</code>, <code id="rpbnb_+3A_formula_2">formula_2</code></td>
+<td>
+<p>Model formulas for the two count responses.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_data">data</code></td>
+<td>
+<p>A data frame containing the model variables.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_engine">engine</code></td>
+<td>
+<p>Estimation engine: <code>"classic"</code> (default) or <code>"tmb"</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_random_1">random_1</code>, <code id="rpbnb_+3A_random_2">random_2</code></td>
+<td>
+<p>Random-coefficient specifications for each equation.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_draws">draws</code></td>
+<td>
+<p>Number of simulation draws.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_seed">seed</code></td>
+<td>
+<p>Random seed for the draw sequence.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_start">start</code></td>
+<td>
+<p>Optional named or unnamed starting values.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_dependence">dependence</code></td>
+<td>
+<p><code>"famoye"</code> (default), a <code><a href="#topic+copula">copula()</a></code> object, or
+<code>"independence"</code> (TMB engine only).</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_poisson_1">poisson_1</code>, <code id="rpbnb_+3A_poisson_2">poisson_2</code></td>
+<td>
+<p>Restrict the corresponding margin to its Poisson
+limit.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_standardize">standardize</code></td>
+<td>
+<p>Centre and scale continuous predictors before fitting,
+and display fitted coefficients back-transformed to their original units
+(see &quot;Automatic centring and scaling&quot; above). Default <code>FALSE</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_continuous_vars">continuous_vars</code></td>
+<td>
+<p>Optional character vector overriding automatic
+continuous-predictor detection when <code>standardize = TRUE</code>. Must be columns
+of <code>data</code>; ignored when <code>standardize = FALSE</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_boundary_tests">boundary_tests</code></td>
+<td>
+<p>Which groups of parameters to LR-test after fitting,
+via <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> (<code>engine = "classic"</code>) or
+<code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests()</a></code> (<code>engine = "tmb"</code>); the result is attached as
+<code style="white-space: pre;">&#8288;$boundary_tests&#8288;</code> and <code>summary()</code>/<code>print()</code> show the test (rather than
+<code>NA</code>, or rather than a Wald <code>z</code>) on the corresponding rows. Accepts:
+</p>
+
+<ul>
+<li> <p><code>FALSE</code> (default) or <code>"none"</code> &ndash; run nothing. Each restricted refit
+costs roughly another full fit.
+</p>
+</li>
+<li> <p><code>TRUE</code> &ndash; <code>c("sd", "dispersion")</code>, the two boundary-null groups. This is
+what <code>TRUE</code> has always meant and it does not silently grow.
+</p>
+</li>
+<li><p> a character vector, any of <code>"sd"</code> (random-coefficient scales),
+<code>"dispersion"</code> (the NB2 overdispersions <code>m1</code>, <code>m2</code>), <code>"dependence"</code>
+(the association parameter), or <code>"all"</code> for all three.
+</p>
+</li></ul>
+
+<p>So <code>boundary_tests = "dispersion"</code> tests overdispersion only,
+<code>boundary_tests = c("dispersion", "dependence")</code> tests overdispersion and
+association without paying for one refit per random-coefficient scale, and
+<code>boundary_tests = "all"</code> tests everything. See &quot;Boundary LR tests&quot; below.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_boundary_draws">boundary_draws</code></td>
+<td>
+<p>Number of Halton simulation draws for the boundary
+tests' restricted refits, <code>engine = "tmb"</code> only. <code>NULL</code> (default) uses
+the main fit's <code>draws</code>. Ignored when no boundary test was requested
+(nothing to apply it to); an error if supplied under <code>engine = "classic"</code> alongside a boundary test (see &quot;Boundary LR tests&quot;
+above &ndash; that engine has no <code>draws</code> to override).</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object &ndash; one object for both engines,
+as of 0.4.1 (<code>rpbnb_tmb_control()</code> is a retained alias that returns the
+same thing). Settings the chosen engine does not read are ignored and
+listed by <code>print()</code>/<code>summary()</code> of the fit; <code>iterlim</code> and <code>print_level</code>,
+whose defaults differ between the engines, resolve to the chosen engine's
+own default unless you set them. Fields sharing a name are still not
+translated: <code>iterlim</code> is a <code>maxLik</code> BFGS limit under <code>engine = "classic"</code>
+and an <code>nlminb</code> limit under <code>"tmb"</code>, and <code>n_cores</code> is worker processes
+versus OpenMP threads.</p>
+</td></tr>
+<tr><td><code id="rpbnb_+3A_...">...</code></td>
+<td>
+<p>Further arguments passed to the selected fitter. Names are
+validated against that fitter's formals; an argument belonging to the other
+engine, or an unrecognised name, is an error. Exception: the TMB tuning
+knobs <code>method</code> and <code>force_parallel_gaussian</code> are dropped with a warning
+(not an error) under <code>engine = "classic"</code>, so a call can switch engines
+without stripping them.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>What it does add is argument checking across the two APIs. The engines do not
+take the same arguments, and passing one engine's argument to the other is a
+mistake that is easy to make and expensive to notice — a standardized
+coefficient table printed under an &quot;original units&quot; heading looks perfectly
+plausible. Every extra argument is therefore matched by name against the
+selected fitter's own formals, and anything that does not belong is an error
+rather than a silently ignored <code>...</code> entry.
+</p>
+
+
+<h3>Value</h3>
+
+<p>The engine-native fit object, identical to what a direct call to the
+underlying fitter would return: an object of class <code>rpbnb_fit</code> for
+<code>engine = "classic"</code>, or <code>rpbnb_tmb_fit</code> for <code>engine = "tmb"</code>. The class
+therefore depends on <code>engine</code>; test with <code>inherits(fit, "rpbnb_tmb_fit")</code>
+if you need to branch. No wrapper class is introduced, so every existing S3
+method and post-estimation function works unchanged. With
+<code>standardize = TRUE</code>, two extra fields are attached &ndash; <code style="white-space: pre;">&#8288;$scaling&#8288;</code> and
+<code style="white-space: pre;">&#8288;$continuous_vars&#8288;</code> &ndash; and <code>print()</code>/<code>summary()</code> use them to display
+original-units coefficients. With any <code>boundary_tests</code> group requested, a
+third field <code style="white-space: pre;">&#8288;$boundary_tests&#8288;</code> (the <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> result) is
+attached, and <code>print()</code>/<code>summary()</code> use it to show the LR test on the
+corresponding rows. Both fitters also attach <code style="white-space: pre;">&#8288;$control_ignored&#8288;</code> /
+<code style="white-space: pre;">&#8288;$control_engine&#8288;</code>, the control settings the chosen engine did not read.
+Nothing else on the object changes.
+</p>
+
+
+<h3>Automatic centring and scaling</h3>
+
+<p><code>standardize = TRUE</code> automates the pattern in <code>inst/rpbnb_frank_open.R</code> and
+<code>inst/tmb_rpbnb_frank_open.R</code>: continuous predictors are centred and scaled
+(mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
+carrier from acting as a disguised random intercept (see those scripts'
+headers) and fixes the design matrix's conditioning when regressors span
+very different ranges. Continuous predictors are identified automatically —
+numeric, non-factor columns used by either formula with more than two
+distinct values, so 0/1 (or any two-level numeric) indicators are left
+alone — or supplied explicitly via <code>continuous_vars</code>. Variables that appear
+only inside an <code>offset()</code> are never standardized.
+</p>
+<p>The fitted design itself (the stored <code>X1</code>/<code>X2</code>, <code>mu1</code>/<code>mu2</code>, simulation
+draws) stays on the standardized scale, exactly as in the two scripts above,
+so <code>predict()</code>, marginal effects, and boundary/LR tests keep working
+unchanged. Only the coefficient table <code>print()</code> and <code>summary()</code> display is
+affected: it is back-transformed to the covariates' original units by the
+exact affine chain rule (no refit, no numerical differentiation) and is the
+<em>only</em> coefficient table shown — there is no separate standardized-scale
+table to reconcile. <code>coef()</code>/<code>vcov()</code> still return the standardized-scale
+values that match the stored design; call <code>.rpbnb_orig_units()</code>
+(internal, mirrors what <code>print()</code> displays) if the numeric original-units
+vector is needed directly. The scaling actually used is stored on the fit
+as <code style="white-space: pre;">&#8288;$scaling&#8288;</code> (a named list of <code>c(center=, scale=)</code>) and <code style="white-space: pre;">&#8288;$continuous_vars&#8288;</code>.
+</p>
+
+
+<h3>Boundary LR tests</h3>
+
+<p><code>boundary_tests</code> runs a likelihood-ratio test on the fit as soon as it
+converges (against the same data the fit itself used &ndash; the standardized
+copy, when <code>standardize = TRUE</code>) and attaches the result as
+<code style="white-space: pre;">&#8288;$boundary_tests&#8288;</code>. It is a switch over three independent groups, so the
+cost is paid only for the parameters actually in question:</p>
+
+<table>
+<tr>
+ <td style="text-align: left;">
+   <code>boundary_tests</code> </td><td style="text-align: left;"> tests </td><td style="text-align: left;"> restricted refits </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>FALSE</code> / <code>"none"</code> </td><td style="text-align: left;"> nothing </td><td style="text-align: left;"> 0 </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>TRUE</code> </td><td style="text-align: left;"> <code>c("sd", "dispersion")</code> </td><td style="text-align: left;"> one per scale + one per free <code>m</code> </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>"sd"</code> </td><td style="text-align: left;"> random-coefficient scales </td><td style="text-align: left;"> one per scale </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>"dispersion"</code> </td><td style="text-align: left;"> overdispersions <code>m1</code>, <code>m2</code> </td><td style="text-align: left;"> one per free <code>m</code> </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>"dependence"</code> </td><td style="text-align: left;"> the association parameter </td><td style="text-align: left;"> 1 </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>"all"</code> </td><td style="text-align: left;"> all three groups </td><td style="text-align: left;"> all of the above 
+</td>
+</tr>
+
+</table>
+
+<p>The random-coefficient SDs and the NB2 dispersions (<code>m1</code>, <code>m2</code>) have a null
+that sits on the boundary of the parameter space, so an ordinary Wald
+<code>z</code>/<code>p</code> does not test it; the boundary test refits each restricted model
+instead and <code>summary()</code>/<code>print()</code> show that test's <code>LR</code>/<code>df</code>/<code>p</code> for those
+rows in the natural-scale block, in place of the <code>NA</code> they would otherwise
+carry.
+</p>
+<p>The <strong>dependence</strong> test is the odd one out and is therefore opt-in even
+under <code>boundary_tests = TRUE</code>. Its null is &quot;no association&quot;, i.e. the
+independence model, which for Famoye (<code>lam</code>), Frank (<code>theta</code>), and the
+Gaussian copula (<code>rho</code>) sits in the <em>interior</em> of the parameter space &ndash;
+the Wald <code>z</code> those rows already show is valid, and the LR statistic is an
+ordinary chi-square(1), not the 50:50 boundary mixture. Only Clayton /
+Kimeldorf (<code>theta &gt; 0</code>) has a genuine boundary null there. Requesting it
+replaces the dependence row's Wald <code>z</code>/<code>p</code> with the LR test on both
+engines, since the two answer the same question.
+</p>
+<p>Both engines test the same parameters via <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code>
+(<code>engine = "classic"</code>) or <code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests()</a></code>
+(<code>engine = "tmb"</code>). They differ only in how each restricted fit is
+constructed while preserving common random numbers: for a scale, the
+classic engine zeroes that coefficient's draw column while the TMB engine
+pins its <code>log_sd</code> and maps it out of the free parameters; for the
+dependence parameter, the TMB engine refits with its own
+<code>dependence = "independence"</code> family while the classic engine (which has no
+such fitter) pins the working-scale dependence parameter at its family's
+independence value.
+</p>
+<p>A <code><a href="base.html#topic+message">message()</a></code> reports how many restricted refits are about to run before
+they start, unless <code>control$print_level</code> is <code>0</code>; suppress it with
+<code><a href="base.html#topic+suppressMessages">suppressMessages()</a></code> if needed.
+</p>
+<p>Under <code>engine = "tmb"</code> with <code>method = "laplace"</code>, a restricted refit that
+fails to converge is automatically retried with both sides of that one LR
+estimated by <code>method = "sml"</code> rather than reported <code>NA</code> &ndash; some
+restrictions leave Laplace no valid optimum at all (see
+<code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests()</a></code>'s <code>sml_fallback</code> argument, which is where to
+turn this off).
+</p>
+<p><code>force_parallel_gaussian</code> (<code>engine = "tmb"</code> only, passed via <code>...</code>) is
+forwarded to every restricted refit, so a Gaussian-copula fit's boundary
+tests honor <code>control$n_cores</code> the same way the original fit did instead
+of silently re-capping each refit to one thread &ndash; see
+<code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests()</a></code>'s own <code>force_parallel_gaussian</code> argument for
+why this needs forwarding at all (the fit object does not record whether
+the override was used).
+</p>
+<p>Each restricted refit costs roughly as much as the original fit (more for
+a <code><a href="#topic+copula">copula()</a></code> dependence than for <code>"famoye"</code>; see <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code>'s
+timing note), so this defaults to <code>FALSE</code>. <code>boundary_draws</code> (<code>engine = "tmb"</code> only) sets a <code>draws</code> for those refits other than the main fit's &ndash;
+e.g. more draws for a more precise boundary test without re-fitting the
+whole model at that <code>draws</code>. It has no classic-engine counterpart:
+<code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> reuses the full fit's exact stored draw matrix
+(zeroing a column) rather than regenerating draws from a count, so passing
+<code>boundary_draws</code> under <code>engine = "classic"</code> is an error. For finer control
+still &ndash; testing only <code>"sd"</code> or only <code>"dispersion"</code> (both engines take a
+<code>which</code> argument), or reusing one boundary-test run across several
+summaries &ndash; call <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code>/<code><a href="#topic+rpbnb_tmb_boundary_tests">rpbnb_tmb_boundary_tests()</a></code>
+directly on the fit and assign its result to <code>fit$boundary_tests</code> (with
+<code>standardize = TRUE</code>, reconstruct the fitting-scale data first:
+<code>rpbnb:::.apply_scaling(data, fit$scaling)</code>).
+</p>
+
+
+<h3>Which arguments go with which engine</h3>
+
+
+<table>
+<tr>
+ <td style="text-align: left;">
+   Argument </td><td style="text-align: left;"> <code>engine = "classic"</code> </td><td style="text-align: left;"> <code>engine = "tmb"</code> </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>draw_type</code>, <code>.fixed</code>, <code>.opt_draws</code> </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> error </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>inference</code>, <code>keep</code> </td><td style="text-align: left;"> error </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>method</code>, <code>force_parallel_gaussian</code> </td><td style="text-align: left;"> ignored with a warning </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>offset()</code> in a formula </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> error </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>dependence = "independence"</code> </td><td style="text-align: left;"> error </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>boundary_draws</code> (non-<code>NULL</code>) </td><td style="text-align: left;"> error </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>control</code> class </td><td style="text-align: left;"> <code>rpbnb_control</code> </td><td style="text-align: left;"> <code>rpbnb_control</code> (same object) </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   optimizer </td><td style="text-align: left;"> <code>maxLik::maxLik(method = "BFGS")</code> </td><td style="text-align: left;"> <code>stats::nlminb</code> + restarts 
+</td>
+</tr>
+
+</table>
+
+<p>Both engines freeze the Famoye admissible lambda interval at the starting
+values (so the analytic gradient is exactly the derivative of the optimized
+objective) and validate the fitted lambda against the interval admissible at
+the optimum afterwards — check <code>lambda_admissible</code> on the fit. The
+fixed-parameter <code><a href="#topic+fit_bnb">fit_bnb()</a></code> takes the opposite trade-off (moving bounds,
+admissible by construction); see the decision note in <code>R/bnb_likelihood.R</code>.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>, <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code>, <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code>,
+<code><a href="#topic+rpbnb_tmb_control">rpbnb_tmb_control()</a></code>, <code><a href="#topic+copula">copula()</a></code>, <code><a href="#topic+fit_bnb">fit_bnb()</a></code>
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>
+d &lt;- read.csv(system.file("extdata", "rwm1984_bnb.csv", package = "rpbnb"))
+fit &lt;- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+             engine = "tmb", random_1 = "outwork", draws = 50)
+
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_boundary_tests'></span>
+<h2 id='rpbnb_boundary_tests'>Boundary-corrected LR tests for all boundary parameters of an rpbnb_fit</h2><span id='topic+rpbnb_boundary_tests'></span>
+
+<h3>Description</h3>
+
+<p>Runs a likelihood-ratio test for every random-coefficient standard deviation
+(<code style="white-space: pre;">&#8288;sd1:*&#8288;</code>, <code style="white-space: pre;">&#8288;sd2:*&#8288;</code>) and NB2 dispersion (<code>m1</code>, <code>m2</code>) of a fitted
+random-parameter bivariate NB model, and merges them into one table. These
+are the parameters whose null lies on the boundary of the parameter space
+(SD = 0, or dispersion <code>m = 0</code> = Poisson), for which the natural-scale summary
+reports no Wald <code>z</code>/<code>p</code>; each test uses the 50:50 chi-square boundary
+correction of <code><a href="#topic+lr_test">lr_test()</a></code> (<code>boundary = TRUE</code>).
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_boundary_tests(
+  fit,
+  data,
+  control = rpbnb_control(compute_se = FALSE),
+  which = c("sd", "dispersion")
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_boundary_tests_+3A_fit">fit</code></td>
+<td>
+<p>A converged <code>rpbnb_fit</code> (the full model), from a Famoye or a
+<code><a href="#topic+copula">copula()</a></code> dependence. Both paths use the exact <code>m = 0</code> branch for the
+dispersion tests.</p>
+</td></tr>
+<tr><td><code id="rpbnb_boundary_tests_+3A_data">data</code></td>
+<td>
+<p>The data frame the model was fit on. Required &ndash; the fit object
+does not store it, and every restricted model is refit on the same data.</p>
+</td></tr>
+<tr><td><code id="rpbnb_boundary_tests_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> for the restricted refits. Defaults to
+<code>compute_se = FALSE</code> (the LR test needs only <code>logLik</code> and the degrees of
+freedom). <code>draws</code>/<code>draw_type</code>/<code>seed</code> are taken from <code>fit</code>, not <code>control</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_boundary_tests_+3A_which">which</code></td>
+<td>
+<p>Which parameter groups to test, any subset of <code>"sd"</code> (the
+random-coefficient scales), <code>"dispersion"</code> (the NB2 dispersions <code>m1</code>,
+<code>m2</code>), and <code>"dependence"</code> (the association parameter). The default is
+<code>c("sd", "dispersion")</code> &ndash; the two boundary-null groups. <code>"dependence"</code>
+is opt-in because it costs another full refit and, for three of the four
+families, tests an <em>interior</em> null whose ordinary Wald <code>z</code> in <code>summary()</code>
+is already valid.
+</p>
+<p>The dependence test restricts the model to independence and compares it to
+<code>fit</code>: one row labelled <code>lam</code> (Famoye), <code>theta</code> (Frank / Clayton), or <code>rho</code>
+(Gaussian). The restriction pins the working-scale dependence parameter at
+its family's independence value rather than refitting a different family,
+so both fits keep the same draws and the same parameter block and the
+comparison is a clean 1-df restriction. Only Clayton's null (<code>theta &gt; 0</code>,
+so <code>theta = 0</code> is a boundary) takes the 50:50 mixture; Famoye, Frank, and
+Gaussian nulls are interior and get an ordinary chi-square(1).</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>Each test refits a properly nested restricted model. With <strong>multiple random
+coefficients in an equation, each SD is tested individually</strong> (a 1-df
+restriction). The restricted fit keeps the full random specification but sets
+the tested coefficient's draw column to the distribution median (<code>u = 0.5</code>),
+which zeroes that coefficient's per-draw <em>deviation</em> exactly for every
+supported distribution (<code>u = 0.5</code> maps to base 0 for normal/lognormal/
+triangular, and to the centered value <code>2 * 0.5 - 1 = 0</code> for uniform). The
+coefficient therefore collapses to its SD-zero null &ndash; the ordinary fixed
+coefficient <code>b</code> for normal/uniform/triangular, and <code>sign * exp(b)</code> for
+lognormal &ndash; on every draw, independent of the covariate scale. Its (now
+inert) log-scale is pinned only to drop it from the free-parameter count. Every
+other draw column is the full model's exact stored draw, so the two simulated
+log-likelihoods are compared on common random numbers, and each restricted fit
+is <strong>warm-started from the full fit's coefficients</strong> so the start-sensitive
+simulated objective does not settle at an inferior optimum. A restricted fit
+that fails to converge yields <code>NA</code> inference (with a warning) rather than a
+p-value, and a non-converged full <code>fit</code> is rejected.
+</p>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_boundary_tests</code>: a data frame with columns
+<code>Parameter</code>, <code>LR</code>, <code>df</code>, <code>p.value</code>, <code>Signif</code> (one row per boundary
+parameter), and a <code>print</code> method.
+</p>
+<p>Under Famoye dependence with uniform or triangular random coefficients
+(or a single varying margin), the full and restricted fits' admissible
+lambda intervals are frozen at different starting values, so each LR
+statistic compares maxima over slightly different lambda ranges; see the
+&quot;Famoye caveat&quot; section of <code><a href="#topic+lr_test">lr_test()</a></code>. Normal/lognormal coefficients in
+both margins are unaffected (the interval is the constant <code>c(-1, 1)</code>).
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+lr_test">lr_test()</a></code>, <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>
+sim &lt;- simulate_rpbnb(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                 draws = 200, seed = 1)
+rpbnb_boundary_tests(fit, sim$data)
+
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_control'></span>
+<h2 id='rpbnb_control'>Control parameters for every rpbnb estimator</h2><span id='topic+rpbnb_control'></span>
+
+<h3>Description</h3>
+
+<p>One control object for all of the package's fitters &ndash; <code><a href="#topic+fit_bnb">fit_bnb()</a></code>,
+<code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>, <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code>, and <code><a href="#topic+rpbnb">rpbnb()</a></code> with either <code>engine</code>. It
+carries the union of the tuning knobs the estimators use; each fitter reads
+the ones that apply to it and <strong>ignores the rest</strong>, reporting the ignored
+names in <code>print()</code>/<code>summary()</code> of the resulting fit rather than erroring.
+That is what makes a script able to flip <code>engine = "classic"</code> to <code>"tmb"</code>
+without rewriting its control call.
 </p>
 
 
 <h3>Usage</h3>
 
 <pre><code class='language-R'>rpbnb_control(
-  method = c("BFGS", "NR", "BHHH", "NM"),
-  iterlim = 300L,
+  method = c("BFGS"),
+  iterlim = NULL,
   reltol = 1e-08,
-  print_level = 0L,
+  print_level = NULL,
   draws_hessian = 100L,
   halton_burn = 300L,
   n_cores = 1L,
   compute_se = TRUE,
   hessian = c("numeric", "analytic"),
+  se_method = c("numeric", "opg", "analytic"),
   hess_eps = 1e-05,
-  hess_r = 4L
+  hess_r = 4L,
+  gradtol = 1e-05,
+  restarts = 10L,
+  max_threads = NULL,
+  max_workload = NULL,
+  parallel_tape = FALSE
 )
 </code></pre>
 
@@ -555,12 +1993,13 @@ coef(fit)
 <table role = "presentation">
 <tr><td><code id="rpbnb_control_+3A_method">method</code></td>
 <td>
-<p>Optimizer passed to <code><a href="maxLik.html#topic+maxLik">maxLik::maxLik()</a></code>. One of &quot;BFGS&quot;, &quot;NR&quot;,
-&quot;BHHH&quot;, &quot;NM&quot;.</p>
+<p>Optimizer used by the <code>maxLik</code> fitters. Only &quot;BFGS&quot; is
+implemented and wired through; it is the sole accepted value.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_iterlim">iterlim</code></td>
 <td>
-<p>Maximum optimizer iterations.</p>
+<p>Maximum optimizer iterations. <code>NULL</code> (default) uses 300 for
+the <code>maxLik</code> fitters and 500 for the TMB engine's <code>nlminb</code>.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_reltol">reltol</code></td>
 <td>
@@ -568,12 +2007,17 @@ coef(fit)
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_print_level">print_level</code></td>
 <td>
-<p>Verbosity passed to the optimizer (0 = silent).</p>
+<p>Optimizer verbosity, and the switch that silences the
+boundary-test progress messages. <code>NULL</code> (default) uses 2 for the <code>maxLik</code>
+fitters and 0 (silent) for the TMB engine.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_draws_hessian">draws_hessian</code></td>
 <td>
-<p>Number of simulation draws used for the random-parameter
-Hessian (smaller than the optimization draws for speed). Ignored by <code><a href="#topic+fit_bnb">fit_bnb()</a></code>.</p>
+<p>Retained for backward compatibility but unused by every
+estimator: the random-parameter numeric Hessian is taken with the same
+optimization draws that produced the estimate (same-draw curvature), so it
+no longer resimulates a separate Hessian draw set. Supplying it is always
+reported as an ignored setting.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_halton_burn">halton_burn</code></td>
 <td>
@@ -582,11 +2026,13 @@ the simulation draws.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_n_cores">n_cores</code></td>
 <td>
-<p>Worker processes for the optional cluster path (1 = sequential).</p>
+<p>Worker processes for <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>'s optional cluster path, or
+OpenMP threads for <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> (1 = sequential in both cases).</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_compute_se">compute_se</code></td>
 <td>
-<p>If FALSE, skip the Hessian and standard errors.</p>
+<p>If FALSE, skip the Hessian and standard errors. The TMB
+engine has its own <code>inference</code> argument for this instead.</p>
 </td></tr>
 <tr><td><code id="rpbnb_control_+3A_hessian">hessian</code></td>
 <td>
@@ -595,17 +2041,153 @@ errors: &quot;numeric&quot; (default, <code><a href="numDeriv.html#topic+hessian
 closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
 at the optimum and yield the same observed-information SEs.</p>
 </td></tr>
+<tr><td><code id="rpbnb_control_+3A_se_method">se_method</code></td>
+<td>
+<p>Standard-error method for <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> (the random-parameter
+model): &quot;numeric&quot; (default) uses the <code><a href="numDeriv.html#topic+hessian">numDeriv::hessian()</a></code> observed-
+information Hessian; &quot;analytic&quot; uses the closed-form observed-information
+Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+mixture formula) &ndash; exact and much faster than &quot;numeric&quot; for larger models;
+&quot;opg&quot; uses the BHHH / outer-product-of-gradients information from the
+per-observation scores &ndash; fastest, but relies on the information-matrix
+equality so it is unreliable for parameters at a boundary (e.g. a random-
+coefficient SD estimated near 0). For copula dependence (<code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> with
+<code>dependence = copula(...)</code>), only &quot;opg&quot; (recommended) and &quot;numeric&quot; are
+available; &quot;analytic&quot; is not implemented for the copula path and errors.</p>
+</td></tr>
 <tr><td><code id="rpbnb_control_+3A_hess_eps">hess_eps</code>, <code id="rpbnb_control_+3A_hess_r">hess_r</code></td>
 <td>
 <p>Step and Richardson order for <code><a href="numDeriv.html#topic+hessian">numDeriv::hessian()</a></code>
-(used only when <code>hessian = "numeric"</code>).</p>
+(used only when the numeric Hessian is selected).</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_gradtol">gradtol</code></td>
+<td>
+<p>Stationarity tolerance for the TMB engine's score, applied
+<em>relative</em> to the objective: the fit is treated as stationary once
+<code>max(abs(gradient))</code> falls below <code>gradtol * max(1, abs(nll))</code>.
+<code>nlminb()</code> declares convergence from its relative function test,
+which can fire while the score is still far from zero; a Hessian taken
+there is not a curvature and its inverse can carry negative variances. The
+fit is restarted until the gradient clears this tolerance; missing it is
+not warned about on its own, because the copula families legitimately
+optimise against a clamp or a probability floor where no step improves the
+objective, but it is reported in the warning raised when the Hessian
+actually fails to factor, and is kept on the fit as
+<code>optimizer$max_abs_gradient</code>. The scaling matters because the score
+is a sum over observations, so an absolute cutoff would tighten with
+sample size for no statistical reason.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_restarts">restarts</code></td>
+<td>
+<p>Maximum number of times to restart <code>nlminb()</code> from its
+own answer while <code>gradtol</code> is unmet. Restarting resets the trust
+region and step scaling that stalled the first solve. Set to <code>0L</code> for
+the single-call behaviour of earlier versions.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_max_threads">max_threads</code></td>
+<td>
+<p>Maximum OpenMP threads permitted for one TMB fit.
+<code>NULL</code> (default) means <code>n_cores</code>, so threads are not capped unless
+set explicitly below <code>n_cores</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_max_workload">max_workload</code></td>
+<td>
+<p>Maximum weighted observation-draw evaluations permitted before TMB tape construction; <code>Inf</code> disables the guard. The default and every figure here are derived from <code>TAPE_CALIBRATION</code>, so this text cannot drift from the shipped behaviour.
+</p>
+<p>With the default <code>parallel_tape = FALSE</code> the budget is per fit; with <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
+</p>
+<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.
+</p>
+<p>Retained tape size depends on <code>n * draws</code> alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).
+</p>
+<p>The budget is set on <em>peak</em> working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.
+</p>
+<p>Families cost different amounts per unit, so each carries a weight &ndash; the largest <em>peak</em> ratio to Famoye observed at matched workload, rounded up to the next tenth: independence 0.7, famoye 1, frank 3.6, gaussian 0.9, clayton 1.1. Frank peaks at over three and a half times Famoye, so treating it as unweighted would under-budget it more than threefold.
+</p>
+<p>Raise <code>max_workload</code> deliberately against the memory you actually have, not to make one particular dataset fit.
+</p>
+<p>As of <code>rpbnb_tmb_max_workload()</code>, the value <code>rpbnb_tmb_control()</code> actually uses by default is no longer the fixed figure above: it will auto-detect available memory and budget 80% of it, falling back to the fixed 8 GiB figure only when detection is unavailable on the current platform. Call <code><a href="#topic+rpbnb_tmb_max_workload">rpbnb_tmb_max_workload</a></code> directly to set your own budget or detection fraction.</p>
+</td></tr>
+<tr><td><code id="rpbnb_control_+3A_parallel_tape">parallel_tape</code></td>
+<td>
+<p>Construct per-thread TMB tapes concurrently. The
+default <code>FALSE</code> constructs them sequentially to reduce peak memory;
+objective and gradient evaluation remains parallel.</p>
 </td></tr>
 </table>
 
 
 <h3>Value</h3>
 
-<p>An object of class <code>rpbnb_control</code> (a named list).
+<p>An object of class <code>c("rpbnb_control", "rpbnb_tmb_control")</code> (a named
+list). It carries both class names so that every historical
+<code>inherits(control, ...)</code> check in the package and in user code accepts it.
+</p>
+
+
+<h3>Which parameters apply to which estimator</h3>
+
+
+<table>
+<tr>
+ <td style="text-align: left;">
+   Parameter </td><td style="text-align: left;"> <code><a href="#topic+fit_bnb">fit_bnb()</a></code> </td><td style="text-align: left;"> <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> </td><td style="text-align: left;"> <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>method</code>, <code>compute_se</code>, <code>hess_eps</code>, <code>hess_r</code> </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> ignored </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>iterlim</code>, <code>reltol</code>, <code>print_level</code> </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>halton_burn</code>, <code>n_cores</code> </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>hessian</code> </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> ignored </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>se_method</code> </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> yes </td><td style="text-align: left;"> ignored </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>gradtol</code>, <code>restarts</code>, <code>max_threads</code>, <code>max_workload</code>, <code>parallel_tape</code> </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> yes </td>
+</tr>
+<tr>
+ <td style="text-align: left;">
+   <code>draws_hessian</code> </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> ignored </td><td style="text-align: left;"> ignored 
+</td>
+</tr>
+
+</table>
+
+<p>Note that <code>iterlim</code> and <code>n_cores</code> mean different things to different
+estimators &ndash; a <code>maxLik</code> BFGS iteration limit versus an <code>nlminb</code> one, worker
+<em>processes</em> versus OpenMP <em>threads</em>. They are not translated; each estimator
+reads the number and applies its own meaning to it.
+</p>
+
+
+<h3>Defaults that depend on the estimator</h3>
+
+<p><code>iterlim</code> and <code>print_level</code> default to <code>NULL</code>, which means &quot;this estimator's
+own long-standing default&quot;: <code>iterlim</code> is 300 under <code>maxLik</code> and 500 under
+<code>nlminb</code>; <code>print_level</code> is 2 (progress) under <code>maxLik</code> and 0 (silent) under
+<code>nlminb</code>. Supplying either explicitly overrides that for every estimator.
+<code>max_threads</code> defaults to <code>n_cores</code> and <code>max_workload</code> is computed from
+available memory by <code><a href="#topic+rpbnb_tmb_max_workload">rpbnb_tmb_max_workload()</a></code> the first time a TMB fit
+needs it (so a non-TMB fit never pays for the memory probe).
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+rpbnb_tmb_max_workload">rpbnb_tmb_max_workload()</a></code>, <code><a href="#topic+rpbnb">rpbnb()</a></code>, <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>,
+<code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code>, <code><a href="#topic+fit_bnb">fit_bnb()</a></code>
 </p>
 
 
@@ -613,9 +2195,1010 @@ at the optimum and yield the same observed-information SEs.</p>
 
 <pre><code class='language-R'>rpbnb_control(method = "BFGS", iterlim = 200)
 rpbnb_control(hessian = "analytic")
+# The same object drives either engine; the TMB-only knobs are simply
+# ignored by the classic one (and reported as ignored in its summary).
+rpbnb_control(n_cores = 4, gradtol = 1e-6, se_method = "opg")
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+rpbnb_elasticities'></span>
+<h2 id='rpbnb_elasticities'>Elasticities and semi-elasticities for a random-parameter bivariate NB model</h2><span id='topic+rpbnb_elasticities'></span>
+
+<h3>Description</h3>
+
+<p>Continuous elasticities <code class="reqn">x_{ij}\,(\partial \mu_i/\partial x_{ij})/\mu_i</code>
+and binary semi-elasticities <code class="reqn">\mu_i(x_j=1)/\mu_i(x_j=0) - 1</code>, built on the
+Monte-Carlo integrated population mean <code class="reqn">\mu_i = E_\beta[\exp(x_i'\beta)]</code>
+of an <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> fit. Under fixed coefficients these reduce to
+<code class="reqn">\beta_j E[x_j]</code> and <code class="reqn">\exp(\beta_j) - 1</code>. Standard errors use a numeric
+delta method over the equation's mean and log-scale parameters.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_elasticities(
+  fit,
+  which = c("y1", "y2", "both"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4,
+  print_output = TRUE,
+  n_cores = 1L,
+  scaling = NULL,
+  log_vars = NULL
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_elasticities_+3A_fit">fit</code></td>
+<td>
+<p>An <code>rpbnb_fit</code> object from <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_which">which</code></td>
+<td>
+<p>Which margin(s): &quot;y1&quot;, &quot;y2&quot;, or &quot;both&quot;.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_type">type</code></td>
+<td>
+<p>&quot;AME&quot; (average over the sample) or &quot;MEM&quot; (evaluated at the mean row).</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_vars">vars</code></td>
+<td>
+<p>Optional variable names or indices to restrict output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_n_cores">n_cores</code></td>
+<td>
+<p>Number of worker processes for the delta-method standard-error
+jacobian (1 = sequential, the default). When <code>n_cores &gt; 1</code>, the jacobian's
+independent per-parameter columns are dispatched across a
+<code>parallel::makeCluster()</code> cluster (one cluster per call, shared across
+every equation <code>which</code> computes); results are numerically identical to the
+sequential path. Falls back to sequential with a warning if the <code>parallel</code>
+package is unavailable.</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_scaling">scaling</code></td>
+<td>
+<p>Optional named list of <code>c(center =, scale =)</code> pairs, one per
+covariate that was centred and/or scaled before fitting (e.g. via
+<code>rpbnb(standardize = TRUE)</code>, whose <code style="white-space: pre;">&#8288;$scaling&#8288;</code> field is exactly this
+shape), used to report the results in the covariate's original units. See
+<code><a href="#topic+rpbnb_marginal_effects">rpbnb_marginal_effects()</a></code>'s <code>scaling</code> documentation for the full
+explanation (elasticities and marginal effects share it verbatim).</p>
+</td></tr>
+<tr><td><code id="rpbnb_elasticities_+3A_log_vars">log_vars</code></td>
+<td>
+<p>Optional character vector naming covariates that are
+ALREADY a log; see <code><a href="#topic+rpbnb_marginal_effects">rpbnb_marginal_effects()</a></code>'s <code>log_vars</code> documentation.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A data frame (single margin, invisibly) or a named list of data frames
+(<code>both</code>), each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>, <code>z</code>, <code>p</code>,
+<code>Signif</code>, <code>var_type</code>.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+bnb_elasticities">bnb_elasticities()</a></code> for fixed-coefficient <code>bnb_fit</code> models.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb(n = 400,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                 draws = 100)
+rpbnb_elasticities(fit, which = "both", type = "AME")
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_marginal_effects'></span>
+<h2 id='rpbnb_marginal_effects'>Marginal effects for a random-parameter bivariate NB model</h2><span id='topic+rpbnb_marginal_effects'></span>
+
+<h3>Description</h3>
+
+<p>Average marginal effects (AME) or marginal effects at the mean (MEM) for each
+margin of an <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code> fit, built on the Monte-Carlo integrated population
+mean <code class="reqn">\mu_i = E_\beta[\exp(x_i'\beta)]</code> (the same estimand as
+<code>predict.rpbnb_fit()</code>, reusing the fit's stored draws). Continuous effects are
+<code class="reqn">\partial \mu_i/\partial x_{ij} = \mathrm{mean}_r\, \mathrm{coef}_{rj}
+\exp(\mathrm{lp}_{ir})</code> (the realized coefficient per draw, so random and fixed
+columns are handled uniformly); binary (0/1) effects are the integrated
+discrete difference <code class="reqn">E[Y|x_j=1] - E[Y|x_j=0]</code>. Standard errors use a
+numeric delta method over the equation's mean and log-scale parameters.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_marginal_effects(
+  fit,
+  which = c("y1", "y2", "both", "all"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4,
+  print_output = TRUE,
+  n_cores = 1L,
+  scaling = NULL,
+  log_vars = NULL
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_marginal_effects_+3A_fit">fit</code></td>
+<td>
+<p>An <code>rpbnb_fit</code> object from <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_which">which</code></td>
+<td>
+<p>Which margin(s): &quot;y1&quot;, &quot;y2&quot;, &quot;both&quot;, or &quot;all&quot;.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_type">type</code></td>
+<td>
+<p>&quot;AME&quot; (average over the sample) or &quot;MEM&quot; (effect at the mean row).</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_vars">vars</code></td>
+<td>
+<p>Optional variable names or indices to restrict output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_print_output">print_output</code></td>
+<td>
+<p>Logical; if <code>FALSE</code>, suppress printing.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_n_cores">n_cores</code></td>
+<td>
+<p>Number of worker processes for the delta-method standard-error
+jacobian (1 = sequential, the default). When <code>n_cores &gt; 1</code>, the jacobian's
+independent per-parameter columns are dispatched across a
+<code>parallel::makeCluster()</code> cluster (one cluster per call, shared across
+every equation <code>which</code> computes); results are numerically identical to the
+sequential path. Falls back to sequential with a warning if the <code>parallel</code>
+package is unavailable.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_scaling">scaling</code></td>
+<td>
+<p>Optional named list of <code>c(center =, scale =)</code> pairs, one per
+covariate that was centred and/or scaled before fitting (e.g. via
+<code>rpbnb(standardize = TRUE)</code>, whose <code style="white-space: pre;">&#8288;$scaling&#8288;</code> field is exactly this
+shape), used to report the results in the covariate's original units.
+Columns not named are left alone, so binary indicators and untransformed
+variables need no entry.
+</p>
+<p>Only the reported quantity is rescaled; the fitted design is not rebuilt.
+That distinction is not cosmetic when a standardized covariate also
+carries a random coefficient: the random term enters as <code>x_std * dev</code>, so
+substituting <code>x_raw = x_std * s + c</code> would add a <code>(c/s) * dev</code> random
+intercept the model never estimated &ndash; the disguised random intercept
+centring was meant to remove, back again. The chain rule avoids that:
+<code>d(mu)/d(x_raw) = (d(mu)/d(x_std))/s</code>, and the elasticity's leading factor
+becomes <code>x_raw/s = x_std + c/s</code>. Binary effects are untouched.</p>
+</td></tr>
+<tr><td><code id="rpbnb_marginal_effects_+3A_log_vars">log_vars</code></td>
+<td>
+<p>Optional character vector naming covariates that are
+ALREADY a log, so results are reported per unit of the underlying
+variable <code>v_j = exp(x_j)</code> rather than per unit of <code>x_j</code> itself. Without
+this the elasticity formula treats <code style="white-space: pre;">&#8288;log v&#8288;</code> as an ordinary regressor and
+returns <code>xbar * b</code>, the elasticity with respect to the LOG &ndash; for a
+log-traffic column that can be an order of magnitude off from the
+elasticity with respect to traffic itself (the coefficient). Rejects
+binary columns (a 0/1 indicator is not a log-transformed variable).</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>For a model fitted with an <code>offset()</code>, absolute marginal effects scale with
+the offset-inclusive mean: AME uses each observation's training offset, and
+MEM uses the mean training offset.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A data frame (single margin, invisibly) or a named list of data frames
+(<code>both</code>/<code>all</code>), each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>, <code>z</code>, <code>p</code>,
+<code>Signif</code>, <code>var_type</code>.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+bnb_marginal_effects">bnb_marginal_effects()</a></code> for fixed-coefficient <code>bnb_fit</code> models.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb(n = 400,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                 draws = 100)
+rpbnb_marginal_effects(fit, which = "y1", type = "AME")
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_threads'></span>
+<h2 id='rpbnb_threads'>Number of CPU threads available for the multithreaded likelihood</h2><span id='topic+rpbnb_threads'></span>
+
+<h3>Description</h3>
+
+<p>Number of CPU threads available for the multithreaded likelihood
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_threads()
+</code></pre>
+
+
+<h3>Value</h3>
+
+<p>Integer thread count reported by OpenMP (1 if OpenMP is unavailable).
+</p>
+
+<hr><span id='rdfile+rpbnb_tmb_boundary_tests'></span>
+<h2 id='rpbnb_tmb_boundary_tests'>Boundary-corrected LR tests for an rpbnb_tmb_fit's boundary parameters</h2><span id='topic+rpbnb_tmb_boundary_tests'></span>
+
+<h3>Description</h3>
+
+<p>Runs a likelihood-ratio test for every random-coefficient scale
+(<code style="white-space: pre;">&#8288;sd1:*&#8288;</code>, <code style="white-space: pre;">&#8288;sd2:*&#8288;</code>) and NB2 dispersion (<code>m1</code>, <code>m2</code>) of a fitted TMB-engine
+random-parameter bivariate NB model, and merges them into one table. These
+are the parameters whose null lies on the boundary of the parameter space
+(scale = 0, or dispersion <code>m = 0</code> = Poisson), for which
+<code>summary(fit)</code> reports no Wald <code>z</code>/<code>p</code>; each test uses the
+50:50 chi-square boundary correction of <code><a href="#topic+lr_test">lr_test()</a></code> (<code>boundary = TRUE</code>).
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_boundary_tests(
+  fit,
+  data,
+  control = NULL,
+  which = c("sd", "dispersion"),
+  draws = fit$draws,
+  force_parallel_gaussian = FALSE,
+  sml_fallback = TRUE
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_fit">fit</code></td>
+<td>
+<p>A converged <code>rpbnb_tmb_fit</code> (from <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> or
+<code>rpbnb(engine = "tmb")</code>).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_data">data</code></td>
+<td>
+<p>The data frame the model was fit on. Required &ndash; the fit
+object does not store it, and every restricted model is refit on the
+same data. With <code>standardize = TRUE</code>, pass the standardized data
+(<code>rpbnb(engine = "tmb", boundary_tests = TRUE)</code> does this automatically;
+a manual call needs <code>rpbnb:::.apply_scaling(data, fit$scaling)</code>).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_control">control</code></td>
+<td>
+<p>An <code><a href="#topic+rpbnb_tmb_control">rpbnb_tmb_control()</a></code> for the restricted refits.
+Defaults to <code>rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = Inf)</code> &ndash; the same <code>n_cores</code> the
+original fit was called with (1 if <code>fit</code> predates the stored
+<code style="white-space: pre;">&#8288;$parallel&#8288;</code> field). <code>seed</code>/<code>method</code> are taken from <code>fit</code>, not <code>control</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_which">which</code></td>
+<td>
+<p>Which parameter groups to test, any subset of <code>"sd"</code> (the
+random-coefficient scales), <code>"dispersion"</code> (the NB2 dispersions <code>m1</code>,
+<code>m2</code>), and <code>"dependence"</code> (the association parameter). The default is
+<code>c("sd", "dispersion")</code> &ndash; the two boundary-null groups. <code>"dependence"</code>
+is opt-in because it costs another full refit and, for three of the four
+families, tests an <em>interior</em> null whose ordinary Wald <code>z</code> in <code>summary()</code>
+is already valid.
+</p>
+<p>The dependence test refits the model with <code>dependence = "independence"</code>
+&ndash; the template's own family, which maps <code>z_dep</code> out of the free
+parameters, giving an exact 1-df restriction on the same draws &ndash; and
+reports one row labelled <code>lam</code> (Famoye), <code>theta</code> (Frank / Kimeldorf), or
+<code>rho</code> (Gaussian). Only Kimeldorf's null (<code>theta &gt; 0</code>, so <code>theta = 0</code> is a
+boundary) takes the 50:50 mixture; Famoye, Frank, and Gaussian nulls are
+interior and get an ordinary chi-square(1).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_draws">draws</code></td>
+<td>
+<p>Number of Halton simulation draws for the restricted refits.
+Defaults to <code>fit$draws</code> &ndash; the same number <code>fit</code> itself used. Raising
+this trades refit cost for precision without needing to refit <code>fit</code> at
+a higher <code>draws</code>; lowering it is cheaper but noisier. A value other
+than <code>fit$draws</code> still shares <code>fit$seed</code> (so the Halton sequence's
+<em>prefix</em> is identical) but no longer draws the exact same simulated
+log-likelihood surface as <code>fit</code>, so the LR statistic picks up simulation
+noise beyond the restriction under test &ndash; prefer the default unless you
+have a specific reason to diverge.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_force_parallel_gaussian">force_parallel_gaussian</code></td>
+<td>
+<p>Opt-in override of the Gaussian-copula
+single-thread safety cap (see <code>?fit_rpbnb_tmb</code>), forwarded to every
+restricted refit. Default <code>FALSE</code>. This is intentionally a separate
+argument rather than something read off <code>fit</code>: <code>fit</code> does not record
+whether the original fit used the override, so passing
+<code>force_parallel_gaussian = TRUE</code> here is required even when the
+original <code>fit_rpbnb_tmb()</code>/<code>rpbnb()</code> call also passed it &ndash; otherwise
+every refit silently falls back to one thread regardless of
+<code>control$n_cores</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_boundary_tests_+3A_sml_fallback">sml_fallback</code></td>
+<td>
+<p>When <code>fit</code> was estimated by <code>method = "laplace"</code> and
+a restricted refit's Laplace pair cannot be trusted, re-run <strong>that one
+test's</strong> LR with both sides estimated by <code>method = "sml"</code> instead of
+reporting <code>NA</code> (or a clamped 0). Default <code>TRUE</code>. Two triggers: the
+restricted refit <strong>fails to converge</strong>, or it reports convergence with
+a restricted logLik <em>above</em> the full fit's (a negative raw LR). The
+second is not a rounding curiosity: the models are nested, so at true
+optima the restricted logLik can never exceed the full fit's &ndash; a
+negative LR proves at least one Laplace value is wrong, either a full
+fit that stopped short of its optimum (observed at -0.002 to -1.2
+nats: the warm-started restricted refit out-polished it) or a
+restricted fit that climbed a spurious ridge of the approximation
+itself (observed at -3838 nats: near a singular inner Hessian the
+Laplace log-likelihood rises without bound, and nlminb reports code 0
+there). Clamping such a statistic to 0 would silently turn a real
+effect into &quot;no evidence&quot;.
+</p>
+<p>This exists because some restrictions leave Laplace no valid optimum to
+converge to. Pinning a margin to Poisson can push the dependence strong
+enough (observed on the truck data's <code>m1</code> test under a Frank copula:
+theta driven to about 20, Kendall's tau 0.8) that the per-observation
+cell probability is non-log-concave in the random effects &ndash; and the
+Laplace approximation differentiates through an inner Newton that
+requires exactly the log-concavity the restricted model no longer has.
+No inner-solver setting fixes that (<code>tol10 = 0</code> clears TMB's
+<code>"Newton drop out"</code> but the outer fit still ends at nlminb
+<code style="white-space: pre;">&#8288;false convergence (8)&#8288;</code> with a gradient of 1e10); SML has no inner
+Newton and is not exposed to it.
+</p>
+<p>The fallback refits the <strong>full model too</strong> under SML (once, cached
+across tests) at these same <code>draws</code> and <code>fit$seed</code>, and takes the LR
+between the two SML fits &ndash; never between a Laplace logLik and an SML
+logLik, which are different approximations of the likelihood and whose
+difference is not an LR statistic. Rows that used the fallback are
+listed in the result's <code>sml_fallback</code> attribute and announced by a
+<code><a href="base.html#topic+message">message()</a></code> (silenced by <code>control$print_level = 0</code> like the other
+announcements). If the SML pair fails to converge as well, the row is
+<code>NA</code> with a warning, exactly as before. Ignored when <code>fit</code> itself was
+estimated by SML (there is nothing different to fall back to).</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>Each test refits a properly nested restricted model, otherwise identical
+to <code>fit</code> (same formulas, random-coefficient specification, dependence,
+seed, and estimator, and by default the same <code>draws</code>), warm-started
+from <code>fit$coef</code> and run with <code>inference = "none"</code> since the LR test
+needs only <code>logLik</code> and the parameter count.
+</p>
+<p><strong>Dispersions</strong> are restricted with <code>poisson_1</code>/<code>poisson_2 = TRUE</code>, the
+template's exact <code>m = 0</code> branch.
+</p>
+<p><strong>Scales</strong> are restricted by pinning that coefficient's <code>log_sd</code> at the
+parameterization's zero (<code>-20</code>; the template clamps <code>log_sd</code> to
+<code style="white-space: pre;">&#8288;[-20, 20]&#8288;</code> and computes <code>sd = exp(log_sd)</code>, so this is <code>sd = 2.1e-9</code> &ndash;
+numerically zero on every draw) and holding it out of the free-parameter
+count, giving a 1-df restriction. With <strong>multiple random coefficients in
+an equation, each scale is tested individually.</strong>
+</p>
+<p>Pinning the scale rather than dropping the coefficient from
+<code>random_1</code>/<code>random_2</code> is what preserves <strong>common random numbers</strong>: the
+Halton draw matrix keeps the same width, so every <em>other</em> random
+coefficient draws from exactly the dimensions it did in the full fit, and
+the two simulated log-likelihoods differ only by the restriction under
+test. Dropping the name instead would renumber the remaining coefficients'
+Halton dimensions, and the LR statistic would absorb that reshuffling as
+extra simulation noise.
+</p>
+<p>A <code><a href="base.html#topic+message">message()</a></code> (<code>"Boundary LR test: &lt;parameter&gt;..."</code>) reports each
+restricted refit right before it starts, unless <code>control$print_level</code> is
+<code>0</code>; suppress it with <code><a href="base.html#topic+suppressMessages">suppressMessages()</a></code> if needed.
+</p>
+
+
+<h3>Value</h3>
+
+<p>An object of class <code>rpbnb_boundary_tests</code> &ndash; the same class
+<code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> returns, with columns <code>Parameter</code>, <code>LR</code>, <code>df</code>,
+<code>p.value</code>, <code>Signif</code> (one row per boundary parameter) and the same
+<code>print()</code> method &ndash; so the two engines' results are interchangeable
+wherever that class is consumed (e.g. <code>summary.rpbnb_tmb_fit()</code>'s scale
+and dispersion blocks, once <code style="white-space: pre;">&#8288;$boundary_tests&#8288;</code> is attached to the fit).
+</p>
+<p>Scale rows are labelled by the distribution's own scale parameter
+(<code>sd</code> for normal/lognormal, <code>w</code> for uniform/triangular half-width, <code>s</code>
+for a lognormal log-scale), matching <code>summary()</code>'s row names.
+</p>
+<p>The <code>sml_fallback</code> attribute is a character vector of the <code>Parameter</code>
+rows whose LR came from the SML fallback pair (see the <code>sml_fallback</code>
+argument); <code>character(0)</code> when every test ran under <code>fit</code>'s own
+estimator.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+lr_test">lr_test()</a></code>, <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code>, <code><a href="#topic+rpbnb_boundary_tests">rpbnb_boundary_tests()</a></code> (the
+classic-engine counterpart)
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>
+sim &lt;- simulate_rpbnb(n = 600,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  random_1 = list(x1 = list(sd = 0.5)),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+fit &lt;- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                     draws = 100)
+rpbnb_tmb_boundary_tests(fit, sim$data)
+
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_tmb_control'></span>
+<h2 id='rpbnb_tmb_control'>Control parameters for the TMB engine (alias of <code>rpbnb_control()</code>)</h2><span id='topic+rpbnb_tmb_control'></span>
+
+<h3>Description</h3>
+
+<p>Retained so that code written against the pre-unification API keeps working.
+The two control objects were merged in 0.4.1: this function forwards to
+<code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> and returns exactly the same object, which every estimator
+in the package accepts. New code should call <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> directly.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_control(
+  iterlim = NULL,
+  reltol = 1e-08,
+  gradtol = 1e-05,
+  restarts = 10L,
+  print_level = NULL,
+  n_cores = 1L,
+  max_threads = NULL,
+  max_workload = NULL,
+  parallel_tape = FALSE,
+  halton_burn = 300L
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_control_+3A_iterlim">iterlim</code></td>
+<td>
+<p>Maximum optimizer iterations. <code>NULL</code> (default) uses 300 for
+the <code>maxLik</code> fitters and 500 for the TMB engine's <code>nlminb</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_reltol">reltol</code></td>
+<td>
+<p>Relative convergence tolerance.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_gradtol">gradtol</code></td>
+<td>
+<p>Stationarity tolerance for the TMB engine's score, applied
+<em>relative</em> to the objective: the fit is treated as stationary once
+<code>max(abs(gradient))</code> falls below <code>gradtol * max(1, abs(nll))</code>.
+<code>nlminb()</code> declares convergence from its relative function test,
+which can fire while the score is still far from zero; a Hessian taken
+there is not a curvature and its inverse can carry negative variances. The
+fit is restarted until the gradient clears this tolerance; missing it is
+not warned about on its own, because the copula families legitimately
+optimise against a clamp or a probability floor where no step improves the
+objective, but it is reported in the warning raised when the Hessian
+actually fails to factor, and is kept on the fit as
+<code>optimizer$max_abs_gradient</code>. The scaling matters because the score
+is a sum over observations, so an absolute cutoff would tighten with
+sample size for no statistical reason.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_restarts">restarts</code></td>
+<td>
+<p>Maximum number of times to restart <code>nlminb()</code> from its
+own answer while <code>gradtol</code> is unmet. Restarting resets the trust
+region and step scaling that stalled the first solve. Set to <code>0L</code> for
+the single-call behaviour of earlier versions.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_print_level">print_level</code></td>
+<td>
+<p>Optimizer verbosity, and the switch that silences the
+boundary-test progress messages. <code>NULL</code> (default) uses 2 for the <code>maxLik</code>
+fitters and 0 (silent) for the TMB engine.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_n_cores">n_cores</code></td>
+<td>
+<p>Worker processes for <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>'s optional cluster path, or
+OpenMP threads for <code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb()</a></code> (1 = sequential in both cases).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_max_threads">max_threads</code></td>
+<td>
+<p>Maximum OpenMP threads permitted for one TMB fit.
+<code>NULL</code> (default) means <code>n_cores</code>, so threads are not capped unless
+set explicitly below <code>n_cores</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_max_workload">max_workload</code></td>
+<td>
+<p>Maximum weighted observation-draw evaluations permitted before TMB tape construction; <code>Inf</code> disables the guard. The default and every figure here are derived from <code>TAPE_CALIBRATION</code>, so this text cannot drift from the shipped behaviour.
+</p>
+<p>With the default <code>parallel_tape = FALSE</code> the budget is per fit; with <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
+</p>
+<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.
+</p>
+<p>Retained tape size depends on <code>n * draws</code> alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).
+</p>
+<p>The budget is set on <em>peak</em> working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.
+</p>
+<p>Families cost different amounts per unit, so each carries a weight &ndash; the largest <em>peak</em> ratio to Famoye observed at matched workload, rounded up to the next tenth: independence 0.7, famoye 1, frank 3.6, gaussian 0.9, clayton 1.1. Frank peaks at over three and a half times Famoye, so treating it as unweighted would under-budget it more than threefold.
+</p>
+<p>Raise <code>max_workload</code> deliberately against the memory you actually have, not to make one particular dataset fit.
+</p>
+<p>As of <code>rpbnb_tmb_max_workload()</code>, the value <code>rpbnb_tmb_control()</code> actually uses by default is no longer the fixed figure above: it will auto-detect available memory and budget 80% of it, falling back to the fixed 8 GiB figure only when detection is unavailable on the current platform. Call <code><a href="#topic+rpbnb_tmb_max_workload">rpbnb_tmb_max_workload</a></code> directly to set your own budget or detection fraction.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_parallel_tape">parallel_tape</code></td>
+<td>
+<p>Construct per-thread TMB tapes concurrently. The
+default <code>FALSE</code> constructs them sequentially to reduce peak memory;
+objective and gradient evaluation remains parallel.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_control_+3A_halton_burn">halton_burn</code></td>
+<td>
+<p>Number of leading Halton points discarded before forming
+the simulation draws.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>Only the arguments you actually supply are forwarded, so an untouched
+<code>iterlim</code>/<code>print_level</code> still resolves to the TMB engine's own defaults (500
+and 0) when the object is used for a TMB fit &ndash; and to the <code>maxLik</code> defaults
+if the same object is handed to <code><a href="#topic+fit_rpbnb">fit_rpbnb()</a></code>.
+</p>
+
+
+<h3>Value</h3>
+
+<p>The <code><a href="#topic+rpbnb_control">rpbnb_control()</a></code> object.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+rpbnb_control">rpbnb_control()</a></code>
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>identical(unclass(rpbnb_tmb_control(n_cores = 2)),
+          unclass(rpbnb_control(n_cores = 2)))
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_tmb_dependence_profile'></span>
+<h2 id='rpbnb_tmb_dependence_profile'>Confidence interval for a fitted dependence parameter</h2><span id='topic+rpbnb_tmb_dependence_profile'></span>
+
+<h3>Description</h3>
+
+<p>Returns a profile-likelihood interval for the dependence parameter of a
+fitted model, computed on the unconstrained working scale and mapped through
+the family's monotone link. This is the tool to reach for when
+<code>summary()</code> reports <code>NA</code> for the dependence standard error: at a
+boundary the delta-method derivative collapses, so
+<code class="reqn">SE = |d\theta/dz| \cdot SE(z)</code> is a <code class="reqn">0 \times \infty</code> product and no
+symmetric standard error exists. A profile interval needs no derivative.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_dependence_profile(
+  fit,
+  level = 0.95,
+  method = c("profile", "wald"),
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_dependence_profile_+3A_fit">fit</code></td>
+<td>
+<p>An object of class <code>rpbnb_tmb_fit</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_dependence_profile_+3A_level">level</code></td>
+<td>
+<p>Coverage level; one number strictly between 0 and 1.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_dependence_profile_+3A_method">method</code></td>
+<td>
+<p><code>"profile"</code> (default) for a profile-likelihood interval,
+or <code>"wald"</code> for a Wald interval on the working scale mapped through
+the same link. <code>"profile"</code> requires the TMB objective, retained only
+under <code>keep = "full"</code>; when it is unavailable this degrades to
+<code>"wald"</code> with a warning rather than failing.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_dependence_profile_+3A_...">...</code></td>
+<td>
+<p>Passed to <code><a href="TMB.html#topic+tmbprofile">tmbprofile</a></code>, e.g. <code>ytol</code> or
+<code>parm.range</code>. <code>lincomb</code> and <code>slice</code> are not supported and
+raise an error: the first would profile a different quantity than
+<code>z_dep</code> while still being reported as if it were, and the second
+returns a likelihood slice rather than a profile.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>For Famoye this is the usual situation, because the admissible lambda
+interval is frozen at the starting values (see <code>lambda_bounds</code> in
+<code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb</a></code>). An interval around a pinned estimate is still
+an interval around an artefact &ndash; widen the box first by refitting from
+better starting values.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A data frame with one row per reported dependence quantity and
+columns <code>parameter</code>, <code>estimate</code>, <code>lower</code>, <code>upper</code>,
+<code>level</code>, and <code>method</code> &ndash; the method actually used, which may
+differ from the one requested. The raw profile, when one was computed, is
+attached as <code>attr(, "profile")</code> so it can be plotted.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="#topic+fit_rpbnb_tmb">fit_rpbnb_tmb</a></code>
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>## Not run: 
+fit &lt;- fit_rpbnb_tmb(y1 ~ x, y2 ~ x, data = d,
+                     dependence = "famoye", keep = "full")
+rpbnb_tmb_dependence_profile(fit)
+plot(attr(rpbnb_tmb_dependence_profile(fit), "profile"))
+
+## End(Not run)
+</code></pre>
+
+<hr><span id='rdfile+rpbnb_tmb_elasticities'></span>
+<h2 id='rpbnb_tmb_elasticities'>Elasticities for a rpbnb_tmb model</h2><span id='topic+rpbnb_tmb_elasticities'></span>
+
+<h3>Description</h3>
+
+<p>Continuous elasticities <code class="reqn">x_j / E[Y] \cdot \partial E[Y]/\partial x_j</code>
+and binary semi-elasticities
+<code class="reqn">E[Y|x_j = 1] / E[Y|x_j = 0] - 1</code>.  Built on the same Monte-Carlo
+integrated mean used by <code><a href="#topic+rpbnb_tmb_marginal_effects">rpbnb_tmb_marginal_effects</a></code>.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_elasticities(
+  fit,
+  which = c("y1", "y2", "both"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4L,
+  scaling = NULL,
+  log_vars = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_fit">fit</code></td>
+<td>
+<p>An object of class <code>rpbnb_tmb_fit</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_which">which</code></td>
+<td>
+<p>Which margin: <code>"y1"</code>, <code>"y2"</code>, or <code>"both"</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_type">type</code></td>
+<td>
+<p><code>"AME"</code> (average over the sample) or <code>"MEM"</code> (at the
+sample mean of covariates).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_vars">vars</code></td>
+<td>
+<p>Optional character vector of variable names to restrict output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term in output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed table entries.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_scaling">scaling</code></td>
+<td>
+<p>Optional named list of <code>c(center =, scale =)</code> pairs, one
+per covariate that was centred and/or scaled before fitting, used to report
+the results in the covariate's original units.  Columns not named are left
+alone, so binary indicators and untransformed variables need no entry.
+</p>
+<p>Only the reported quantity is rescaled; the fitted design is not rebuilt.
+That distinction is not cosmetic when a standardized covariate also carries
+a random coefficient.  The random term enters as
+<code>x_std * dev</code>, so substituting <code>x_raw = x_std * s + c</code> would add a
+<code>(c/s) * dev</code> random intercept the model never estimated &ndash; which is
+how a centred random slope turns back into the disguised random intercept
+that centring was meant to remove.  The chain rule avoids that entirely:
+<code class="reqn">\partial\mu/\partial x_{raw} = (\partial\mu/\partial x_{std})/s</code>, and
+the elasticity's leading factor becomes
+<code class="reqn">x_{raw}/s = x_{std} + c/s</code>.  Binary effects are untouched.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_log_vars">log_vars</code></td>
+<td>
+<p>Optional character vector naming covariates that are ALREADY
+a log, so that results are reported per unit of the underlying variable
+<code class="reqn">v_j = \exp(x_j)</code> rather than per unit of <code class="reqn">x_j</code> itself.
+</p>
+<p>Without this the elasticity formula treats <code class="reqn">\log v</code> as an ordinary
+regressor and returns <code class="reqn">\bar{x} b</code>, the elasticity with respect to the
+LOG &ndash; for the truck model's <code>LNAADT_3</code> that is 8.59, where the
+elasticity with respect to AADT is the coefficient itself, 0.871.  A
+ten-fold overstatement that looks perfectly plausible in a table.
+</p>
+<p>Because <code class="reqn">\partial\log\mu/\partial\log v = (\partial\mu/\partial x)/\mu</code>,
+the elasticity is <code class="reqn">E[d\mu/\mu]/s</code> and the marginal effect is
+<code class="reqn">E[d\mu/(s v)]</code>, with <code class="reqn">v = \exp(x_{std} s + c)</code> picking up any
+<code>scaling</code> applied to the logged column.  Named columns are reported
+with type <code>"log-continuous"</code>.  Binary columns are rejected.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_elasticities_+3A_...">...</code></td>
+<td>
+<p>Not used.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A data frame or named list of data frames.
+</p>
+
+<hr><span id='rdfile+rpbnb_tmb_marginal_effects'></span>
+<h2 id='rpbnb_tmb_marginal_effects'>Marginal effects for a rpbnb_tmb model</h2><span id='topic+rpbnb_tmb_marginal_effects'></span>
+
+<h3>Description</h3>
+
+<p>Computes average marginal effects (AME) or marginal effects at the mean (MEM)
+for a fitted random-parameter bivariate negative binomial model.  For
+continuous covariates the effect is <code class="reqn">\partial E[Y]/\partial x_j</code>; for
+binary covariates it is the discrete difference
+<code class="reqn">E[Y|x_j = 1] - E[Y|x_j = 0]</code>.  When a coefficient is random the
+per-draw realized coefficients are used to form the Monte-Carlo integrated
+mean.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_marginal_effects(
+  fit,
+  which = c("y1", "y2", "both"),
+  type = c("AME", "MEM"),
+  vars = NULL,
+  include_intercept = FALSE,
+  digits = 4L,
+  scaling = NULL,
+  log_vars = NULL,
+  ...
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_fit">fit</code></td>
+<td>
+<p>An object of class <code>rpbnb_tmb_fit</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_which">which</code></td>
+<td>
+<p>Which margin: <code>"y1"</code>, <code>"y2"</code>, or <code>"both"</code>.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_type">type</code></td>
+<td>
+<p><code>"AME"</code> (average over the sample) or <code>"MEM"</code> (at the
+sample mean of covariates).</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_vars">vars</code></td>
+<td>
+<p>Optional character vector of variable names to restrict output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_include_intercept">include_intercept</code></td>
+<td>
+<p>Logical; include the intercept term in output.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for printed table entries.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_scaling">scaling</code></td>
+<td>
+<p>Optional named list of <code>c(center =, scale =)</code> pairs, one
+per covariate that was centred and/or scaled before fitting, used to report
+the results in the covariate's original units.  Columns not named are left
+alone, so binary indicators and untransformed variables need no entry.
+</p>
+<p>Only the reported quantity is rescaled; the fitted design is not rebuilt.
+That distinction is not cosmetic when a standardized covariate also carries
+a random coefficient.  The random term enters as
+<code>x_std * dev</code>, so substituting <code>x_raw = x_std * s + c</code> would add a
+<code>(c/s) * dev</code> random intercept the model never estimated &ndash; which is
+how a centred random slope turns back into the disguised random intercept
+that centring was meant to remove.  The chain rule avoids that entirely:
+<code class="reqn">\partial\mu/\partial x_{raw} = (\partial\mu/\partial x_{std})/s</code>, and
+the elasticity's leading factor becomes
+<code class="reqn">x_{raw}/s = x_{std} + c/s</code>.  Binary effects are untouched.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_log_vars">log_vars</code></td>
+<td>
+<p>Optional character vector naming covariates that are ALREADY
+a log, so that results are reported per unit of the underlying variable
+<code class="reqn">v_j = \exp(x_j)</code> rather than per unit of <code class="reqn">x_j</code> itself.
+</p>
+<p>Without this the elasticity formula treats <code class="reqn">\log v</code> as an ordinary
+regressor and returns <code class="reqn">\bar{x} b</code>, the elasticity with respect to the
+LOG &ndash; for the truck model's <code>LNAADT_3</code> that is 8.59, where the
+elasticity with respect to AADT is the coefficient itself, 0.871.  A
+ten-fold overstatement that looks perfectly plausible in a table.
+</p>
+<p>Because <code class="reqn">\partial\log\mu/\partial\log v = (\partial\mu/\partial x)/\mu</code>,
+the elasticity is <code class="reqn">E[d\mu/\mu]/s</code> and the marginal effect is
+<code class="reqn">E[d\mu/(s v)]</code>, with <code class="reqn">v = \exp(x_{std} s + c)</code> picking up any
+<code>scaling</code> applied to the logged column.  Named columns are reported
+with type <code>"log-continuous"</code>.  Binary columns are rejected.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_marginal_effects_+3A_...">...</code></td>
+<td>
+<p>Not used.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>A data frame (single margin) or named list of two data frames
+(<code>"both"</code>).
+</p>
+
+<hr><span id='rdfile+rpbnb_tmb_max_workload'></span>
+<h2 id='rpbnb_tmb_max_workload'>Compute a TMB workload budget from a memory figure</h2><span id='topic+rpbnb_tmb_max_workload'></span>
+
+<h3>Description</h3>
+
+<p>Companion to <code>rpbnb_tmb_control()</code>'s <code>max_workload</code>: rather than
+picking a weighted-observation-draw count directly, state a memory budget
+and let this function do the arithmetic <code>TAPE_CALIBRATION</code> implies.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_max_workload(budget_gib = NULL, fraction = 0.8)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="rpbnb_tmb_max_workload_+3A_budget_gib">budget_gib</code></td>
+<td>
+<p>Optional memory budget in GiB, stated explicitly. When
+supplied, used as-is &ndash; <code>fraction</code> does not apply, because a number
+you state yourself is not second-guessed with a discount. When omitted
+(the default), available memory is auto-detected and <code>fraction</code> of
+it is budgeted instead.</p>
+</td></tr>
+<tr><td><code id="rpbnb_tmb_max_workload_+3A_fraction">fraction</code></td>
+<td>
+<p>Of auto-detected available memory, the fraction to
+actually budget; one number in <code>(0, 1]</code>. Available memory
+fluctuates and competes with other processes, so budgeting all of it
+risks the guard passing a fit that then exhausts memory anyway. Ignored
+when <code>budget_gib</code> is supplied.</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>With <code>budget_gib</code> omitted, this is also <code>rpbnb_tmb_control()</code>'s
+own default: every fit that doesn't set <code>max_workload</code> explicitly
+already goes through this function.
+</p>
+
+
+<h3>Value</h3>
+
+<p>One positive numeric workload value, on the same scale as
+<code>rpbnb_tmb_control()</code>'s <code>max_workload</code>.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>rpbnb_tmb_max_workload(budget_gib = 16)
+## Not run: 
+ctrl &lt;- rpbnb_tmb_control(max_workload = rpbnb_tmb_max_workload())
+
+## End(Not run)
+</code></pre>
+
+<hr><span id='rdfile+simulate_bnb'></span>
 <h2 id='simulate_bnb'>Simulate data from the Famoye/Sarmanov bivariate NB distribution</h2><span id='topic+simulate_bnb'></span>
 
 <h3>Description</h3>
@@ -634,7 +3217,7 @@ Famoye/Sarmanov bivariate NB2 joint PMF:
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 </code></pre>
 
@@ -668,7 +3251,9 @@ normal columns are generated for every non-intercept coefficient name.</p>
 </td></tr>
 <tr><td><code id="simulate_bnb_+3A_seed">seed</code></td>
 <td>
-<p>Random seed for reproducibility.</p>
+<p>Optional random seed. If <code>NULL</code> (default) the RNG is left
+untouched and draws continue from the caller's current stream, so repeated
+calls yield distinct datasets; supply an integer for reproducible output.</p>
 </td></tr>
 </table>
 
@@ -712,7 +3297,7 @@ normal columns are generated for every non-intercept coefficient name.</p>
 head(sim$data)
 </code></pre>
 
-<hr>
+<hr><span id='rdfile+simulate_rpbnb'></span>
 <h2 id='simulate_rpbnb'>Simulate data from a random-parameter bivariate NB process</h2><span id='topic+simulate_rpbnb'></span>
 
 <h3>Description</h3>
@@ -732,7 +3317,7 @@ head(sim$data)
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 </code></pre>
 
@@ -751,8 +3336,12 @@ equation; must include &quot;(Intercept)&quot;.</p>
 </td></tr>
 <tr><td><code id="simulate_rpbnb_+3A_random_1">random_1</code>, <code id="simulate_rpbnb_+3A_random_2">random_2</code></td>
 <td>
-<p>Named lists giving random coefficients, e.g.
-<code>list(x1 = list(sd = 0.5))</code>. Means come from <code>beta1</code>/<code>beta2</code>.</p>
+<p>Named lists giving random coefficients. Each value
+is a list with <code>dist</code> (one of &quot;normal&quot;, &quot;lognormal&quot;, &quot;uniform&quot;,
+&quot;triangular&quot;; default &quot;normal&quot;), <code>scale</code> (or <code>sd</code>) for the dispersion, and
+<code>sign</code> (-1/1, lognormal only). Means come from <code>beta1</code>/<code>beta2</code>; for a
+lognormal coefficient the <code>beta</code> entry is the log-location and the realized
+coefficient is <code>sign * exp(log_location + scale * z)</code>.</p>
 </td></tr>
 <tr><td><code id="simulate_rpbnb_+3A_dispersion">dispersion</code></td>
 <td>
@@ -769,7 +3358,9 @@ columns are generated for every non-intercept name.</p>
 </td></tr>
 <tr><td><code id="simulate_rpbnb_+3A_seed">seed</code></td>
 <td>
-<p>Random seed.</p>
+<p>Optional random seed. If <code>NULL</code> (default) the RNG is left
+untouched and draws continue from the caller's current stream, so repeated
+calls yield distinct datasets; supply an integer for reproducible output.</p>
 </td></tr>
 </table>
 
@@ -792,7 +3383,193 @@ columns are generated for every non-intercept name.</p>
 head(sim$data)
 </code></pre>
 
+<hr><span id='rdfile+simulate_rpbnb_copula'></span>
+<h2 id='simulate_rpbnb_copula'>Simulate data from a copula RP-BNB process</h2><span id='topic+simulate_rpbnb_copula'></span>
+
+<h3>Description</h3>
+
+<p>Simulate data from a copula RP-BNB process
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>simulate_rpbnb_copula(
+  n,
+  beta1,
+  beta2,
+  random_1 = NULL,
+  random_2 = NULL,
+  dispersion = c(m1 = 0.5, m2 = 0.5),
+  copula,
+  covariates = NULL,
+  seed = NULL
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="simulate_rpbnb_copula_+3A_n">n</code></td>
+<td>
+<p>Number of observations.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_beta1">beta1</code>, <code id="simulate_rpbnb_copula_+3A_beta2">beta2</code></td>
+<td>
+<p>Named coefficient means; must include &quot;(Intercept)&quot;.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_random_1">random_1</code>, <code id="simulate_rpbnb_copula_+3A_random_2">random_2</code></td>
+<td>
+<p>Random-coefficient specs (see <code><a href="#topic+simulate_rpbnb">simulate_rpbnb()</a></code>).</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_dispersion">dispersion</code></td>
+<td>
+<p>Named <code>c(m1=, m2=)</code> NB2 dispersions.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_copula">copula</code></td>
+<td>
+<p>An <code><a href="#topic+copula">copula()</a></code> object giving the family and native parameter <code>par</code>.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_covariates">covariates</code></td>
+<td>
+<p>Optional covariate data frame; NULL -&gt; standard-normal columns.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_copula_+3A_seed">seed</code></td>
+<td>
+<p>Optional RNG seed.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>list(data, mu, true, settings).
+</p>
+
+<hr><span id='rdfile+simulate_rpbnb_tmb'></span>
+<h2 id='simulate_rpbnb_tmb'>Simulate data from a bivariate NB process</h2><span id='topic+simulate_rpbnb_tmb'></span>
+
+<h3>Description</h3>
+
+<p>Generates count data from a bivariate negative binomial model with
+random coefficients and Famoye/Sarmanov or copula dependence.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>simulate_rpbnb_tmb(
+  n,
+  beta1,
+  beta2,
+  random_1 = NULL,
+  random_2 = NULL,
+  dispersion = c(m1 = 0.5, m2 = 0.5),
+  dependence = "famoye",
+  lambda = 0,
+  covariates = NULL,
+  seed = NULL
+)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="simulate_rpbnb_tmb_+3A_n">n</code></td>
+<td>
+<p>Number of observations.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_beta1">beta1</code>, <code id="simulate_rpbnb_tmb_+3A_beta2">beta2</code></td>
+<td>
+<p>Named coefficient vectors (must include &quot;(Intercept)&quot;).</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_random_1">random_1</code>, <code id="simulate_rpbnb_tmb_+3A_random_2">random_2</code></td>
+<td>
+<p>Random coefficient specs (same format as fit_rpbnb_tmb).</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_dispersion">dispersion</code></td>
+<td>
+<p>Named vector c(m1 = , m2 = ) of NB2 dispersions.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_dependence">dependence</code></td>
+<td>
+<p>&quot;famoye&quot;, &quot;independence&quot;, or a copula() object.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_lambda">lambda</code></td>
+<td>
+<p>Famoye dependence parameter (0 = independence).</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_covariates">covariates</code></td>
+<td>
+<p>Optional data frame. If NULL, standard-normal covariates generated.</p>
+</td></tr>
+<tr><td><code id="simulate_rpbnb_tmb_+3A_seed">seed</code></td>
+<td>
+<p>Optional integer seed.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>List with $data (data.frame), $truth (parameters), $settings.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre><code class='language-R'>sim &lt;- simulate_rpbnb_tmb(n = 200,
+  beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+  beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+  dispersion = c(m1 = 0.4, m2 = 0.5), seed = 1)
+head(sim$data)
+</code></pre>
+
+<hr><span id='rdfile+summary.rpbnb_tmb_fit'></span>
+<h2 id='summary.rpbnb_tmb_fit'>Summarize a fitted TMB-engine rpbnb model</h2><span id='topic+summary.rpbnb_tmb_fit'></span>
+
+<h3>Description</h3>
+
+<p>Summarize a fitted TMB-engine rpbnb model
+</p>
+
+
+<h3>Usage</h3>
+
+<pre><code class='language-R'>## S3 method for class 'rpbnb_tmb_fit'
+summary(object, digits = 4L, ...)
+</code></pre>
+
+
+<h3>Arguments</h3>
+
+<table role = "presentation">
+<tr><td><code id="summary.rpbnb_tmb_fit_+3A_object">object</code></td>
+<td>
+<p>A fitted model object of class rpbnb_tmb_fit.</p>
+</td></tr>
+<tr><td><code id="summary.rpbnb_tmb_fit_+3A_digits">digits</code></td>
+<td>
+<p>Number of decimal places for numeric columns in coefficient
+tables. Default 4. Use a negative value (e.g. -1) for full precision.</p>
+</td></tr>
+<tr><td><code id="summary.rpbnb_tmb_fit_+3A_...">...</code></td>
+<td>
+<p>Not used.</p>
+</td></tr>
+</table>
+
+
+<h3>Value</h3>
+
+<p>The fitted object, invisibly.
+</p>
+
 </main>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-r.min.js"></script>
 </body></html>

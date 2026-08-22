@@ -11,7 +11,7 @@ binary (0/1) regressors, the semi-elasticity is \(\exp(\beta_j) - 1\)
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -101,18 +101,62 @@ each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>,
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"rwm1984_clean.csv"</span>, package <span class="op">=</span> <span class="st">"rpbnb"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="fit_bnb.html">fit_bnb</a></span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span> <span class="op">+</span> <span class="va">age</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
 <span class="r-in"><span>               dependence <span class="op">=</span> <span class="st">"famoye"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 16577.658491 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 13271.264393</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 11329.413288</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 10927.948782</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 10460.070098</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 10268.013084</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 10239.090291</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 10217.702577</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 10098.173611</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 10011.189900</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 9742.281069</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9697.323089</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 9638.136548</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 9621.201100</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 9620.312447</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 9620.114617</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 9620.104409</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 9620.098183</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 9620.089991</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 9620.089991</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 9620.089991</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9620.089991 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 9667.499495 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9655.410932</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 9649.351194</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 9649.083518</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 9648.593995</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 9648.079321</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 9643.429855</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 9632.852428</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 9627.281386</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 9620.485655</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 9620.372605</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9620.226082</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 9620.184059</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 9620.034085</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 9619.983585</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 9619.962489</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 9619.956429</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 9619.954798</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 9619.954798</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9619.954798 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
 <span class="r-in"><span><span class="fu">bnb_elasticities</span><span class="op">(</span><span class="va">fit</span>, which <span class="op">=</span> <span class="st">"both"</span>, type <span class="op">=</span> <span class="st">"AME"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> --- Elasticities / semi-elasticities (y1, AME) ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     Name Estimate StdErr      z      p Signif                   var_type</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  outwork   0.5235 0.1038 5.0408 0.0000    *** binary (0-&gt;1): exp(beta)-1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      age   0.9453 0.3763 2.5124 0.0120      *    continuous: beta * E[x]</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  outwork   0.5236 0.0840 6.2351 0.0000    *** binary (0-&gt;1): exp(beta)-1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      age   0.9459 0.1037 9.1198 0.0000    ***    continuous: beta * E[x]</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Continuous vars: elasticity = beta * E[x].</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 0/1 vars: semi-elasticity = exp(beta) - 1 (percent change from 0-&gt;1).</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> --- Elasticities / semi-elasticities (y2, AME) ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     Name Estimate StdErr      z      p Signif                   var_type</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  outwork   0.3552 0.6159 0.5767 0.5641        binary (0-&gt;1): exp(beta)-1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  outwork   0.3585 0.1878 1.9087 0.0563      . binary (0-&gt;1): exp(beta)-1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Continuous vars: elasticity = beta * E[x].</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 0/1 vars: semi-elasticity = exp(beta) - 1 (percent change from 0-&gt;1).</span>
 </code></pre></div>
@@ -122,11 +166,11 @@ each with columns <code>Name</code>, <code>Estimate</code>, <code>StdErr</code>,
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

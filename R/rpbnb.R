@@ -43,27 +43,59 @@
 #'
 #' # Boundary LR tests
 #'
-#' `boundary_tests = TRUE` runs a boundary-corrected LR test on the fit as
-#' soon as it converges (against the same data the fit itself used -- the
-#' standardized copy, when `standardize = TRUE`) and attaches the result as
-#' `$boundary_tests`. The random-coefficient SDs and the NB2 dispersions
-#' (`m1`, `m2`) have a null that sits on the boundary of the parameter space,
-#' so an ordinary Wald `z`/`p` does not test it; the boundary test refits
-#' each restricted model instead. `summary()`/`print()` then show that test's
-#' `LR`/`df`/`p` for those rows in the natural-scale block, in place of the
-#' `NA` they would otherwise carry.
+#' `boundary_tests` runs a likelihood-ratio test on the fit as soon as it
+#' converges (against the same data the fit itself used -- the standardized
+#' copy, when `standardize = TRUE`) and attaches the result as
+#' `$boundary_tests`. It is a switch over three independent groups, so the
+#' cost is paid only for the parameters actually in question:
 #'
-#' Both engines test the same parameters -- every random-coefficient scale
-#' and every unrestricted NB2 dispersion -- via [rpbnb_boundary_tests()]
+#' | `boundary_tests` | tests | restricted refits |
+#' | --- | --- | --- |
+#' | `FALSE` / `"none"` | nothing | 0 |
+#' | `TRUE` | `c("sd", "dispersion")` | one per scale + one per free `m` |
+#' | `"sd"` | random-coefficient scales | one per scale |
+#' | `"dispersion"` | overdispersions `m1`, `m2` | one per free `m` |
+#' | `"dependence"` | the association parameter | 1 |
+#' | `"all"` | all three groups | all of the above |
+#'
+#' The random-coefficient SDs and the NB2 dispersions (`m1`, `m2`) have a null
+#' that sits on the boundary of the parameter space, so an ordinary Wald
+#' `z`/`p` does not test it; the boundary test refits each restricted model
+#' instead and `summary()`/`print()` show that test's `LR`/`df`/`p` for those
+#' rows in the natural-scale block, in place of the `NA` they would otherwise
+#' carry.
+#'
+#' The **dependence** test is the odd one out and is therefore opt-in even
+#' under `boundary_tests = TRUE`. Its null is "no association", i.e. the
+#' independence model, which for Famoye (`lam`), Frank (`theta`), and the
+#' Gaussian copula (`rho`) sits in the *interior* of the parameter space --
+#' the Wald `z` those rows already show is valid, and the LR statistic is an
+#' ordinary chi-square(1), not the 50:50 boundary mixture. Only Clayton /
+#' Kimeldorf (`theta > 0`) has a genuine boundary null there. Requesting it
+#' replaces the dependence row's Wald `z`/`p` with the LR test on both
+#' engines, since the two answer the same question.
+#'
+#' Both engines test the same parameters via [rpbnb_boundary_tests()]
 #' (`engine = "classic"`) or [rpbnb_tmb_boundary_tests()]
-#' (`engine = "tmb"`). They differ only in how each restricted fit holds the
-#' scale at zero while preserving common random numbers: the classic engine
-#' zeroes that coefficient's draw column, the TMB engine pins its `log_sd`
-#' and maps it out of the free parameters.
+#' (`engine = "tmb"`). They differ only in how each restricted fit is
+#' constructed while preserving common random numbers: for a scale, the
+#' classic engine zeroes that coefficient's draw column while the TMB engine
+#' pins its `log_sd` and maps it out of the free parameters; for the
+#' dependence parameter, the TMB engine refits with its own
+#' `dependence = "independence"` family while the classic engine (which has no
+#' such fitter) pins the working-scale dependence parameter at its family's
+#' independence value.
 #'
 #' A [message()] reports how many restricted refits are about to run before
 #' they start, unless `control$print_level` is `0`; suppress it with
 #' [suppressMessages()] if needed.
+#'
+#' Under `engine = "tmb"` with `method = "laplace"`, a restricted refit that
+#' fails to converge is automatically retried with both sides of that one LR
+#' estimated by `method = "sml"` rather than reported `NA` -- some
+#' restrictions leave Laplace no valid optimum at all (see
+#' [rpbnb_tmb_boundary_tests()]'s `sml_fallback` argument, which is where to
+#' turn this off).
 #'
 #' `force_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
 #' forwarded to every restricted refit, so a Gaussian-copula fit's boundary
@@ -94,11 +126,12 @@
 #' | Argument | `engine = "classic"` | `engine = "tmb"` |
 #' | --- | --- | --- |
 #' | `draw_type`, `.fixed`, `.opt_draws` | yes | error |
-#' | `inference`, `keep`, `method`, `force_parallel_gaussian` | error | yes |
+#' | `inference`, `keep` | error | yes |
+#' | `method`, `force_parallel_gaussian` | ignored with a warning | yes |
 #' | `offset()` in a formula | yes | error |
 #' | `dependence = "independence"` | error | yes |
 #' | `boundary_draws` (non-`NULL`) | error | yes |
-#' | `control` class | `rpbnb_control` | `rpbnb_tmb_control` |
+#' | `control` class | `rpbnb_control` | `rpbnb_control` (same object) |
 #' | optimizer | `maxLik::maxLik(method = "BFGS")` | `stats::nlminb` + restarts |
 #'
 #' Both engines freeze the Famoye admissible lambda interval at the starting
@@ -125,25 +158,45 @@
 #' @param continuous_vars Optional character vector overriding automatic
 #'   continuous-predictor detection when `standardize = TRUE`. Must be columns
 #'   of `data`; ignored when `standardize = FALSE`.
-#' @param boundary_tests Run [rpbnb_boundary_tests()] (`engine = "classic"`)
-#'   or [rpbnb_tmb_boundary_tests()] (`engine = "tmb"`) after fitting and
-#'   attach the result as `$boundary_tests`, so `summary()`/`print()` show a
-#'   boundary-corrected LR test (rather than `NA`) for the tested rows (see
-#'   "Boundary LR tests" above for which parameters each engine tests).
-#'   Default `FALSE` (each restricted refit costs roughly another full fit).
+#' @param boundary_tests Which groups of parameters to LR-test after fitting,
+#'   via [rpbnb_boundary_tests()] (`engine = "classic"`) or
+#'   [rpbnb_tmb_boundary_tests()] (`engine = "tmb"`); the result is attached as
+#'   `$boundary_tests` and `summary()`/`print()` show the test (rather than
+#'   `NA`, or rather than a Wald `z`) on the corresponding rows. Accepts:
+#'
+#'   * `FALSE` (default) or `"none"` -- run nothing. Each restricted refit
+#'     costs roughly another full fit.
+#'   * `TRUE` -- `c("sd", "dispersion")`, the two boundary-null groups. This is
+#'     what `TRUE` has always meant and it does not silently grow.
+#'   * a character vector, any of `"sd"` (random-coefficient scales),
+#'     `"dispersion"` (the NB2 overdispersions `m1`, `m2`), `"dependence"`
+#'     (the association parameter), or `"all"` for all three.
+#'
+#'   So `boundary_tests = "dispersion"` tests overdispersion only,
+#'   `boundary_tests = c("dispersion", "dependence")` tests overdispersion and
+#'   association without paying for one refit per random-coefficient scale, and
+#'   `boundary_tests = "all"` tests everything. See "Boundary LR tests" below.
 #' @param boundary_draws Number of Halton simulation draws for the boundary
 #'   tests' restricted refits, `engine = "tmb"` only. `NULL` (default) uses
-#'   the main fit's `draws`. Ignored when `boundary_tests` is not `TRUE`
+#'   the main fit's `draws`. Ignored when no boundary test was requested
 #'   (nothing to apply it to); an error if supplied under `engine =
-#'   "classic"` while `boundary_tests = TRUE` (see "Boundary LR tests"
+#'   "classic"` alongside a boundary test (see "Boundary LR tests"
 #'   above -- that engine has no `draws` to override).
-#' @param control An `rpbnb_control()` object when `engine = "classic"`, or an
-#'   `rpbnb_tmb_control()` object when `engine = "tmb"`. Defaults to the right
-#'   one for the chosen engine. The two are not interchangeable and are never
-#'   translated into one another.
+#' @param control An [rpbnb_control()] object -- one object for both engines,
+#'   as of 0.4.1 (`rpbnb_tmb_control()` is a retained alias that returns the
+#'   same thing). Settings the chosen engine does not read are ignored and
+#'   listed by `print()`/`summary()` of the fit; `iterlim` and `print_level`,
+#'   whose defaults differ between the engines, resolve to the chosen engine's
+#'   own default unless you set them. Fields sharing a name are still not
+#'   translated: `iterlim` is a `maxLik` BFGS limit under `engine = "classic"`
+#'   and an `nlminb` limit under `"tmb"`, and `n_cores` is worker processes
+#'   versus OpenMP threads.
 #' @param ... Further arguments passed to the selected fitter. Names are
 #'   validated against that fitter's formals; an argument belonging to the other
-#'   engine, or an unrecognised name, is an error.
+#'   engine, or an unrecognised name, is an error. Exception: the TMB tuning
+#'   knobs `method` and `force_parallel_gaussian` are dropped with a warning
+#'   (not an error) under `engine = "classic"`, so a call can switch engines
+#'   without stripping them.
 #'
 #' @return The engine-native fit object, identical to what a direct call to the
 #'   underlying fitter would return: an object of class `rpbnb_fit` for
@@ -153,9 +206,11 @@
 #'   method and post-estimation function works unchanged. With
 #'   `standardize = TRUE`, two extra fields are attached -- `$scaling` and
 #'   `$continuous_vars` -- and `print()`/`summary()` use them to display
-#'   original-units coefficients. With `boundary_tests = TRUE`, a third field
-#'   `$boundary_tests` (the [rpbnb_boundary_tests()] result) is attached, and
-#'   `print()`/`summary()` use it to show the SD/dispersion rows' LR test.
+#'   original-units coefficients. With any `boundary_tests` group requested, a
+#'   third field `$boundary_tests` (the [rpbnb_boundary_tests()] result) is
+#'   attached, and `print()`/`summary()` use it to show the LR test on the
+#'   corresponding rows. Both fitters also attach `$control_ignored` /
+#'   `$control_engine`, the control settings the chosen engine did not read.
 #'   Nothing else on the object changes.
 #'
 #' @seealso [fit_rpbnb()], [fit_rpbnb_tmb()], [rpbnb_control()],
@@ -178,6 +233,9 @@ rpbnb <- function(formula_1, formula_2, data,
                   control = NULL,
                   ...) {
   engine <- match.arg(engine)
+  # Validated up front, not at the point of use: a typo in the group name would
+  # otherwise surface only after the full fit had already been paid for.
+  bt_which <- .normalize_boundary_tests(boundary_tests)
 
   this_fit  <- if (engine == "classic") fit_rpbnb     else fit_rpbnb_tmb
   other_fit <- if (engine == "classic") fit_rpbnb_tmb else fit_rpbnb
@@ -195,6 +253,21 @@ rpbnb <- function(formula_1, formula_2, data,
       stop("Every extra argument to rpbnb() must be named. Positional ",
            "pass-through is not supported, because the two engines do not ",
            "take the same arguments in the same order.", call. = FALSE)
+    }
+    # `method` and `force_parallel_gaussian` are TMB tuning knobs with no
+    # classic-engine meaning at all, so a script flipping engine = "tmb" to
+    # "classic" need not strip them: drop with a warning instead of erroring.
+    # Everything else keeps the hard error -- those names select behaviour the
+    # caller presumably wanted.
+    if (engine == "classic") {
+      ignorable <- intersect(nm, c("method", "force_parallel_gaussian"))
+      if (length(ignorable)) {
+        warning(paste0("`", ignorable, "`", collapse = ", "),
+                " ignored: tmb-only, and engine = \"classic\" was chosen.",
+                call. = FALSE)
+        dots <- dots[!nm %in% ignorable]
+        nm <- names(dots)
+      }
     }
     allowed <- setdiff(names(formals(this_fit)),  "...")
     foreign <- setdiff(names(formals(other_fit)), "...")
@@ -219,25 +292,14 @@ rpbnb <- function(formula_1, formula_2, data,
     }
   }
 
-  # Engine-typed control. The default must NOT be rpbnb_control() in the
-  # signature: a default evaluated at call time would hand the classic control
-  # object to the TMB engine.
-  if (is.null(control)) {
-    control <- if (engine == "classic") rpbnb_control() else rpbnb_tmb_control()
-  } else {
-    want <- if (engine == "classic") "rpbnb_control"   else "rpbnb_tmb_control"
-    ctor <- if (engine == "classic") "rpbnb_control()" else "rpbnb_tmb_control()"
-    if (!inherits(control, want)) {
-      stop("engine = \"", engine, "\" needs a `", want, "` object; got `",
-           class(control)[1L], "`. Build it with ", ctor, ".\n",
-           "  The two control objects are not interchangeable and are never ",
-           "translated: fields sharing a name mean different things ",
-           "(`iterlim` is a maxLik BFGS limit vs. an nlminb limit; `n_cores` ",
-           "is worker processes vs. OpenMP threads), and only ",
-           "rpbnb_tmb_control() has gradtol/restarts/max_workload/",
-           "parallel_tape.", call. = FALSE)
-    }
-  }
+  # One control object drives both engines (see R/control.R). Resolving it here
+  # -- rather than leaving it to the fitter -- is what makes `control` usable in
+  # this function too: the boundary-tests message below reads `print_level`, and
+  # an unresolved object carries NULL there, which would print under the TMB
+  # engine where the default is silence.
+  if (is.null(control)) control <- rpbnb_control()
+  control <- .resolve_control(control,
+                             if (engine == "classic") "classic" else "tmb")
 
   # Dependence structures the two engines do not share.
   if (engine == "classic" && identical(dependence, "independence")) {
@@ -293,19 +355,25 @@ rpbnb <- function(formula_1, formula_2, data,
   # Boundary LR tests (see "Boundary LR tests" above). `data` is already the
   # standardized copy at this point when standardize = TRUE, matching what
   # `fit` was actually estimated on -- both boundary-test functions refit
-  # restricted models against it and need that to be the same design. Both
-  # engines test every random-coefficient scale and every unrestricted NB2
-  # dispersion.
-  if (isTRUE(boundary_tests)) {
-    n_sd   <- length(fit$rand_idx1) + length(fit$rand_idx2)
-    n_disp <- sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
-    n_tot  <- n_sd + n_disp
+  # restricted models against it and need that to be the same design.
+  # `bt_which` was normalized (and validated) at the top of the function.
+  if (length(bt_which)) {
+    n_sd   <- if ("sd" %in% bt_which) {
+      length(fit$rand_idx1) + length(fit$rand_idx2)
+    } else 0L
+    n_disp <- if ("dispersion" %in% bt_which) {
+      sum(!isTRUE(fit$poisson_1), !isTRUE(fit$poisson_2))
+    } else 0L
+    n_dep  <- if ("dependence" %in% bt_which &&
+                  !identical(dependence, "independence")) 1L else 0L
+    n_tot  <- n_sd + n_disp + n_dep
     if (is.null(control$print_level) || control$print_level > 0) {
       message(sprintf(
-        "rpbnb(): running boundary LR tests (%d restricted refit%s: %d random-coefficient scale%s, %d NB2 dispersion%s)...",
+        "rpbnb(): running boundary LR tests (%d restricted refit%s: %d random-coefficient scale%s, %d NB2 dispersion%s, %d dependence parameter%s)...",
         n_tot, if (n_tot == 1L) "" else "s",
         n_sd, if (n_sd == 1L) "" else "s",
-        n_disp, if (n_disp == 1L) "" else "s"))
+        n_disp, if (n_disp == 1L) "" else "s",
+        n_dep, if (n_dep == 1L) "" else "s"))
     }
     if (engine == "classic") {
       # No `draws` knob to honor here: rpbnb_boundary_tests() reuses the full
@@ -321,14 +389,16 @@ rpbnb <- function(formula_1, formula_2, data,
       # only logLik and df, not their standard errors.
       bt_control <- control
       bt_control$compute_se <- FALSE
-      fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data, control = bt_control)
+      fit$boundary_tests <- rpbnb_boundary_tests(fit, data = data,
+                                                 control = bt_control,
+                                                 which = bt_which)
     } else {
       # force_parallel_gaussian is tmb-only and reaches the main fit through
       # `dots` (validated above); the boundary refits need it forwarded
       # explicitly too, since rpbnb_tmb_boundary_tests() has no way to read
       # it back off `fit` -- see its own force_parallel_gaussian argument doc.
       fit$boundary_tests <- rpbnb_tmb_boundary_tests(
-        fit, data = data,
+        fit, data = data, which = bt_which,
         draws = if (is.null(boundary_draws)) fit$draws else boundary_draws,
         force_parallel_gaussian = isTRUE(dots$force_parallel_gaussian))
     }

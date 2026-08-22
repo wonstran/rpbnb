@@ -352,7 +352,10 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   converged objective (the frozen-bounds gradient makes the objective
 #'   start-sensitive and neither start dominates).
 #' @param control An [rpbnb_control()] object. The famoye and copula estimators
-#'   both use BFGS, the only optimizer `control$method` accepts.
+#'   both use BFGS, the only optimizer `control$method` accepts. One control
+#'   object serves every estimator in the package; settings this one does not
+#'   read -- `se_method`, `n_cores`, `halton_burn`, `draws_hessian`, and the TMB
+#'   knobs -- are ignored and listed by `print()`/`summary()` of the fit.
 #' @param poisson_1,poisson_2 Fit the corresponding margin at its exact Poisson
 #'   limit (NB2 dispersion `m = 0`) instead of estimating the dispersion. The
 #'   margin's `log_m` is held fixed, so it is not a free parameter and the fit is
@@ -387,6 +390,9 @@ fit_bnb <- function(formula_1, formula_2, data,
 
   .chk_poisson_flag(poisson_1, "poisson_1")
   .chk_poisson_flag(poisson_2, "poisson_2")
+  # Shared control object: fill in this estimator's defaults and record which
+  # supplied settings it does not read (see R/control.R).
+  control <- .resolve_control(control, "bnb")
 
   prep <- .prepare_bnb_data(formula_1, formula_2, data)
   Y1 <- prep$Y1; Y2 <- prep$Y2
@@ -401,7 +407,7 @@ fit_bnb <- function(formula_1, formula_2, data,
     res <- fit_bnb_copula(Y1, Y2, X1, X2, cn1, cn2,
                           family = dependence$family, start = start, control = control,
                           off1 = prep$off1, off2 = prep$off2)
-    return(new_bnb_fit(
+    out <- new_bnb_fit(
       coef = res$coef, vcov = res$vcov, se = res$se,
       logLik = res$logLik, nobs = length(Y1), npar = res$npar,
       dependence = res$cop_family,
@@ -411,7 +417,8 @@ fit_bnb <- function(formula_1, formula_2, data,
       ll_trace = res$ll_trace, convergence = res$convergence, call = match.call(),
       cop_family = res$cop_family, cop_par = res$cop_par, cop_tau = res$cop_tau,
       hessian_diag = res$hessian_diag, predict_meta = .prep_predict_meta(prep)
-    ))
+    )
+    return(.attach_control_note(out, control))
   }
 
   dependence <- match.arg(dependence)
@@ -425,7 +432,7 @@ fit_bnb <- function(formula_1, formula_2, data,
                          poisson_1 = poisson_1, poisson_2 = poisson_2)
   }
 
-  new_bnb_fit(coef = res$coef, vcov = res$vcov, se = res$se,
+  out <- new_bnb_fit(coef = res$coef, vcov = res$vcov, se = res$se,
               logLik = res$logLik, nobs = length(Y1), npar = res$npar,
               dependence = dependence, lambda = res$lambda, bounds = res$bounds,
               mu1 = res$mu1, mu2 = res$mu2, X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
@@ -434,4 +441,9 @@ fit_bnb <- function(formula_1, formula_2, data,
               call = match.call(), hessian_diag = res$hessian_diag,
               predict_meta = .prep_predict_meta(prep),
               poisson_1 = poisson_1, poisson_2 = poisson_2)
+  # dependence = "independence" is fit by two MASS::glm.nb margins and reads no
+  # control field at all; the ignored-settings note is still attached from the
+  # `bnb` applicability list, which is the right approximation -- it reports
+  # settings this *function* does not use, not per-dependence differences.
+  .attach_control_note(out, control)
 }

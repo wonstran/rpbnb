@@ -49,7 +49,12 @@ marginal-effect functions.}
 \item{dependence}{Dependence structure: "famoye", "independence", or a
 \code{copula()} object for copula dependence.}
 
-\item{control}{An object from \code{rpbnb_tmb_control()}.}
+\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object (\code{rpbnb_tmb_control()} is a
+retained alias that returns the same object). One control object serves
+every estimator in the package; settings this engine does not read --
+\code{se_method}, \code{hessian}, \code{compute_se}, \code{method},
+\code{hess_eps}, \code{hess_r}, \code{draws_hessian} -- are ignored and
+listed by \code{print()}/\code{summary()} of the fit rather than rejected.}
 
 \item{inference}{Inference storage: \code{"full"} for a full covariance,
 \code{"diag"} for standard errors only, or \code{"none"} to skip Hessian

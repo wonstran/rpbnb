@@ -426,3 +426,348 @@ test_that("a message announces each restricted refit, unless print_level = 0", {
     message = "Boundary LR test"
   )
 })
+
+# ---- sml_fallback -----------------------------------------------------------
+# A Laplace fit's restricted refit can have no optimum for the inner Newton to
+# find (pinning a margin to Poisson can drive the dependence strong enough
+# that the cell probability is non-log-concave in the random effects -- see
+# the sml_fallback argument doc). The fallback re-runs that one test with
+# BOTH sides estimated by SML. These tests pin the mechanics with mocked
+# refits: which estimator each side used, that the full-model SML refit is
+# built once and cached, that a Laplace logLik is never paired with an SML
+# one, and that every failure path still reports NA with its own warning.
+
+.tmb_laplace_anchor <- function(n = 120, seed = 9) {
+  set.seed(seed)
+  x1 <- rnorm(n)
+  u <- rnorm(n, 0, 0.4)
+  d <- data.frame(y1 = rnbinom(n, mu = exp(0.4 + (0.3 + u) * x1), size = 2),
+                  y2 = rnbinom(n, mu = exp(0.1 + 0.2 * x1), size = 2),
+                  x1 = x1)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, random_1 = "x1",
+                       method = "laplace", draws = 10, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L,
+                                                   n_cores = 1L))
+  list(d = d, fit = fit)
+}
+
+.stub_tmb_fit <- function(logLik, npar, code = 0L,
+                          msg = "relative convergence (4)") {
+  structure(list(logLik = logLik, npar = npar, nobs = 120L,
+                 optimizer = list(convergence = code, message = msg)),
+            class = "rpbnb_tmb_fit")
+}
+
+test_that("sml_fallback rescues a Laplace-unfittable restriction with an SML pair", {
+  skip_on_cran()
+  a <- .tmb_laplace_anchor()
+  skip_if_not(identical(a$fit$optimizer$convergence, 0L),
+              "Laplace anchor fit did not converge on this platform")
+
+  full_sml_calls <- 0L
+  fake <- function(...) {
+    args <- list(...)
+    restricted <- isTRUE(args$poisson_1) || isTRUE(args$poisson_2) ||
+      !is.null(args$.fixed)
+    if (identical(args$method, "laplace")) {
+      return(.stub_tmb_fit(NA_real_, 8L, code = 1L,
+                           msg = "false convergence (8)"))
+    }
+    if (!restricted) {
+      full_sml_calls <<- full_sml_calls + 1L
+      return(.stub_tmb_fit(-100, 9L))
+    }
+    .stub_tmb_fit(-110, 8L)
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  msgs <- testthat::capture_messages(
+    bt <- rpbnb_tmb_boundary_tests(
+      a$fit, a$d, which = "dispersion",
+      control = rpbnb_tmb_control(print_level = 1L, n_cores = 1L,
+                                  max_workload = Inf))
+  )
+  expect_true(any(grepl("retrying the test with both sides", msgs)))
+  expect_true(any(grepl("refitting the FULL model", msgs)))
+
+  # Both dispersion rows fell back, and each carries the SML pair's LR:
+  # 2 * (-100 - -110) = 20 on 1 df, halved by the boundary mixture.
+  expect_identical(attr(bt, "sml_fallback"), c("m1", "m2"))
+  expect_equal(bt$LR, rep(20, 2L))
+  expect_identical(bt$df, rep(1L, 2L))
+  expect_equal(bt$p.value,
+               rep(0.5 * pchisq(20, 1L, lower.tail = FALSE), 2L),
+               tolerance = 1e-12)
+  # One full-model SML refit serves both tests.
+  expect_identical(full_sml_calls, 1L)
+
+  # print() footnotes the fallback rows (and only prints them for TMB
+  # results -- the classic engine never sets the attribute).
+  out <- capture.output(print(bt))
+  expect_true(any(grepl("Estimated by an SML pair", out)))
+  expect_true(any(grepl("m1, m2", out)))
+})
+
+test_that("sml_fallback = FALSE keeps the NA-with-warning behaviour", {
+  skip_on_cran()
+  a <- .tmb_laplace_anchor()
+  skip_if_not(identical(a$fit$optimizer$convergence, 0L),
+              "Laplace anchor fit did not converge on this platform")
+
+  sml_calls <- 0L
+  fake <- function(...) {
+    args <- list(...)
+    if (identical(args$method, "sml")) sml_calls <<- sml_calls + 1L
+    .stub_tmb_fit(NA_real_, 8L, code = 1L, msg = "false convergence (8)")
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  warns <- testthat::capture_warnings(
+    bt <- rpbnb_tmb_boundary_tests(
+      a$fit, a$d, which = "dispersion", sml_fallback = FALSE,
+      control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L,
+                                  max_workload = Inf))
+  )
+  expect_true(all(grepl("did not converge", warns)))
+  expect_true(all(is.na(bt$LR)))
+  expect_identical(attr(bt, "sml_fallback"), character(0))
+  # The off switch means SML was never tried.
+  expect_identical(sml_calls, 0L)
+})
+
+test_that("a failed SML restricted fit reports NA without paying for the full refit", {
+  skip_on_cran()
+  a <- .tmb_laplace_anchor()
+  skip_if_not(identical(a$fit$optimizer$convergence, 0L),
+              "Laplace anchor fit did not converge on this platform")
+
+  full_sml_calls <- 0L
+  fake <- function(...) {
+    args <- list(...)
+    restricted <- isTRUE(args$poisson_1) || isTRUE(args$poisson_2) ||
+      !is.null(args$.fixed)
+    if (identical(args$method, "sml") && !restricted) {
+      full_sml_calls <<- full_sml_calls + 1L
+      return(.stub_tmb_fit(-100, 9L))
+    }
+    .stub_tmb_fit(NA_real_, 8L, code = 1L, msg = "false convergence (8)")
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  warns <- testthat::capture_warnings(suppressMessages(
+    bt <- rpbnb_tmb_boundary_tests(
+      a$fit, a$d, which = "dispersion",
+      control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L,
+                                  max_workload = Inf))
+  ))
+  expect_true(any(grepl("SML fallback restricted fit did not converge",
+                        warns)))
+  expect_true(all(is.na(bt$LR)))
+  expect_identical(attr(bt, "sml_fallback"), character(0))
+  # The restricted side failed first, so the full-model SML refit -- whose
+  # only purpose is to pair with it -- was never built.
+  expect_identical(full_sml_calls, 0L)
+})
+
+test_that("a failed full-model SML refit reports NA with its own warning", {
+  skip_on_cran()
+  a <- .tmb_laplace_anchor()
+  skip_if_not(identical(a$fit$optimizer$convergence, 0L),
+              "Laplace anchor fit did not converge on this platform")
+
+  fake <- function(...) {
+    args <- list(...)
+    restricted <- isTRUE(args$poisson_1) || isTRUE(args$poisson_2) ||
+      !is.null(args$.fixed)
+    if (identical(args$method, "sml") && restricted) {
+      return(.stub_tmb_fit(-110, 8L))
+    }
+    .stub_tmb_fit(NA_real_, 8L, code = 1L, msg = "false convergence (8)")
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  warns <- testthat::capture_warnings(suppressMessages(
+    bt <- rpbnb_tmb_boundary_tests(
+      a$fit, a$d, which = "dispersion",
+      control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L,
+                                  max_workload = Inf))
+  ))
+  expect_true(any(grepl("FULL-model refit did not converge", warns)))
+  expect_true(all(is.na(bt$LR)))
+  expect_identical(attr(bt, "sml_fallback"), character(0))
+})
+
+test_that("an SML fit never engages the fallback (nothing different to try)", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture(n = 120)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L,
+                                                   n_cores = 1L))
+  fake <- function(...) {
+    .stub_tmb_fit(NA_real_, 8L, code = 1L, msg = "false convergence (8)")
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  msgs <- testthat::capture_messages(warns <- testthat::capture_warnings(
+    bt <- rpbnb_tmb_boundary_tests(
+      fit, d, which = "dispersion",
+      control = rpbnb_tmb_control(print_level = 1L, n_cores = 1L,
+                                  max_workload = Inf))
+  ))
+  expect_false(any(grepl("retrying the test", msgs)))
+  expect_true(all(grepl("did not converge", warns)))
+  expect_true(all(is.na(bt$LR)))
+})
+
+test_that("sml_fallback must be one non-missing logical", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture(n = 120)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L,
+                                                   n_cores = 1L))
+  expect_error(rpbnb_tmb_boundary_tests(fit, d, sml_fallback = NA),
+               "sml_fallback")
+  expect_error(rpbnb_tmb_boundary_tests(fit, d, sml_fallback = "yes"),
+               "sml_fallback")
+})
+
+test_that("a converged Laplace pair with a NEGATIVE raw LR also falls back to SML", {
+  skip_on_cran()
+  a <- .tmb_laplace_anchor()
+  skip_if_not(identical(a$fit$optimizer$convergence, 0L),
+              "Laplace anchor fit did not converge on this platform")
+
+  # The restricted Laplace refits report clean convergence (code 0) but a
+  # logLik ABOVE the full fit's -- the truck data's -3838 failure mode, where
+  # the Laplace value itself is wrong (spurious ridge near a singular inner
+  # Hessian), scaled down. lr_test() must never see this pair: it would clamp
+  # the statistic to 0 and warn, turning a wrong value into "no evidence".
+  inflated <- as.numeric(stats::logLik(a$fit)) + 3
+  fake <- function(...) {
+    args <- list(...)
+    restricted <- isTRUE(args$poisson_1) || isTRUE(args$poisson_2) ||
+      !is.null(args$.fixed)
+    if (identical(args$method, "laplace")) {
+      return(.stub_tmb_fit(inflated, 8L))       # code 0, inflated logLik
+    }
+    if (!restricted) return(.stub_tmb_fit(-100, 9L))
+    .stub_tmb_fit(-110, 8L)
+  }
+  testthat::local_mocked_bindings(fit_rpbnb_tmb = fake)
+
+  warns <- testthat::capture_warnings(
+    msgs <- testthat::capture_messages(
+      bt <- rpbnb_tmb_boundary_tests(
+        a$fit, a$d, which = "dispersion",
+        control = rpbnb_tmb_control(print_level = 1L, n_cores = 1L,
+                                    max_workload = Inf))
+    )
+  )
+  expect_true(any(grepl("EXCEEDS the full", msgs)))
+  # No clamp warning: the inconsistent pair was never handed to lr_test().
+  expect_false(any(grepl("higher log-likelihood", warns)))
+  expect_identical(attr(bt, "sml_fallback"), c("m1", "m2"))
+  expect_equal(bt$LR, rep(20, 2L))
+  expect_equal(bt$p.value,
+               rep(0.5 * pchisq(20, 1L, lower.tail = FALSE), 2L),
+               tolerance = 1e-12)
+})
+
+# ---- Dependence (association) test ------------------------------------------
+
+test_that("which = 'dependence' refits at independence and drops one df", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  ctl <- rpbnb_tmb_control(print_level = 0L, n_cores = 1L, max_workload = Inf)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = ctl)
+
+  bt <- rpbnb_tmb_boundary_tests(fit, d, which = "dependence", control = ctl)
+  expect_identical(bt$Parameter, "lam")        # famoye dependence
+  expect_identical(bt$df, 1L)                  # z_dep mapped out
+  expect_true(is.finite(bt$LR) && bt$LR >= 0)
+
+  # Must reproduce the hand-built independence refit + an ORDINARY chi-square
+  # LR: the Famoye lambda's null is interior, so no 50:50 mixture here.
+  rest <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                        dependence = "independence",
+                        start = fit$coef[setdiff(names(fit$coef), "z_dep")],
+                        control = ctl, inference = "none")
+  manual <- lr_test(rest, fit, boundary = FALSE)
+  expect_equal(manual$statistic, bt$LR, tolerance = 1e-6)
+  expect_equal(manual$p.value, bt$p.value, tolerance = 1e-6)
+  # The boundary-corrected p-value would be exactly half -- assert we did NOT
+  # report that, since the whole point is that this null is interior.
+  expect_false(isTRUE(all.equal(bt$p.value, manual$p.value / 2)))
+})
+
+test_that("summary() replaces the dependence Wald row with the LR test", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  ctl <- rpbnb_tmb_control(print_level = 0L, n_cores = 1L, max_workload = Inf)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = ctl)
+
+  out_wald <- capture.output(summary(fit))
+  expect_true(any(grepl("z value", out_wald, fixed = TRUE)))
+
+  fit$boundary_tests <- rpbnb_tmb_boundary_tests(fit, d, which = "dependence",
+                                                 control = ctl)
+  out_lr <- capture.output(summary(fit))
+  expect_true(any(grepl("independence", out_lr, fixed = TRUE)))
+  expect_true(any(grepl("Pr(>chisq)", out_lr, fixed = TRUE)))
+})
+
+test_that("an independence fit has no dependence parameter to test", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  ctl <- rpbnb_tmb_control(print_level = 0L, n_cores = 1L, max_workload = Inf)
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       dependence = "independence", control = ctl)
+  expect_error(
+    rpbnb_tmb_boundary_tests(fit, d, which = "dependence", control = ctl),
+    "No boundary parameters to test")
+})
+
+test_that("rpbnb(boundary_tests = ) switches groups on and off", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  ctl <- rpbnb_tmb_control(print_level = 0L, n_cores = 1L, max_workload = Inf)
+
+  only_disp <- suppressMessages(
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", draws = 20, seed = 7,
+          control = ctl, boundary_tests = "dispersion"))
+  expect_identical(sort(only_disp$boundary_tests$Parameter), c("m1", "m2"))
+
+  disp_dep <- suppressMessages(
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", draws = 20, seed = 7,
+          control = ctl, boundary_tests = c("dispersion", "dependence")))
+  expect_identical(sort(disp_dep$boundary_tests$Parameter),
+                   c("lam", "m1", "m2"))
+
+  # TRUE keeps its historical meaning: no dependence row appears.
+  hist <- suppressMessages(
+    rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", draws = 20, seed = 7,
+          control = ctl, boundary_tests = TRUE))
+  expect_false("lam" %in% hist$boundary_tests$Parameter)
+
+  expect_null(
+    suppressMessages(
+      rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "tmb", draws = 20, seed = 7,
+            control = ctl, boundary_tests = FALSE))$boundary_tests)
+})
+
+test_that("a TMB fit reports the control settings its engine did not read", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(
+    y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+    control = rpbnb_control(print_level = 0L, n_cores = 1L,
+                            max_workload = Inf,
+                            se_method = "opg", draws_hessian = 50L))
+  expect_setequal(fit$control_ignored, c("se_method", "draws_hessian"))
+  expect_identical(fit$control_engine, "tmb")
+  out <- capture.output(print(fit))
+  expect_true(any(grepl("Control settings ignored", out, fixed = TRUE)))
+  expect_true(any(grepl("se_method", out, fixed = TRUE)))
+})

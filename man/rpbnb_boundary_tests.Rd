@@ -23,8 +23,22 @@ does not store it, and every restricted model is refit on the same data.}
 \code{compute_se = FALSE} (the LR test needs only \code{logLik} and the degrees of
 freedom). \code{draws}/\code{draw_type}/\code{seed} are taken from \code{fit}, not \code{control}.}
 
-\item{which}{Which boundary parameters to test: \code{"sd"}, \code{"dispersion"}, or
-both (the default).}
+\item{which}{Which parameter groups to test, any subset of \code{"sd"} (the
+random-coefficient scales), \code{"dispersion"} (the NB2 dispersions \code{m1},
+\code{m2}), and \code{"dependence"} (the association parameter). The default is
+\code{c("sd", "dispersion")} -- the two boundary-null groups. \code{"dependence"}
+is opt-in because it costs another full refit and, for three of the four
+families, tests an \emph{interior} null whose ordinary Wald \code{z} in \code{summary()}
+is already valid.
+
+The dependence test restricts the model to independence and compares it to
+\code{fit}: one row labelled \code{lam} (Famoye), \code{theta} (Frank / Clayton), or \code{rho}
+(Gaussian). The restriction pins the working-scale dependence parameter at
+its family's independence value rather than refitting a different family,
+so both fits keep the same draws and the same parameter block and the
+comparison is a clean 1-df restriction. Only Clayton's null (\code{theta > 0},
+so \code{theta = 0} is a boundary) takes the 50:50 mixture; Famoye, Frank, and
+Gaussian nulls are interior and get an ordinary chi-square(1).}
 }
 \value{
 An object of class \code{rpbnb_boundary_tests}: a data frame with columns

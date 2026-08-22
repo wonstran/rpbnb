@@ -54,27 +54,48 @@ and display fitted coefficients back-transformed to their original units
 continuous-predictor detection when \code{standardize = TRUE}. Must be columns
 of \code{data}; ignored when \code{standardize = FALSE}.}
 
-\item{boundary_tests}{Run \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} (\code{engine = "classic"})
-or \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} (\code{engine = "tmb"}) after fitting and
-attach the result as \verb{$boundary_tests}, so \code{summary()}/\code{print()} show a
-boundary-corrected LR test (rather than \code{NA}) for the tested rows (see
-"Boundary LR tests" above for which parameters each engine tests).
-Default \code{FALSE} (each restricted refit costs roughly another full fit).}
+\item{boundary_tests}{Which groups of parameters to LR-test after fitting,
+via \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} (\code{engine = "classic"}) or
+\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}} (\code{engine = "tmb"}); the result is attached as
+\verb{$boundary_tests} and \code{summary()}/\code{print()} show the test (rather than
+\code{NA}, or rather than a Wald \code{z}) on the corresponding rows. Accepts:
+\itemize{
+\item \code{FALSE} (default) or \code{"none"} -- run nothing. Each restricted refit
+costs roughly another full fit.
+\item \code{TRUE} -- \code{c("sd", "dispersion")}, the two boundary-null groups. This is
+what \code{TRUE} has always meant and it does not silently grow.
+\item a character vector, any of \code{"sd"} (random-coefficient scales),
+\code{"dispersion"} (the NB2 overdispersions \code{m1}, \code{m2}), \code{"dependence"}
+(the association parameter), or \code{"all"} for all three.
+}
+
+So \code{boundary_tests = "dispersion"} tests overdispersion only,
+\code{boundary_tests = c("dispersion", "dependence")} tests overdispersion and
+association without paying for one refit per random-coefficient scale, and
+\code{boundary_tests = "all"} tests everything. See "Boundary LR tests" below.}
 
 \item{boundary_draws}{Number of Halton simulation draws for the boundary
 tests' restricted refits, \code{engine = "tmb"} only. \code{NULL} (default) uses
-the main fit's \code{draws}. Ignored when \code{boundary_tests} is not \code{TRUE}
-(nothing to apply it to); an error if supplied under \code{engine = "classic"} while \code{boundary_tests = TRUE} (see "Boundary LR tests"
+the main fit's \code{draws}. Ignored when no boundary test was requested
+(nothing to apply it to); an error if supplied under \code{engine = "classic"} alongside a boundary test (see "Boundary LR tests"
 above -- that engine has no \code{draws} to override).}
 
-\item{control}{An \code{rpbnb_control()} object when \code{engine = "classic"}, or an
-\code{rpbnb_tmb_control()} object when \code{engine = "tmb"}. Defaults to the right
-one for the chosen engine. The two are not interchangeable and are never
-translated into one another.}
+\item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object -- one object for both engines,
+as of 0.4.1 (\code{rpbnb_tmb_control()} is a retained alias that returns the
+same thing). Settings the chosen engine does not read are ignored and
+listed by \code{print()}/\code{summary()} of the fit; \code{iterlim} and \code{print_level},
+whose defaults differ between the engines, resolve to the chosen engine's
+own default unless you set them. Fields sharing a name are still not
+translated: \code{iterlim} is a \code{maxLik} BFGS limit under \code{engine = "classic"}
+and an \code{nlminb} limit under \code{"tmb"}, and \code{n_cores} is worker processes
+versus OpenMP threads.}
 
 \item{...}{Further arguments passed to the selected fitter. Names are
 validated against that fitter's formals; an argument belonging to the other
-engine, or an unrecognised name, is an error.}
+engine, or an unrecognised name, is an error. Exception: the TMB tuning
+knobs \code{method} and \code{force_parallel_gaussian} are dropped with a warning
+(not an error) under \code{engine = "classic"}, so a call can switch engines
+without stripping them.}
 }
 \value{
 The engine-native fit object, identical to what a direct call to the
@@ -85,9 +106,11 @@ if you need to branch. No wrapper class is introduced, so every existing S3
 method and post-estimation function works unchanged. With
 \code{standardize = TRUE}, two extra fields are attached -- \verb{$scaling} and
 \verb{$continuous_vars} -- and \code{print()}/\code{summary()} use them to display
-original-units coefficients. With \code{boundary_tests = TRUE}, a third field
-\verb{$boundary_tests} (the \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} result) is attached, and
-\code{print()}/\code{summary()} use it to show the SD/dispersion rows' LR test.
+original-units coefficients. With any \code{boundary_tests} group requested, a
+third field \verb{$boundary_tests} (the \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}} result) is
+attached, and \code{print()}/\code{summary()} use it to show the LR test on the
+corresponding rows. Both fitters also attach \verb{$control_ignored} /
+\verb{$control_engine}, the control settings the chosen engine did not read.
 Nothing else on the object changes.
 }
 \description{
@@ -133,27 +156,59 @@ as \verb{$scaling} (a named list of \code{c(center=, scale=)}) and \verb{$contin
 }
 
 \section{Boundary LR tests}{
-\code{boundary_tests = TRUE} runs a boundary-corrected LR test on the fit as
-soon as it converges (against the same data the fit itself used -- the
-standardized copy, when \code{standardize = TRUE}) and attaches the result as
-\verb{$boundary_tests}. The random-coefficient SDs and the NB2 dispersions
-(\code{m1}, \code{m2}) have a null that sits on the boundary of the parameter space,
-so an ordinary Wald \code{z}/\code{p} does not test it; the boundary test refits
-each restricted model instead. \code{summary()}/\code{print()} then show that test's
-\code{LR}/\code{df}/\code{p} for those rows in the natural-scale block, in place of the
-\code{NA} they would otherwise carry.
+\code{boundary_tests} runs a likelihood-ratio test on the fit as soon as it
+converges (against the same data the fit itself used -- the standardized
+copy, when \code{standardize = TRUE}) and attaches the result as
+\verb{$boundary_tests}. It is a switch over three independent groups, so the
+cost is paid only for the parameters actually in question:\tabular{lll}{
+   \code{boundary_tests} \tab tests \tab restricted refits \cr
+   \code{FALSE} / \code{"none"} \tab nothing \tab 0 \cr
+   \code{TRUE} \tab \code{c("sd", "dispersion")} \tab one per scale + one per free \code{m} \cr
+   \code{"sd"} \tab random-coefficient scales \tab one per scale \cr
+   \code{"dispersion"} \tab overdispersions \code{m1}, \code{m2} \tab one per free \code{m} \cr
+   \code{"dependence"} \tab the association parameter \tab 1 \cr
+   \code{"all"} \tab all three groups \tab all of the above \cr
+}
 
-Both engines test the same parameters -- every random-coefficient scale
-and every unrestricted NB2 dispersion -- via \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}
+
+The random-coefficient SDs and the NB2 dispersions (\code{m1}, \code{m2}) have a null
+that sits on the boundary of the parameter space, so an ordinary Wald
+\code{z}/\code{p} does not test it; the boundary test refits each restricted model
+instead and \code{summary()}/\code{print()} show that test's \code{LR}/\code{df}/\code{p} for those
+rows in the natural-scale block, in place of the \code{NA} they would otherwise
+carry.
+
+The \strong{dependence} test is the odd one out and is therefore opt-in even
+under \code{boundary_tests = TRUE}. Its null is "no association", i.e. the
+independence model, which for Famoye (\code{lam}), Frank (\code{theta}), and the
+Gaussian copula (\code{rho}) sits in the \emph{interior} of the parameter space --
+the Wald \code{z} those rows already show is valid, and the LR statistic is an
+ordinary chi-square(1), not the 50:50 boundary mixture. Only Clayton /
+Kimeldorf (\code{theta > 0}) has a genuine boundary null there. Requesting it
+replaces the dependence row's Wald \code{z}/\code{p} with the LR test on both
+engines, since the two answer the same question.
+
+Both engines test the same parameters via \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}
 (\code{engine = "classic"}) or \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}
-(\code{engine = "tmb"}). They differ only in how each restricted fit holds the
-scale at zero while preserving common random numbers: the classic engine
-zeroes that coefficient's draw column, the TMB engine pins its \code{log_sd}
-and maps it out of the free parameters.
+(\code{engine = "tmb"}). They differ only in how each restricted fit is
+constructed while preserving common random numbers: for a scale, the
+classic engine zeroes that coefficient's draw column while the TMB engine
+pins its \code{log_sd} and maps it out of the free parameters; for the
+dependence parameter, the TMB engine refits with its own
+\code{dependence = "independence"} family while the classic engine (which has no
+such fitter) pins the working-scale dependence parameter at its family's
+independence value.
 
 A \code{\link[=message]{message()}} reports how many restricted refits are about to run before
 they start, unless \code{control$print_level} is \code{0}; suppress it with
 \code{\link[=suppressMessages]{suppressMessages()}} if needed.
+
+Under \code{engine = "tmb"} with \code{method = "laplace"}, a restricted refit that
+fails to converge is automatically retried with both sides of that one LR
+estimated by \code{method = "sml"} rather than reported \code{NA} -- some
+restrictions leave Laplace no valid optimum at all (see
+\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s \code{sml_fallback} argument, which is where to
+turn this off).
 
 \code{force_parallel_gaussian} (\code{engine = "tmb"} only, passed via \code{...}) is
 forwarded to every restricted refit, so a Gaussian-copula fit's boundary
@@ -183,11 +238,12 @@ directly on the fit and assign its result to \code{fit$boundary_tests} (with
 \tabular{lll}{
    Argument \tab \code{engine = "classic"} \tab \code{engine = "tmb"} \cr
    \code{draw_type}, \code{.fixed}, \code{.opt_draws} \tab yes \tab error \cr
-   \code{inference}, \code{keep}, \code{method}, \code{force_parallel_gaussian} \tab error \tab yes \cr
+   \code{inference}, \code{keep} \tab error \tab yes \cr
+   \code{method}, \code{force_parallel_gaussian} \tab ignored with a warning \tab yes \cr
    \code{offset()} in a formula \tab yes \tab error \cr
    \code{dependence = "independence"} \tab error \tab yes \cr
    \code{boundary_draws} (non-\code{NULL}) \tab error \tab yes \cr
-   \code{control} class \tab \code{rpbnb_control} \tab \code{rpbnb_tmb_control} \cr
+   \code{control} class \tab \code{rpbnb_control} \tab \code{rpbnb_control} (same object) \cr
    optimizer \tab \code{maxLik::maxLik(method = "BFGS")} \tab \code{stats::nlminb} + restarts \cr
 }
 

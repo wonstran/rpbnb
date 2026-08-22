@@ -11,7 +11,7 @@ name via random_1 / random_2."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,12 @@ name via <code>random_1</code> / <code>random_2</code>.</p>
 <span>  draw_type <span class="op">=</span> <span class="st">"halton"</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">1234</span>,</span>
 <span>  start <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  dependence <span class="op">=</span> <span class="st">"famoye"</span>,</span>
+<span>  poisson_1 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  poisson_2 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  .fixed <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  .opt_draws <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -65,7 +70,11 @@ name via <code>random_1</code> / <code>random_2</code>.</p>
 
 
 <dl><dt id="arg-formula-formula-">formula_1, formula_2<a class="anchor" aria-label="anchor" href="#arg-formula-formula-"></a></dt>
-<dd><p>Model formulas for the two count outcomes.</p></dd>
+<dd><p>Model formulas for the two count outcomes. An
+equation-specific <code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> term (e.g. <code>y ~ x + offset(log(exposure))</code>) is
+supported: the offset enters that margin's linear predictor additively
+(integrated mean <code>E[exp(x'beta + offset)]</code>) during estimation and is carried
+through the stored fitted means and <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>.</p></dd>
 
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
@@ -73,9 +82,11 @@ name via <code>random_1</code> / <code>random_2</code>.</p>
 
 
 <dt id="arg-random-random-">random_1, random_2<a class="anchor" aria-label="anchor" href="#arg-random-random-"></a></dt>
-<dd><p>Character vectors of coefficient names (matching
-<code>model.matrix</code> columns) to treat as normal random coefficients in each
-equation. NULL means all-fixed for that equation.</p></dd>
+<dd><p>Random coefficients per equation. Either a character
+vector of <code>model.matrix</code> column names (all Normal), or a named list whose
+values are a distribution name (<code>"normal"</code>, <code>"lognormal"</code>, <code>"uniform"</code>,
+<code>"triangular"</code>) or a list <code>list(dist = ..., sign = ...)</code> (<code>sign</code> is -1/1 and
+lognormal-only). NULL means all-fixed for that equation.</p></dd>
 
 
 <dt id="arg-draws">draws<a class="anchor" aria-label="anchor" href="#arg-draws"></a></dt>
@@ -95,14 +106,66 @@ equation. NULL means all-fixed for that equation.</p></dd>
 
 
 <dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
-<dd><p>An <code><a href="rpbnb_control.html">rpbnb_control()</a></code> object. Estimation uses BFGS;
-<code>control$method</code> is not currently honored by <code>fit_rpbnb</code> (the
-simulated-likelihood objective returns an aggregate gradient).</p></dd>
+<dd><p>An <code><a href="rpbnb_control.html">rpbnb_control()</a></code> object. Estimation uses BFGS, the only
+optimizer <code>control$method</code> accepts. One control object serves every
+estimator in the package; settings this one does not read – the TMB knobs
+(<code>gradtol</code>, <code>restarts</code>, <code>max_threads</code>, <code>max_workload</code>, <code>parallel_tape</code>),
+<code>hessian</code>, and <code>draws_hessian</code> – are ignored and listed by
+<code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>/<code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> of the fit rather than rejected.</p></dd>
+
+
+<dt id="arg-dependence">dependence<a class="anchor" aria-label="anchor" href="#arg-dependence"></a></dt>
+<dd><p>Dependence structure: "famoye" (default; Famoye/Sarmanov)
+or an <code><a href="copula.html">copula()</a></code> object for copula dependence (Frank / Gaussian /
+Clayton). Both paths use the multithreaded (OpenMP) C++ simulated
+likelihood; the copula path is more numerically expensive per evaluation
+(discrete-copula pmf + per-draw NB CDF corners), so fits typically take
+noticeably longer than the Famoye path at comparable <code>draws</code>/<code>n</code>. Random
+coefficients on 0/1 dummy regressors are weakly identified under the
+copula path (NB dispersion trades off against the random-coefficient
+scale); prefer random coefficients on continuous regressors.</p></dd>
+
+
+<dt id="arg-poisson-poisson-">poisson_1, poisson_2<a class="anchor" aria-label="anchor" href="#arg-poisson-poisson-"></a></dt>
+<dd><p>Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion <code>m = 0</code>): the margin's <code>log_m</code> is held fixed, so it is
+not a free parameter and the fit is a properly nested restriction of the NB
+model. Pair with <code><a href="lr_test.html">lr_test()</a></code> (<code>boundary = TRUE</code>) to test a margin for
+overdispersion (<code>H0: m = 0</code>). The simulated likelihood uses the exact <code>m = 0</code>
+branch – the per-draw margin log-pmf is <code>dpois</code> and its Famoye dependence
+constant is <code>exp(-d*mu)</code> – so it is accurate at any fitted mean, not a
+fixed-dispersion approximation. Supported with both Famoye/Sarmanov and
+<code><a href="copula.html">copula()</a></code> dependence (the copula path uses the same exact m = 0 branch).</p></dd>
+
+
+<dt id="arg--fixed">.fixed<a class="anchor" aria-label="anchor" href="#arg--fixed"></a></dt>
+<dd><p>Internal. A named numeric vector of parameters (in the
+optimization/log-scale parameterization) to pin at the supplied values and
+hold fixed during estimation. Used by <code><a href="rpbnb_boundary_tests.html">rpbnb_boundary_tests()</a></code> to construct
+scale-zero (SD boundary) restricted fits; not intended for direct use.</p></dd>
+
+
+<dt id="arg--opt-draws">.opt_draws<a class="anchor" aria-label="anchor" href="#arg--opt-draws"></a></dt>
+<dd><p>Internal. A list <code>list(Z1, Z2)</code> of uniform Halton draw
+matrices to use verbatim instead of generating them, so a restricted refit
+reuses a full fit's draws (common random numbers). Used by
+<code><a href="rpbnb_boundary_tests.html">rpbnb_boundary_tests()</a></code>; not intended for direct use.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>An object of class <code>rpbnb_fit</code>.</p>
+    <p>An object of class <code>rpbnb_fit</code>. Under Famoye dependence three fields
+describe the admissible lambda interval: <code>bounds</code> is the interval the
+optimized likelihood actually used, frozen at the starting values (its
+width also feeds <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>'s delta-method standard error for lambda);
+<code>bounds_at_optimum</code> is the interval admissible at the fitted parameters,
+recomputed after optimization for validation only; and
+<code>lambda_admissible</code> records whether <code>lambda</code> — the fitted value, mapped
+through <code>bounds</code> — lies inside <code>bounds_at_optimum</code>. <code>FALSE</code> means the
+optimizer escaped the valid region (a warning is raised) and the fit
+should be re-run from starting values closer to the optimum. For normal
+or lognormal random coefficients loaded in both margins the bound is the
+constant <code>c(-1, 1)</code>, the two intervals coincide, and escape cannot occur.</p>
     </div>
 
     <div class="section level2">
@@ -114,11 +177,66 @@ simulated-likelihood objective returns an aggregate gradient).</p></dd>
 <span class="r-in"><span>  dispersion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>m1 <span class="op">=</span> <span class="fl">0.4</span>, m2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">fit_rpbnb</span><span class="op">(</span><span class="va">y1</span> <span class="op">~</span> <span class="va">x1</span>, <span class="va">y2</span> <span class="op">~</span> <span class="va">x1</span>, data <span class="op">=</span> <span class="va">sim</span><span class="op">$</span><span class="va">data</span>, random_1 <span class="op">=</span> <span class="st">"x1"</span>,</span></span>
 <span class="r-in"><span>                 draws <span class="op">=</span> <span class="fl">100</span>, control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span>compute_se <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 2004.254281 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 1893.236582</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 1892.174243</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 1885.984661</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 1885.511406</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 1884.309399</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 1884.169782</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 1883.428494</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 1881.770693</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 1880.478679</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 1880.272268</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 1880.222694</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 1880.207021</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 1880.206316</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 1880.206283</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 1880.206283</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 1880.206283</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 1880.206283 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> b1:(Intercept)          b1:x1 b2:(Intercept)          b2:x1     log_sd1:x1 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      0.2496146      0.3613532      0.1481217     -0.2144693     -0.5695825 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      0.2495537      0.3613666      0.1481139     -0.2144669     -0.5696078 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>         log_m1         log_m2       z_lambda </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     -1.2598219     -0.9085006      0.5684488 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     -1.2597146     -0.9084395      0.3757306 </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># \donttest{</span></span></span>
+<span class="r-in"><span><span class="co"># Copula dependence instead of Famoye/Sarmanov (slower; fewer draws here</span></span></span>
+<span class="r-in"><span><span class="co"># for a quick example -- use more in practice)</span></span></span>
+<span class="r-in"><span><span class="va">sim_cop</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_rpbnb_copula.html">simulate_rpbnb_copula</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fl">600</span>,</span></span>
+<span class="r-in"><span>  beta1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.2</span>, x1 <span class="op">=</span> <span class="fl">0.4</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  beta2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.1</span>, x1 <span class="op">=</span> <span class="op">-</span><span class="fl">0.3</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  random_1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>x1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sd <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  dispersion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>m1 <span class="op">=</span> <span class="fl">0.4</span>, m2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  copula <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span>, par <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">fit_cop</span> <span class="op">&lt;-</span> <span class="fu">fit_rpbnb</span><span class="op">(</span><span class="va">y1</span> <span class="op">~</span> <span class="va">x1</span>, <span class="va">y2</span> <span class="op">~</span> <span class="va">x1</span>, data <span class="op">=</span> <span class="va">sim_cop</span><span class="op">$</span><span class="va">data</span>, random_1 <span class="op">=</span> <span class="st">"x1"</span>,</span></span>
+<span class="r-in"><span>                     dependence <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span><span class="op">)</span>, draws <span class="op">=</span> <span class="fl">100</span>,</span></span>
+<span class="r-in"><span>                     control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span>compute_se <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 1879.567596 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 1763.577380</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 1760.412380</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 1760.182545</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 1759.459428</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 1759.315678</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 1758.584033</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 1757.546326</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 1755.044896</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 1752.119663</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 1752.076240</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 1750.292446</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 1750.238890</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 1750.228544</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 1750.222392</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 1750.221844</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 1750.221833</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 1750.221833</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 1750.221833 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Hyperbolic.html" class="external-link">tanh</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit_cop</span><span class="op">)</span><span class="op">[[</span><span class="st">"z_theta"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>  <span class="co"># estimated copula rho</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5136254</span>
+<span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -126,11 +244,11 @@ simulated-likelihood objective returns an aggregate gradient).</p></dd>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

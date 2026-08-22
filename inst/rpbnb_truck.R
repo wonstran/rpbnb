@@ -34,9 +34,15 @@ setwd("C:\\Users\\zwang9\\repos\\rpbnb")
 
 n_cores <- 20L
 draws <- 500L
-boundary_tests <- TRUE
+# Which groups of parameters to LR-test after the fit. FALSE runs none; TRUE is
+# the historical c("sd", "dispersion"); any subset of "sd" (random-coefficient
+# scales), "dispersion" (the overdispersions m1/m2) and "dependence" (the
+# association parameter) can be named, or "all" for every group. Each entry
+# costs restricted refits -- "sd" one per random coefficient, "dispersion" one
+# per free dispersion, "dependence" exactly one.
+boundary_tests <- c("sd", "dispersion", "dependence")
 # Same knob as rpbnb_frank_open.R: "famoye" or a copula() object.
-dependence <- copula("normal")
+dependence <- copula("frank")
 
 data <- read.csv(file.path("inst", "extdata", "export_open_all.csv"))
 cat("Observations :", nrow(data), "\n")
@@ -98,7 +104,8 @@ t_fit <- system.time(
 )[["elapsed"]]
 
 cat(sprintf("\nEstimation finished in %.2f s%s\n", t_fit,
-            if (boundary_tests) " (includes the boundary LR test refits)" else ""))
+            if (length(boundary_tests) && !identical(boundary_tests, FALSE))
+              " (includes the boundary LR test refits)" else ""))
 # Memory is not reported: the C++ core keeps its working set outside R's
 # allocator, so gc() would understate exactly the quantity this script tests.
 cat(sprintf("Convergence : code=%d, message=%s (iterations=%d)\n",
@@ -177,13 +184,15 @@ cat("\n")
 # printed again here on its own for the raw LR/df/p table with its Signif
 # stars, matching what rpbnb_frank_open.R prints from its separate call.
 if (!is.null(fit$boundary_tests)) {
-  sep(); cat("BOUNDARY LR TESTS (SDs and dispersions)\n"); sep()
+  sep(); cat("LR TESTS (", paste(boundary_tests, collapse = ", "), ")\n", sep = "")
+  sep()
   print(fit$boundary_tests)
 } else {
-  sep(); cat("BOUNDARY LR TESTS (SDs and dispersions)\n"); sep()
-  cat("Skipped (boundary_tests = FALSE). Set boundary_tests <- TRUE at the top\n")
-  cat("of this script to run them (one restricted refit per boundary parameter,\n")
-  cat("folded into the rpbnb() call above via boundary_tests = TRUE).\n")
+  sep(); cat("LR TESTS\n"); sep()
+  cat("Skipped (boundary_tests names no group). Set boundary_tests at the top\n")
+  cat("of this script -- e.g. \"all\", or c(\"dispersion\", \"dependence\") -- to\n")
+  cat("run them (one restricted refit per tested parameter, folded into the\n")
+  cat("rpbnb() call above).\n")
 }
 cat("\n")
 

@@ -1,0 +1,125 @@
+---
+title: "rpbnb Truck Open v2: TMB Benchmark"
+format: docx
+---
+
+::: {.callout-note}
+This report was generated using AI under general human direction. At the time of generation, the contents have not been comprehensively reviewed by a human analyst.
+:::
+
+# Executive summary
+
+This report compares six fits of the truck open-section bivariate negative-binomial random-parameter model. The model specification, data, seed, simulation-draw count, standardization, and LR-test settings were held fixed. Only the TMB estimation method and copula family varied:
+
+- estimation method: simulated maximum likelihood (`sml`) or Laplace;
+- dependence: Frank, Kimeldorf, or normal (Gaussian) copula.
+
+The benchmark used 2,321 observations, 300 Halton draws, 16 requested TMB threads, and 30 estimated parameters per fit. The normal copula achieved the lowest AIC and BIC in both estimation methods, but required substantially more time. Frank was preferred to Kimeldorf among the two non-Gaussian copulas. Main-fit optimizer convergence codes were zero for all six fits.
+
+# Goodness of fit and processing time
+
+The table below reports the goodness-of-fit (log-likelihood, AIC, BIC) and processing time (minutes) for each scenario. All six fits use the same 30 parameters, so the information criteria are directly comparable.
+
+```{r gof-table}
+#| echo: false
+root <- normalizePath("..", mustWork = TRUE)
+fit_paths <- c(
+  sml_frank = file.path(root, "results/fit_benchmark_open_v2_sml_frank_2026-08-21-003228.rds"),
+  sml_kimeldorf = file.path(root, "results/fit_benchmark_open_v2_sml_kimeldorf_2026-08-21-013111.rds"),
+  sml_normal = file.path(root, "results/fit_benchmark_open_v2_sml_normal_2026-08-21-134835.rds"),
+  laplace_frank = file.path(root, "results/fit_benchmark_open_v2_laplace_frank_2026-08-21-150128.rds"),
+  laplace_kimeldorf = file.path(root, "results/fit_benchmark_open_v2_laplace_kimeldorf_2026-08-21-152832.rds"),
+  laplace_normal = file.path(root, "results/fit_benchmark_open_v2_laplace_normal_2026-08-22-015347.rds")
+)
+stopifnot(all(file.exists(fit_paths)))
+fits <- lapply(fit_paths, readRDS)
+names(fits) <- names(fit_paths)
+library(knitr)
+
+fixed_names <- rownames(summary(fits[[1]]$sdreport, "fixed"))
+gof <- data.frame(
+  Scenario = vapply(fits, function(f) paste0(toupper(f$method), " + ", f$dependence$family), character(1)),
+  Method = vapply(fits, function(f) f$method, character(1)),
+  Copula = vapply(fits, function(f) f$dependence$family, character(1)),
+  `Log-likelihood` = round(vapply(fits, function(f) as.numeric(logLik(f)), numeric(1)), 4),
+  AIC = round(vapply(fits, function(f) AIC(f), numeric(1)), 4),
+  BIC = round(vapply(fits, function(f) BIC(f), numeric(1)), 4),
+  `Time (min)` = round(vapply(fits, function(f) f$benchmark_elapsed / 60, numeric(1)), 4),
+  Convergence = vapply(fits, function(f) f$optimizer$convergence, numeric(1)),
+  row.names = NULL
+)
+kable(gof)
+```
+
+The normal copula produced the best information-criterion values under both methods. The SML normal fit had AIC 15,362.79 and BIC 15,535.29; the Laplace normal fit had AIC 15,366.81 and BIC 15,539.30. The corresponding Frank and Kimeldorf models had higher AIC and BIC values. Processing time followed the same ordering: the normal copula was the slowest under both methods, and the Kimeldorf Laplace fit was the fastest overall.
+
+# Coefficient differences across scenarios
+
+The table below reports the relative difference, in percent, of each coefficient across the six scenarios. Each cell shows how far the scenario's coefficient moves, as a percentage, from the corresponding Frank reference under the same estimation method: the SML + Frank fit is the reference for the SML rows and the Laplace + Frank fit is the reference for the Laplace rows (hence the Frank columns are 0). Values are rounded to 4 decimals.
+
+```{r coef-diff-table}
+#| echo: false
+estimate_matrix <- vapply(fits, function(f) {
+  as.numeric(summary(f$sdreport, "fixed")[, "Estimate"])
+}, numeric(length(fixed_names)))
+rownames(estimate_matrix) <- fixed_names
+colnames(estimate_matrix) <- names(fits)
+
+sml_ref <- estimate_matrix[, "sml_frank"]
+lap_ref <- estimate_matrix[, "laplace_frank"]
+pct_diff <- cbind(
+  `SML Frank` = rep(0, nrow(estimate_matrix)),
+  `SML Kimeldorf` = 100 * (estimate_matrix[, "sml_kimeldorf"] / sml_ref - 1),
+  `SML Normal` = 100 * (estimate_matrix[, "sml_normal"] / sml_ref - 1),
+  `Laplace Frank` = rep(0, nrow(estimate_matrix)),
+  `Laplace Kimeldorf` = 100 * (estimate_matrix[, "laplace_kimeldorf"] / lap_ref - 1),
+  `Laplace Normal` = 100 * (estimate_matrix[, "laplace_normal"] / lap_ref - 1)
+)
+rownames(pct_diff) <- fixed_names
+pct_out <- data.frame(Parameter = fixed_names, round(pct_diff, 4), row.names = NULL)
+kable(pct_out)
+```
+
+Most fixed-effect coefficients stay within a few percent of the Frank reference under the same method. The largest deviations appear for the equation 2 intercept and the `SR40_MI3` and `MPD_ME` coefficients under the normal copula, which move the most from their Frank references; the random-scale and dispersion parameters (the `log_sd` and `log_m` rows) also show the widest spreads, reflecting their greater sensitivity to the dependence specification.
+
+# Estimation results by scenario
+
+The following tables give the full coefficient table for each scenario: estimate, standard error, z-value (estimate divided by its standard error), and two-sided p-value from the standard normal distribution, all rounded to 4 decimals.
+
+```{r est-tables}
+#| echo: false
+make_est_table <- function(fit) {
+  fx <- summary(fit$sdreport, "fixed")
+  est <- as.numeric(fx[, "Estimate"])
+  se <- as.numeric(fx[, "Std. Error"])
+  z <- est / se
+  data.frame(
+    Parameter = rownames(fx),
+    Coefficient = round(est, 4),
+    `Std. Error` = round(se, 4),
+    `z-value` = round(z, 4),
+    `p-value` = round(2 * pnorm(-abs(z)), 4),
+    row.names = NULL
+  )
+}
+scenario_names <- c(
+  sml_frank = "SML Frank", sml_kimeldorf = "SML Kimeldorf", sml_normal = "SML Normal",
+  laplace_frank = "Laplace Frank", laplace_kimeldorf = "Laplace Kimeldorf", laplace_normal = "Laplace Normal"
+)
+for (nm in names(fits)) {
+  cat("## ", scenario_names[nm], "\n\n", sep = "")
+  kable(make_est_table(fits[[nm]]))
+}
+```
+
+Across the scenarios, the equation 1 coefficients are highly significant in every fit, while the equation 2 coefficients show a mix of strong and weak significance. The equation 2 `SR40_MI3` and `MPD_ME` coefficients are not significant at conventional levels in most scenarios, consistent with the small equation 2 random scales.
+
+# Conclusions
+
+The normal copula is the fit-quality leader in this benchmark, with the lowest AIC and BIC under both SML and Laplace. Its dependence estimate is also highly consistent between methods. The cost is substantial: the normal SML fit took about 359 minutes, while the normal Laplace fit took about 625 minutes.
+
+For a balance between fit quality and runtime, the Frank copula with Laplace estimation is a practical alternative: it completed in about 73 minutes and had better information criteria than either Kimeldorf specification. SML and Laplace produced similar coefficient estimates for the Frank and Kimeldorf models, with Laplace completing faster in these runs. Method-specific runtime behavior was not uniform, however: Laplace was slower than SML for the normal copula.
+
+# Files and provenance
+
+The report reads the six saved fit objects in `results/fit_benchmark_open_v2_*.rds`. The original model script, `inst/rpbnb_truck_open_v2.R`, was not modified. The benchmark settings matched that script except that the method and copula family were swept across the six requested combinations.

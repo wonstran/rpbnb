@@ -64,7 +64,8 @@ argument through `...`. The TMB engine REJECTS `offset()` terms; the Gaussian
 copula is capped at one thread (known SIGSEGV in the registered atomic).
 
 Supporting: `simulate_bnb()`, `simulate_rpbnb()`, `simulate_rpbnb_tmb()`,
-`rpbnb_control()`, `rpbnb_tmb_control()` (NOT interchangeable), `copula()`,
+`rpbnb_control()` (ONE control object for every estimator;
+`rpbnb_tmb_control()` is a retained alias for it), `copula()`,
 plus S3 methods for `print`, `summary`, `coef`, `vcov`, `logLik`, `predict`,
 `AIC`, `BIC` on each fit class.
 
@@ -96,7 +97,15 @@ plus S3 methods for `print`, `summary`, `coef`, `vcov`, `logLik`, `predict`,
 - **2-space indent** (configured in `rpbnb.Rproj`)
 - **S3 dispatch** — the class determines method behavior; `class(fit)` returns `c("bnb_fit")` or `c("rpbnb_fit")`
 - **Constructor pattern** — `new_bnb_fit()` / `new_rpbnb_fit()` build the object; public `fit_*()` functions are thin wrappers
-- **`rpbnb_control()`** — all tuning params (iterlim, reltol, hessian, n_cores, etc.) funnel through one control object
+- **`rpbnb_control()`** — all tuning params (iterlim, reltol, hessian, n_cores,
+  gradtol, max_workload, etc.) funnel through ONE control object shared by every
+  estimator. Each fitter calls `.resolve_control(control, engine)` at the top:
+  it fills the two estimator-dependent defaults (`iterlim`, `print_level`, which
+  are `NULL` until then) and records the supplied-but-unread field names, which
+  the fitter stores as `fit$control_ignored` and `print()`/`summary()` report.
+  Adding a control field means updating `.CONTROL_ALL_FIELDS` **and**
+  `.CONTROL_APPLICABLE` in `R/control.R`, or it will be reported as ignored (or
+  silently claimed as honored) by the wrong estimators.
 - **Seed semantics** — `set.seed(seed)` drives the Cranley-Patterson rotation in `halton_uniform()`; it affects reproducibility of Halton draws, not RNG
 - **Lambda bounds** — the Famoye admissible interval is the random
   coefficients' SUPPORT bound (`famoye_support_bounds()` in `famoye_core.R`),

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>rpbnb Reference Manual</title>
-  <style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<title>rpbnb Reference Manual</title>
+<style>
     body { font-family: sans-serif; margin: 2em; line-height: 1.6; max-width: 1000px; }
     h1 { color: #333; border-bottom: 3px solid #007ba7; padding-bottom: 0.5em; }
     h2 { color: #555; margin-top: 1.5em; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
@@ -25,7 +26,7 @@
 </head>
 <body>
 
-<h1>rpbnb Package Reference Manual</h1>
+
 <p><em>Random-Parameter Bivariate Negative Binomial Regression</em></p>
 <p><strong>Version:</strong> Development | <strong>Last Updated:</strong> July 3, 2026</p>
 
@@ -52,36 +53,77 @@ negative binomial (RP-BNB) regression models. The package supports:
 <li>Efficient likelihood evaluation and analytic gradient computation</li>
 <li>Simulation tools for model development and Monte Carlo experiments</li>
 </ul>
-
 <h2 id="core">Core Functions</h2>
 
 <h3>Simulation</h3>
 <table>
-<tr><th>Function</th><th>Description</th></tr>
-<tr><td><code>simulate_bnb()</code></td><td>Generate data from a fixed-parameter bivariate NB distribution with Sarmanov dependence structure</td></tr>
-<tr><td><code>simulate_rpbnb()</code></td><td>Generate data from a random-parameter bivariate NB process with per-coefficient random distributions</td></tr>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+<tr>
+<td><code>simulate_bnb()</code></td>
+<td>Generate data from a fixed-parameter bivariate NB distribution with Sarmanov dependence structure</td>
+</tr>
+<tr>
+<td><code>simulate_rpbnb()</code></td>
+<td>Generate data from a random-parameter bivariate NB process with per-coefficient random distributions</td>
+</tr>
 </table>
-
 <h3>Model Fitting</h3>
 <table>
-<tr><th>Function</th><th>Description</th></tr>
-<tr><td><code>fit_bnb()</code></td><td>Maximum likelihood estimation of fixed-parameter BNB regression</td></tr>
-<tr><td><code>fit_rpbnb()</code></td><td>Quasi-Monte Carlo maximum likelihood estimation of random-parameter BNB regression</td></tr>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+<tr>
+<td><code>fit_bnb()</code></td>
+<td>Maximum likelihood estimation of fixed-parameter BNB regression</td>
+</tr>
+<tr>
+<td><code>fit_rpbnb()</code></td>
+<td>Quasi-Monte Carlo maximum likelihood estimation of random-parameter BNB regression</td>
+</tr>
 </table>
-
 <h2 id="methods">Methods and Utilities</h2>
 <table>
-<tr><th>Function</th><th>Description</th></tr>
-<tr><td><code>summary.bnb_fit()</code></td><td>Print model summary with coefficients and significance tests</td></tr>
-<tr><td><code>print.bnb_fit()</code></td><td>Print model object</td></tr>
-<tr><td><code>predict.bnb_fit()</code></td><td>Predict conditional means for new observations</td></tr>
-<tr><td><code>predict.rpbnb_fit()</code></td><td>Predict draw-averaged conditional means for random-parameter models</td></tr>
-<tr><td><code>bnb_gof()</code></td><td>Compute goodness-of-fit measures (pseudo-R-squared, BIC, AIC)</td></tr>
-<tr><td><code>bnb_marginal_effects()</code></td><td>Marginal effects on conditional means at the sample mean</td></tr>
-<tr><td><code>bnb_elasticities()</code></td><td>Elasticities of expected outcomes with respect to covariates</td></tr>
-<tr><td><code>rpbnb_control()</code></td><td>Control parameters for random-parameter estimation</td></tr>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+<tr>
+<td><code>summary.bnb_fit()</code></td>
+<td>Print model summary with coefficients and significance tests</td>
+</tr>
+<tr>
+<td><code>print.bnb_fit()</code></td>
+<td>Print model object</td>
+</tr>
+<tr>
+<td><code>predict.bnb_fit()</code></td>
+<td>Predict conditional means for new observations</td>
+</tr>
+<tr>
+<td><code>predict.rpbnb_fit()</code></td>
+<td>Predict draw-averaged conditional means for random-parameter models</td>
+</tr>
+<tr>
+<td><code>bnb_gof()</code></td>
+<td>Compute goodness-of-fit measures (pseudo-R-squared, BIC, AIC)</td>
+</tr>
+<tr>
+<td><code>bnb_marginal_effects()</code></td>
+<td>Marginal effects on conditional means at the sample mean</td>
+</tr>
+<tr>
+<td><code>bnb_elasticities()</code></td>
+<td>Elasticities of expected outcomes with respect to covariates</td>
+</tr>
+<tr>
+<td><code>rpbnb_control()</code></td>
+<td>Control parameters for random-parameter estimation</td>
+</tr>
 </table>
-
 <h2 id="examples">Quick Start Examples</h2>
 
 <h3>Simulating Data</h3>
@@ -135,13 +177,32 @@ bnb_elasticities(fit)
 For random-parameter specifications, each coefficient can be assigned a distribution:
 </p>
 <table>
-<tr><th>Distribution</th><th>Parameterization</th><th>Use Case</th></tr>
-<tr><td>normal</td><td>β = μ + σ · z, z ~ N(0,1)</td><td>Unbounded heterogeneity (default)</td></tr>
-<tr><td>lognormal</td><td>β = ±exp(μ + σ · z), z ~ N(0,1)</td><td>Strictly positive/negative coefficients</td></tr>
-<tr><td>uniform</td><td>β = μ + σ · (2u - 1), u ~ U(0,1)</td><td>Bounded support [-σ, σ]</td></tr>
-<tr><td>triangular</td><td>Symmetric triangular on [-σ, σ]</td><td>Peaked heterogeneity near the mean</td></tr>
+<tr>
+<th>Distribution</th>
+<th>Parameterization</th>
+<th>Use Case</th>
+</tr>
+<tr>
+<td>normal</td>
+<td>β = μ + σ · z, z ~ N(0,1)</td>
+<td>Unbounded heterogeneity (default)</td>
+</tr>
+<tr>
+<td>lognormal</td>
+<td>β = ±exp(μ + σ · z), z ~ N(0,1)</td>
+<td>Strictly positive/negative coefficients</td>
+</tr>
+<tr>
+<td>uniform</td>
+<td>β = μ + σ · (2u - 1), u ~ U(0,1)</td>
+<td>Bounded support [-σ, σ]</td>
+</tr>
+<tr>
+<td>triangular</td>
+<td>Symmetric triangular on [-σ, σ]</td>
+<td>Peaked heterogeneity near the mean</td>
+</tr>
 </table>
-
 <h3>Sarmanov Bivariate NB</h3>
 <p>
 The fixed-parameter Sarmanov structure induces dependence between y1 and y2 via:

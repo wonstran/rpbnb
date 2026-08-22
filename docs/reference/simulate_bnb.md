@@ -13,7 +13,7 @@ simulate_bnb(
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 ```
 
@@ -45,7 +45,9 @@ simulate_bnb(
 
 - seed:
 
-  Random seed for reproducibility.
+  Optional random seed. If `NULL` (default) the RNG is left untouched
+  and draws continue from the caller's current stream, so repeated calls
+  yield distinct datasets; supply an integer for reproducible output.
 
 ## Value
 

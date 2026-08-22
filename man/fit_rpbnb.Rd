@@ -46,7 +46,11 @@ lognormal-only). NULL means all-fixed for that equation.}
 \item{start}{Optional starting parameter vector.}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object. Estimation uses BFGS, the only
-optimizer \code{control$method} accepts.}
+optimizer \code{control$method} accepts. One control object serves every
+estimator in the package; settings this one does not read -- the TMB knobs
+(\code{gradtol}, \code{restarts}, \code{max_threads}, \code{max_workload}, \code{parallel_tape}),
+\code{hessian}, and \code{draws_hessian} -- are ignored and listed by
+\code{print()}/\code{summary()} of the fit rather than rejected.}
 
 \item{dependence}{Dependence structure: "famoye" (default; Famoye/Sarmanov)
 or an \code{\link[=copula]{copula()}} object for copula dependence (Frank / Gaussian /

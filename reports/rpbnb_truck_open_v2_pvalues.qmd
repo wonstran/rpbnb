@@ -1,0 +1,45 @@
+---
+title: "rpbnb Truck Open v2: Coefficient P-values"
+---
+
+::: {.callout-note}
+This report was generated using AI under general human direction. At the time of generation, the contents have not been comprehensively reviewed by a human analyst.
+:::
+
+# Coefficient p-values across scenarios
+
+This table compares two-sided asymptotic Wald p-values for the regression coefficients across six TMB fits. The model and data were held fixed while estimation method and copula family varied. Values are rounded to three decimal places; values smaller than 0.0005 display as `0.000`.
+
+```{r load-data}
+#| label: load-data
+library(knitr)
+
+pvalue_file <- file.path("..", "results", "benchmark_open_v2_significance.rds")
+stopifnot(file.exists(pvalue_file))
+sig <- readRDS(pvalue_file)
+
+pvalues <- sig$pwide
+names(pvalues)[names(pvalues) == "parameter"] <- "Coefficient"
+
+# Rename scenario columns for readability.
+scenario_names <- c(
+  p.sml_frank = "SML + Frank",
+  p.sml_kimeldorf = "SML + Kimeldorf",
+  p.sml_normal = "SML + Normal",
+  p.laplace_frank = "Laplace + Frank",
+  p.laplace_kimeldorf = "Laplace + Kimeldorf",
+  p.laplace_normal = "Laplace + Normal"
+)
+names(pvalues) <- ifelse(names(pvalues) %in% names(scenario_names),
+                          scenario_names[names(pvalues)], names(pvalues))
+
+# Display exactly three decimal places, including trailing zeroes.
+pvalues[-1] <- lapply(pvalues[-1], function(x) formatC(x, format = "f", digits = 3))
+```
+
+```{r pvalue-table}
+#| label: pvalue-table
+kable(pvalues, align = "lrrrrrr", caption = "Two-sided coefficient p-values by estimation method and copula family.")
+```
+
+The p-values are unadjusted for multiple comparisons and use the standard 0.05 significance threshold.

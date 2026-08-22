@@ -175,14 +175,21 @@ test_that("TMB summary labels random-coefficient scales by distribution", {
 
   # No invalid Wald test on a boundary null -- scoped to the SCALE block, not to
   # the whole printout. The equation-1 and equation-2 coefficient tables do
-  # legitimately carry Signif columns; asserting over all of `out` would test
-  # the wrong thing and fail for the right reason.
+  # legitimately carry Wald columns; asserting over all of `out` would test the
+  # wrong thing and fail for the right reason.
+  #
+  # The block DOES carry LR/df/Pr(>chisq)/Signif columns, because a boundary LR
+  # test can fill them (rpbnb_tmb_boundary_tests()); with none attached here
+  # they are NA and Signif is blank. What must never appear is the Wald pair --
+  # `z value` / `Pr(>|z|)` -- which is what would be invalid at scale = 0.
   start <- grep("Random-coefficient scales", out, fixed = TRUE)[1]
   ends <- grep("^--- ", out)
   stop_at <- ends[ends > start]
   block <- out[start:(if (length(stop_at)) stop_at[1] - 1L else length(out))]
-  expect_false(any(grepl("Signif", block, fixed = TRUE)))
+  expect_false(any(grepl("z value", block, fixed = TRUE)))
   expect_false(any(grepl("Pr(>|z|)", block, fixed = TRUE)))
+  # No stars either: with no LR test attached the p-values are all NA.
+  expect_false(any(grepl("*", block, fixed = TRUE)))
 })
 
 test_that("TMB summary prints the random-coefficient-scales note once, not per equation", {
@@ -241,4 +248,77 @@ test_that("TMB summary reports an ordinary Wald z/p for the dependence parameter
   dep_val <- sdr_sum["theta", "Estimate"]
   dep_se  <- sdr_sum["theta", "Std. Error"]
   expect_true(is.finite(dep_val) && is.finite(dep_se) && dep_se > 0)
+
+  # A healthy fit must NOT carry the explanatory note added for NA rows.
+  expect_false(any(grepl("No Wald z/p for", block, fixed = TRUE)))
+  expect_false(any(grepl("EVERY parameter above", block, fixed = TRUE)))
+})
+
+# The dispersion block has always explained its own NAs; the dependence block
+# used to print bare NA/NA/NA, which reads as a malfunction rather than as the
+# deliberate refusal it is (the boundary scan in R/tmb_inference.R nulls the
+# standard error when the estimate is set by an implementation bound). These
+# pin the two cases apart, because they call for OPPOSITE remedies: a pinned
+# lambda means the family cannot represent the association, whereas a
+# non-positive-definite Hessian says nothing about the dependence parameter at
+# all and makes every other standard error NA too.
+test_that("a Famoye lambda pinned at its bound explains its NA standard error", {
+  skip_on_cran()
+  # A strong shared latent component drives lambda onto the top of the frozen
+  # Famoye interval, where near_smooth_cap()'s 2% margin flags it.
+  set.seed(5)
+  n <- 250
+  x1 <- rnorm(n); u <- rnorm(n)
+  d <- data.frame(y1 = rpois(n, exp(0.3 + 0.2 * x1 + 2.6 * u)),
+                  y2 = rpois(n, exp(0.3 - 0.2 * x1 + 2.6 * u)), x1 = x1)
+  fit <- suppressWarnings(
+    fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, dependence = "famoye",
+                  draws = 20, seed = 3,
+                  control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L)))
+
+  skip_if_not(identical(fit$boundary_report, "lam"),
+              "lambda did not reach its bound on this platform")
+  expect_identical(unname(fit$boundary_sides), "upper")
+  expect_true(fit$sdreport$pdHess)
+
+  out <- capture.output(summary(fit))
+  block <- out[grep("--- Dependence ---", out, fixed = TRUE):length(out)]
+  # The note is wrapped, so a phrase can straddle a line break; match against
+  # the rejoined text and keep the width assertion on the individual lines.
+  flat <- paste(block, collapse = " ")
+  expect_true(grepl("pinned against its upper implementation bound",
+                    flat, fixed = TRUE))
+  # The Famoye-specific paragraph: the profile cannot escape the frozen box.
+  expect_true(grepl("frozen lambda box", flat, fixed = TRUE))
+  # It must NOT mis-attribute this to a failed Hessian.
+  expect_false(grepl("EVERY parameter above", flat, fixed = TRUE))
+  # Nothing may exceed the width of the tables it sits under.
+  expect_true(all(nchar(block) <= 80L))
+})
+
+test_that("a singular Hessian is not mis-reported as a dependence bound", {
+  skip_on_cran()
+  # Exact collinearity -> non-positive-definite Hessian -> every SE is NA.
+  # Blaming an implementation bound here would point at the wrong remedy.
+  set.seed(11)
+  n <- 200
+  x1 <- rnorm(n)
+  d <- data.frame(y1 = rpois(n, exp(0.5 + 0.3 * x1)),
+                  y2 = rpois(n, exp(0.4 - 0.2 * x1)),
+                  x1 = x1, x1copy = x1)
+  fit <- suppressWarnings(
+    fit_rpbnb_tmb(y1 ~ x1 + x1copy, y2 ~ x1, data = d, dependence = "famoye",
+                  draws = 20, seed = 3,
+                  control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L)))
+
+  skip_if(isTRUE(fit$sdreport$pdHess), "Hessian stayed PD on this platform")
+  out <- capture.output(summary(fit))
+  block <- out[grep("--- Dependence ---", out, fixed = TRUE):length(out)]
+  flat <- paste(block, collapse = " ")
+  expect_true(grepl("EVERY parameter above", flat, fixed = TRUE))
+  expect_true(grepl("pdHess", flat, fixed = TRUE))
+  # The bound wording and the Famoye box advice are both wrong here.
+  expect_false(grepl("implementation bound", flat, fixed = TRUE))
+  expect_false(grepl("frozen lambda box", flat, fixed = TRUE))
+  expect_true(all(nchar(block) <= 80L))
 })

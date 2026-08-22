@@ -17,14 +17,16 @@ reference:
     contents:
       - rpbnb
       - fit_bnb
+      - fit_rpbnb
       - copula
       - rpbnb_control
-      - fit_rpbnb
+      - rpbnb_threads
   - title: "TMB engine"
     desc: >
       The automatic-differentiation engine, reachable either directly or via
       rpbnb(engine = "tmb"). Adds a Laplace approximation and dependence
-      profiling.
+      profiling. Shares rpbnb_control() with the classic engine above
+      (rpbnb_tmb_control() is a retained alias for the same object).
     contents:
       - fit_rpbnb_tmb
       - rpbnb_tmb_control
@@ -32,18 +34,37 @@ reference:
       - rpbnb_tmb_marginal_effects
       - rpbnb_tmb_elasticities
       - rpbnb_tmb_max_workload
-      - simulate_rpbnb_tmb
+  - title: "Boundary and likelihood-ratio tests"
+    desc: >
+      Tests for the parameters (random-coefficient scales, NB2 dispersions,
+      the dependence parameter) whose null hides on or near a boundary of the
+      parameter space, where an ordinary Wald z/p does not apply.
+    contents:
+      - lr_test
+      - rpbnb_boundary_tests
+      - rpbnb_tmb_boundary_tests
   - title: "Post-estimation"
-    desc: "Marginal effects, goodness-of-fit, and elasticities"
+    desc: "Marginal effects, elasticities, goodness-of-fit, and residual diagnostics"
     contents:
       - bnb_marginal_effects
-      - bnb_gof
       - bnb_elasticities
+      - bnb_gof
+      - bnb_residual_checks
+      - rpbnb_marginal_effects
+      - rpbnb_elasticities
+      - predict.rpbnb_tmb_fit
+      - summary.rpbnb_tmb_fit
+      - residuals.bnb_fit
+      - residuals.rpbnb_fit
+      - plot.bnb_fit
+      - plot.rpbnb_fit
   - title: "Simulation"
     desc: "Data simulators"
     contents:
       - simulate_bnb
       - simulate_rpbnb
+      - simulate_rpbnb_copula
+      - simulate_rpbnb_tmb
   - title: "Package"
     contents:
       - rpbnb-package

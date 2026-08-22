@@ -21,7 +21,12 @@
 #' @param start Optional starting parameter vector (named or positional).
 #' @param dependence Dependence structure: "famoye", "independence", or a
 #'   \code{copula()} object for copula dependence.
-#' @param control An object from \code{rpbnb_tmb_control()}.
+#' @param control An [rpbnb_control()] object (\code{rpbnb_tmb_control()} is a
+#'   retained alias that returns the same object). One control object serves
+#'   every estimator in the package; settings this engine does not read --
+#'   \code{se_method}, \code{hessian}, \code{compute_se}, \code{method},
+#'   \code{hess_eps}, \code{hess_r}, \code{draws_hessian} -- are ignored and
+#'   listed by \code{print()}/\code{summary()} of the fit rather than rejected.
 #' @param inference Inference storage: \code{"full"} for a full covariance,
 #'   \code{"diag"} for standard errors only, or \code{"none"} to skip Hessian
 #'   calculations. In diagonal mode, \code{vcov()} returns \code{NA} for
@@ -180,16 +185,12 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   inference <- match.arg(inference)
   keep <- match.arg(keep)
   method <- match.arg(method)
-  # rpbnb() type-checks this before dispatching, but a direct call bypasses the
-  # wrapper. Without the check, an rpbnb_control() object reaches here and its
-  # missing fields read as NULL: control$gradtol NULL makes the restart loop's
-  # comparison logical(0), control$n_cores NULL breaks thread configuration.
-  if (!inherits(control, "rpbnb_tmb_control")) {
-    stop("`control` must be an `rpbnb_tmb_control` object from ",
-         "rpbnb_tmb_control(); got `", class(control)[1L], "`. The Rcpp ",
-         "engine's rpbnb_control() is not interchangeable with it.",
-         call. = FALSE)
-  }
+  # One control object now serves every estimator (see R/control.R). This fills
+  # in the nlminb-side defaults for the two fields whose default depends on the
+  # estimator (iterlim, print_level), computes max_workload if it was left to
+  # the memory probe, and records which supplied settings this engine does not
+  # read -- reported by print()/summary(), not warned about here.
+  control <- .resolve_control(control, "tmb")
   .chk_poisson_flag(poisson_1, "poisson_1")
   .chk_poisson_flag(poisson_2, "poisson_2")
   if (length(draws) != 1L || !is.numeric(draws) || is.na(draws) ||
@@ -845,6 +846,11 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     keep = keep,
     parallel = list(requested = control$n_cores,
                     realized = configured$n_cores),
+    # Supplied control settings this engine does not read (e.g. se_method,
+    # hessian, draws_hessian). Reported by print()/summary() rather than
+    # warned about, so one control object can drive either engine.
+    control_ignored = attr(control, "ignored"),
+    control_engine = attr(control, "engine"),
     call = match.call()
   )
   class(result) <- "rpbnb_tmb_fit"

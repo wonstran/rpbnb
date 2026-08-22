@@ -1,7 +1,94 @@
+# rpbnb 0.4.1
+
+## Breaking-ish: one control object for every estimator
+
+* `rpbnb_control()` and `rpbnb_tmb_control()` **are now the same object**.
+  `rpbnb_control()` carries the union of both parameter sets and is accepted
+  by `fit_bnb()`, `fit_rpbnb()`, `fit_rpbnb_tmb()`, and `rpbnb()` with either
+  `engine`. `rpbnb_tmb_control()` is retained as a thin alias that forwards to
+  it, so existing scripts keep working unchanged.
+* `rpbnb(engine = ..., control = ...)` no longer errors on a "wrong-engine"
+  control object; a script can flip `engine` without rewriting its control
+  call. The returned object's class is
+  `c("rpbnb_control", "rpbnb_tmb_control")`, so every historical
+  `inherits(control, ...)` check still passes.
+* **Settings an estimator does not read are ignored, not rejected** — and are
+  reported, not silenced. Each fit records the supplied-but-unused names on
+  `$control_ignored` (with `$control_engine`), and `print()`/`summary()` print
+  a line naming them, e.g.
+  `Control settings ignored (not used by the TMB engine): se_method, draws_hessian`.
+  Only settings the caller actually wrote are reported. `draws_hessian` has
+  been a documented no-op since same-draw curvature landed, so it is now
+  always reported as ignored.
+* `iterlim` and `print_level` — the two fields whose two constructors
+  disagreed (300/500 and 2/0) — now default to `NULL`, meaning "this
+  estimator's own default", resolved once the estimator is known. Each engine
+  therefore behaves exactly as before when they are left alone, and an
+  explicit value is honored by every engine. `rpbnb_control()$iterlim` is
+  consequently `NULL` rather than `300L`; read it back off a fit's control, or
+  set it explicitly, if a number is needed.
+* `max_workload` also defaults to `NULL` and is computed by
+  `rpbnb_tmb_max_workload()` only when a TMB fit needs it, so a `maxLik` fit
+  no longer pays for the memory probe (and cannot emit its detection warning).
+* Fields sharing a name are still **not translated**: `iterlim` means a
+  `maxLik` BFGS limit to one estimator and an `nlminb` limit to another, and
+  `n_cores` means worker processes versus OpenMP threads.
+
+## New feature: per-group switches for the boundary LR tests, incl. the dependence parameter
+
+* `rpbnb(boundary_tests = )` now takes a **switch over three groups** instead
+  of a bare logical: `"sd"` (random-coefficient scales), `"dispersion"` (the
+  NB2 overdispersions `m1`, `m2`), `"dependence"` (the association
+  parameter), plus `"all"` and `"none"`. `TRUE` still means exactly what it
+  always did, `c("sd", "dispersion")`, so it does not silently grow a third
+  refit; `FALSE` still runs nothing. So `boundary_tests = "dispersion"` tests
+  overdispersion alone, and `c("dispersion", "dependence")` tests
+  overdispersion and association without paying one refit per scale.
+* Both `rpbnb_boundary_tests()` and `rpbnb_tmb_boundary_tests()` accept
+  `which = "dependence"` for the new test: H0 is "no association", i.e. the
+  independence model, giving one row labelled `lam` (Famoye), `theta` (Frank /
+  Clayton-Kimeldorf), or `rho` (Gaussian).
+  * The TMB engine refits with its own `dependence = "independence"` family,
+    which maps `z_dep` out of the free parameters — an exact 1-df restriction
+    on the same draws.
+  * The classic engine has no independence fitter, so it pins the
+    working-scale dependence parameter at its family's independence value:
+    `z_theta = 0` for Frank (`theta = 0`) and the Gaussian copula
+    (`rho = tanh(0) = 0`), `z_theta = -30` for Clayton (below the `theta`
+    threshold at which both the R and C++ kernels take their exact
+    product-copula branch), and for Famoye the `z` that maps to `lambda = 0`
+    under the interval the restricted refit freezes.
+  * **The boundary correction is applied per family, not blanket.** Famoye's
+    `lambda`, Frank's `theta`, and the Gaussian `rho` all have an *interior*
+    null at 0, so their LR statistic is an ordinary chi-square(1); only
+    Clayton/Kimeldorf (`theta > 0`) takes the 50:50 mixture. Using the mixture
+    everywhere would have halved three of the four families' p-values.
+* When a dependence LR test is present, `summary()` shows it in place of that
+  row's Wald `z`/`p` on both engines — the two answer the same question, and
+  printing both in one row invites reading the wrong column. Without the test
+  (the default) the dependence row is the Wald table it has always been.
+* Fix: the classic `rpbnb_boundary_tests()` no longer tests `m1`/`m2` on a
+  margin the fit already pinned to its Poisson limit (a 0-df comparison
+  `lr_test()` correctly refuses), and its restricted refits now inherit the
+  full fit's `poisson_1`/`poisson_2` rather than defaulting to `FALSE` — with
+  a Poisson-pinned margin the old default made every scale test compare
+  non-nested fits. `rpbnb_tmb_boundary_tests()` already had both guards.
+
 # rpbnb 0.4.0
 
 The `rpbnb.tmb` package (v0.3.5, git `c64a2ec`) has been merged into `rpbnb`.
 That source tree is now superseded; everything it provided is available here.
+
+## Behaviour change: `rpbnb(engine = "classic")` ignores `method`/`force_parallel_gaussian`
+
+* The TMB tuning knobs `method` and `force_parallel_gaussian` passed via
+  `...` are now **dropped with a warning** under `engine = "classic"`,
+  instead of the hard "only accepted by engine = \"tmb\"" error. Neither has
+  any classic-engine meaning (they only tune *how* the TMB fit runs, not
+  *what* is fitted), so a call can switch `engine = "tmb"` to `"classic"`
+  without stripping them. All other cross-engine argument names — `inference`
+  and `keep` under classic; `draw_type`, `.fixed`, `.opt_draws` under tmb —
+  keep the hard error, as do unknown names.
 
 ## New feature: `rpbnb_tmb_boundary_tests()` / `rpbnb(engine = "tmb", boundary_tests = TRUE)`
 
@@ -95,6 +182,37 @@ That source tree is now superseded; everything it provided is available here.
   footnote) once per equation when both equations had random coefficients —
   identical text, back to back. It now prints once, after both equations'
   tables.
+* `summary.rpbnb_tmb_fit()`'s "--- Dependence ---" block now explains an `NA`
+  standard error instead of printing a bare `Estimate / NA / NA / NA` row.
+  The "Dispersion" block above it has always explained its own `NA`s, so the
+  silent one read as a malfunction rather than as the deliberate refusal it
+  is: the boundary scan in `R/tmb_inference.R` nulls the standard error when
+  the estimate is set by an implementation bound rather than identified by
+  the data. Reported from a Famoye fit whose `z_dep` reached 24.9, saturating
+  the logistic map onto the frozen lambda interval — `lam` came out
+  `1 - 2.0e-06` (printing as a tidy `1.0000`, which is what made it look like
+  a placeholder) with a delta-method derivative of `3.1e-11`, so
+  `near_smooth_cap()`'s 2% margin flagged it `"upper"` and blanked the SE.
+  The note names the cause, points at `fit$boundary_report` /
+  `fit$boundary_sides`, and refers `rpbnb_tmb_dependence_profile()` for a
+  likelihood-based interval.
+
+  Two cases that produce identical-looking `NA`s are deliberately kept apart,
+  because they call for opposite remedies. A *pinned* dependence parameter is
+  specific to that parameter and means the family cannot represent the
+  association in the data. A *non-positive-definite Hessian* says nothing
+  about the dependence parameter at all — it blanks every standard error in
+  the summary — so the note reports that case as a property of the fit as a
+  whole and points at rank deficiency instead. Attributing the second to an
+  implementation bound would be a confidently wrong diagnosis aimed at the
+  wrong fix.
+
+  For Famoye the note adds that the profile interval is mapped through the
+  same frozen box, and that when the box is parameter-independent
+  (`lambda_bounds` identical to `lambda_bounds_at_optimum`) refitting from
+  better starting values *cannot* widen it — the documented "widen the box"
+  remedy does not apply there and the cap is structural, so a copula
+  dependence is the actual answer.
 * Fixed: `fit_rpbnb_tmb()` (and therefore `rpbnb(engine = "tmb")`) could
   abort outright with `Error in stats::nlminb(...) : NA/NaN gradient
   evaluation` (or `NA/NaN function evaluation`), discarding an entire
@@ -225,6 +343,127 @@ That source tree is now superseded; everything it provided is available here.
     node budget on `[q(a'), q(a)]`, so the deeper sentinel made that interval
     about five times wider for every zero count — and zeros are most of a
     count sample — for no gain in accuracy.
+* Fixed: **a Frank copula cell probability the data genuinely produces was
+  being clipped at `1e-300`.** Frank's `frank_cell_prob()` returned a *linear*
+  probability, and the caller floored it at `1e-300` before taking its log —
+  the same floor Clayton and Gaussian still use. That floor was written as a
+  guard against underflow noise, but on this workload it clips ordinary
+  observations. It is now `frank_log_cell_prob()`: it takes the margins' *log*
+  masses (which `nb2_cdf_pair()`/`pois_cdf_pair()` already return) and returns
+  the log cell probability, so nothing on the Frank path passes through the
+  linear representation of the cell and the floor never binds.
+  - Found on the truck data's `m1` boundary LR test — margin 1 forced Poisson,
+    a Frank copula, `method = "laplace"`. Observation 2230 (`y = 125` against
+    `mu = 0.193`, so `log P(Y1 = 125) = -687.8`) has a cell probability of
+    **1.03e-300**: three ulp above the floor, not an underflow artefact. One
+    inner-Newton step crosses it, and on the far side the objective is the
+    constant `-log(1e-300) = 690.776` rather than the likelihood.
+  - A clip is a kink, and Laplace differentiates the joint *twice*. The
+    centred second difference of `-log p` in `log(mu1)` across it came back
+    **-12,181** at `h = 1e-2` and **-94,836** at `h = 1e-3` where the true
+    curvature is `mu1 = 0.193` — which is what the log-space form now returns,
+    at every step size. That much negative curvature on one latent row costs
+    the inner Hessian its positive definiteness, and TMB reports
+    `PD hess?: FALSE`, then `Newton drop out: Too many failed attempts`, then
+    `inner newton optimization failed during gradient calculation` and a NaN
+    outer gradient. At the parameter vector where the refit first went
+    non-finite, the inner Hessian's worst per-observation eigenvalue was NaN
+    (and `-106.6` on the blocks that still had one); it is `-0.109` after the
+    fix, and the matrix is finite throughout.
+  - `M = (1 + A(a')B(b)/D)(1 + A(a)B(b')/D)` is now computed from an identity
+    rather than as written. Each factor is `exp(-th * C(.,.))`, which for
+    saturated corners is `exp(-th)`: 2.5e-9 at the `theta = 19.8` this test
+    reaches and 6.3e-16 at the `FRANK_THETA_MAX` cap of 35, where it is under
+    three ulp of 1. Recovering it by adding 1 to a quantity near -1 left
+    **5.6% relative error** at the cap. Writing `p = exp(-th u)`,
+    `q = exp(-th v)` and expanding `D + A(u)B(v)` gives a numerator of two
+    terms that both carry the denominator's sign for either sign of `theta`,
+    so the factor is positive by construction and accurate to full relative
+    precision.
+  - **This changes the Frank likelihood wherever the old floor bound**, under
+    both estimators — those cells now contribute their true value instead of
+    690.776 nats, so the objective is larger and the fit is not the same
+    number. On a one-observation check (`y = (300, 0)`, Poisson margin 1,
+    `mu = 1`) the objective is **1432.93** against the **706.49** the floor
+    allowed. Ordinary counts are untouched: against the old linear form, over
+    counts where that form is sound, the two agree to 1e-8.
+  - **Not fixed, and not a numerical defect:** the truck `m1` refit still ends
+    at `nlminb` `false convergence (8)`, so that row stays `NA` under
+    `method = "laplace"`. With margin 1 forced Poisson the optimizer drives
+    Frank's `theta` to about 20 (Kendall's tau ≈ 0.8) to recover the lost
+    dispersion, and at that strength the cell probability is a smooth but very
+    sharp ridge — convex only near its peak. A fine scan at the worst
+    observation (`y = (38, 1)`, `mu = (26.9, 0.57)`) shows `-log p` falling
+    from 4.21 to 3.09 and back to 10.03 over `eta1` steps of 0.01, with
+    curvature running from +584 on the peak to negative on the shoulders. That
+    is genuine non-log-concavity of a strong discrete copula in the random
+    effects, which is exactly what a Laplace inner Newton cannot have.
+    `method = "sml"` has no inner Newton and is not exposed to it.
+  - Clayton and Gaussian still return a linear cell probability and keep the
+    `1e-300` floor, so a Laplace fit whose true cell probabilities reach that
+    depth remains exposed there. Clayton's internals are already log-space
+    (`log_ratio()`), so it is the cheaper of the two to convert if the need
+    comes up; Gaussian's cell is a quadrature and has no log form.
+* `rpbnb_tmb_boundary_tests()` gains **`sml_fallback`** (default `TRUE`):
+  when the fit under test was estimated by `method = "laplace"` and a
+  restricted refit fails to converge, that one test's LR is re-run with
+  **both sides estimated by `method = "sml"`** instead of reported `NA`.
+  `rpbnb(engine = "tmb", boundary_tests = TRUE)` inherits it automatically.
+  - This is the follow-up to the Frank clip fix above, which repaired the
+    *numerics* of the truck data's `m1` test but left its row `NA` anyway,
+    for a reason no numerical fix can reach: pinning margin 1 to Poisson
+    drives Frank's `theta` to about 20 (Kendall's tau 0.8) to absorb the
+    lost dispersion, and at that strength the cell probability is
+    non-log-concave in the random effects — at `y = (38, 1)`,
+    `mu = (26.9, 0.57)`, `-log p` runs 4.21 → 3.09 → 10.03 over `eta1`
+    steps of 0.01, curvature +584 at the peak and negative on the
+    shoulders. The Laplace approximation differentiates through an inner
+    Newton that requires exactly the log-concavity the restricted model no
+    longer has. TMB's inner-solver knobs were screened at the failing
+    point: `tol10 = 0` does clear the `"Newton drop out"` (the early-exit
+    probe's PD check was one failure source), but the outer fit still ends
+    at nlminb `false convergence (8)` with `max|grad|` of 1e8–1e10.
+    SML has no inner Newton and no third derivatives, and is not exposed.
+  - The fallback refits the **full model too** under SML (once, cached
+    across all of one call's tests, warm-started from the Laplace optimum,
+    at the same `draws`/`seed`), and takes the LR between the two SML
+    fits. A Laplace `logLik` is never paired with an SML `logLik`: they
+    are different approximations of the likelihood, and their difference
+    is not an LR statistic. If the SML restricted fit fails too, the row
+    is `NA` with a warning and the full-model refit is skipped (its only
+    purpose is to pair with the restricted one).
+  - Fallback rows are announced by a `message()` (silenced by
+    `control$print_level = 0`), listed in the result's `sml_fallback`
+    attribute, and footnoted by `print()` — the estimator switch is never
+    silent. Validated on the truck data (`m1`, Frank copula, 400 draws,
+    16 threads): full SML `logLik = -7674.99` (30 min), restricted
+    `-8188.79` (37 min), **both `nlminb` code 0** with `max|grad|` under
+    0.05, giving LR = **1027.60** on 1 df, `p ≈ 9e-226` — where every
+    Laplace attempt at the same restriction ended at
+    `false convergence (8)` with `max|grad|` of 1e8–1e10. (The stalled
+    Laplace pairs bounded their LR near 948.6; the SML statistic differs
+    because the two estimators maximize different approximations of the
+    likelihood — which is exactly why the fallback never mixes them.)
+  - The interpretation caveat is the flip side of the rescue: an SML-pair
+    LR is a statement about the SML likelihood, tested at these `draws`.
+    It answers "is this dispersion zero" under a consistent estimator; it
+    is not the Laplace fit's own LR, which is exactly why the rows are
+    flagged everywhere they appear.
+  - The fallback also triggers on a **converged Laplace pair with a
+    negative raw LR** -- a restricted logLik above the full fit's, which a
+    nested pair at true optima cannot produce. nlminb code 0 is not
+    sufficient to trust a Laplace value: a full truck-data boundary run
+    surfaced restricted refits beating the full fit by 0.002-1.2 nats
+    (the warm-started, restart-polished refits out-polished the full
+    fit's stopping point) and one by 1,919 nats (LR = -3838: near a
+    singular inner Hessian the Laplace log-likelihood rises without
+    bound, and the restricted refit "converged" on that spurious ridge).
+    Previously these fell through to `lr_test()`, which clamped the
+    statistic to 0 with a warning -- for the scale rows that silently
+    replaced real LRs of 7-30 with "no evidence". Now any negative raw
+    LR under a Laplace fit is treated exactly like a failed refit: the
+    test re-runs as an SML pair, with a message stating the raw LR that
+    disqualified the Laplace one.
 
 ## New feature: `fit_rpbnb_tmb(force_parallel_gaussian = )`
 

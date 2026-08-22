@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -46,7 +46,9 @@
 <span>  <span class="va">data</span>,</span>
 <span>  dependence <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"independence"</span>, <span class="st">"famoye"</span><span class="op">)</span>,</span>
 <span>  start <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  poisson_1 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  poisson_2 <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -55,7 +57,11 @@
 
 
 <dl><dt id="arg-formula-formula-">formula_1, formula_2<a class="anchor" aria-label="anchor" href="#arg-formula-formula-"></a></dt>
-<dd><p>Model formulas for the two count outcomes.</p></dd>
+<dd><p>Model formulas for the two count outcomes. An
+equation-specific <code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> term (e.g. <code>y ~ x + offset(log(exposure))</code>) is
+supported on every dependence path: the offset enters that margin's linear
+predictor additively (mean <code>exp(x'beta + offset)</code>) during estimation, and is
+carried through the stored fitted means and both <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> methods.</p></dd>
 
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
@@ -64,16 +70,41 @@
 
 <dt id="arg-dependence">dependence<a class="anchor" aria-label="anchor" href="#arg-dependence"></a></dt>
 <dd><p>Dependence structure: "independence" (two univariate NB2
-margins) or "famoye" (Famoye/Sarmanov bivariate NB).</p></dd>
+margins), "famoye" (Famoye/Sarmanov bivariate NB), or a <code><a href="copula.html">copula()</a></code> object
+(Frank / Gaussian / Clayton discrete-copula bivariate NB; the dependence
+parameter is estimated).</p></dd>
 
 
 <dt id="arg-start">start<a class="anchor" aria-label="anchor" href="#arg-start"></a></dt>
-<dd><p>Optional starting parameter vector.</p></dd>
+<dd><p>Optional starting parameter vector. May be positional (length
+equal to the number of parameters) or named; a named vector is reordered to
+the canonical parameter order and a named partial vector is merged into the
+defaults (unknown or duplicate names are rejected). When <code>start</code> is <code>NULL</code>,
+the famoye path uses a multi-start policy: it optimizes from both an all-zero
+mean-coefficient start and marginal <code>glm.nb</code> starts and keeps the better
+converged objective (the frozen-bounds gradient makes the objective
+start-sensitive and neither start dominates).</p></dd>
 
 
 <dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
-<dd><p>An <code><a href="rpbnb_control.html">rpbnb_control()</a></code> object. The famoye estimator uses BFGS;
-<code>control$method</code> is currently honored only by the optimizer's internal setup.</p></dd>
+<dd><p>An <code><a href="rpbnb_control.html">rpbnb_control()</a></code> object. The famoye and copula estimators
+both use BFGS, the only optimizer <code>control$method</code> accepts. One control
+object serves every estimator in the package; settings this one does not
+read – <code>se_method</code>, <code>n_cores</code>, <code>halton_burn</code>, <code>draws_hessian</code>, and the TMB
+knobs – are ignored and listed by <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>/<code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> of the fit.</p></dd>
+
+
+<dt id="arg-poisson-poisson-">poisson_1, poisson_2<a class="anchor" aria-label="anchor" href="#arg-poisson-poisson-"></a></dt>
+<dd><p>Fit the corresponding margin at its exact Poisson
+limit (NB2 dispersion <code>m = 0</code>) instead of estimating the dispersion. The
+margin's <code>log_m</code> is held fixed, so it is not a free parameter and the fit is
+a properly nested restriction of the NB model – pair it with <code><a href="lr_test.html">lr_test()</a></code>
+(<code>boundary = TRUE</code>) to test for overdispersion. This is the exact <code>m = 0</code>
+restriction at any fitted mean: the margin's log-pmf is <code>dpois</code> and its
+Famoye dependence constant is <code>exp(-d*mu)</code> (the <code>m -&gt; 0</code> limit), not an NB2
+at a tiny pinned dispersion. The famoye and independence paths are both
+exact (the independence path fits a Poisson GLM margin). Not supported with
+a <code><a href="copula.html">copula()</a></code> dependence.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -86,26 +117,153 @@ margins) or "famoye" (Famoye/Sarmanov bivariate NB).</p></dd>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"rwm1984_clean.csv"</span>, package <span class="op">=</span> <span class="st">"rpbnb"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">fit_bnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
 <span class="r-in"><span>               dependence <span class="op">=</span> <span class="st">"famoye"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 16577.658491 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 15142.325204</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 14710.503331</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 14333.907717</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 14162.447652</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 14076.950085</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 13623.894678</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 13436.688689</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 13264.517777</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 13214.495326</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 13075.322014</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 12780.993726</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 12491.582897</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 11921.168011</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 11753.944382</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 11377.499493</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 10317.762362</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 10251.001528</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 10047.658983</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  20 value 9921.406917</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 9883.025635</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  22 value 9841.589759</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  23 value 9777.676419</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  24 value 9740.193415</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  25 value 9671.855990</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  26 value 9661.429609</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  27 value 9660.718514</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  28 value 9660.625970</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  29 value 9660.618441</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618315</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618304</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618304</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9660.618304 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 9711.685648 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9688.919104 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Bivariate NB (famoye) - summary</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> --- Equation 1: docvis ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Parameter Estimate StdErr       z      p Signif</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)   0.9194 0.0336 27.3700 0.0000    ***</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      outwork   0.5401 0.0543  9.9506 0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)   0.9192 0.0336 27.3602 0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      outwork   0.5412 0.0543  9.9682 0.0000    ***</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> --- Equation 2: hospvis ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Parameter Estimate StdErr        z      p Signif</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)  -2.2442 0.0900 -24.9496 0.0000    ***</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      outwork   0.3079 0.1381   2.2292 0.0258      *</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)  -2.2454 0.0899 -24.9627 0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      outwork   0.3069 0.1381   2.2224 0.0263      *</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Natural-scale dispersion / dependence (delta-method SE):</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>            Parameter Estimate StdErr</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      m1 (dispersion)   2.3738 0.0725</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      m2 (dispersion)   9.9291 1.0636</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  lambda (dependence)   1.6816 0.1208</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>            Parameter Estimate StdErr    LR df       z      p Signif</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      m1 (dispersion)   2.3751 0.0725    NA NA      NA     NA       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      m2 (dispersion)   9.9295 1.0636    NA NA      NA     NA       </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  lambda (dependence)   1.6906 0.1208    NA NA 13.9949 0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Note: no Wald z/p or boundary LR test for positive scale/dispersion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>       parameters (SDs, m) above without one; their null is a boundary.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>       Use rpbnb_boundary_tests() (or rpbnb(boundary_tests = TRUE)) to</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>       test these.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> n = 3874   k = 7   logLik = -9660.6217   AIC = 19335.2435   BIC = 19379.0778</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> n = 3874   k = 7   logLik = -9660.6183   AIC = 19335.2366   BIC = 19379.0709</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Overdispersion test for margin 1 (H0: m1 = 0, Poisson)</span></span></span>
+<span class="r-in"><span><span class="va">fit_p1</span> <span class="op">&lt;-</span> <span class="fu">fit_bnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
+<span class="r-in"><span>                  dependence <span class="op">=</span> <span class="st">"famoye"</span>, poisson_1 <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 25581.990475 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 20616.385772</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 18884.874824</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 18642.717397</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 18217.421957</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 17933.118740</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 17654.086815</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 17582.731279</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 17444.526478</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 17344.689555</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 17298.609706</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 17280.642784</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 17277.496870</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 17277.420780</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 17277.416915</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 17277.416623</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 17277.416339</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 17277.412561</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 17277.389987</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  20 value 17277.364231</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359697</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359597</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359597</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 17277.359597 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 17462.029005 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 17449.876714</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 17447.492778</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 17394.160398</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 17376.014919</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 17363.733784</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 17359.462196</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 17295.465761</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 17277.821424</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 17277.547811</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 17277.448854</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 17277.429390</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 17277.407595</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 17277.381789</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 17277.380761</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 17277.380319</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 17277.378189</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 17277.376333</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 17277.376061</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  20 value 17277.363922</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359603</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359596</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 17277.359596</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 17277.359596 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-in"><span><span class="fu"><a href="lr_test.html">lr_test</a></span><span class="op">(</span><span class="va">fit_p1</span>, <span class="va">fit</span>, boundary <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Likelihood-ratio test</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   full model:       logLik = -9660.6183  (df = 7)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   restricted model: logLik = -17277.3596  (df = 6)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   --------------------------------------------------</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   LR statistic = 15233.4826  on 1 df   p = 0.0000  ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   (boundary-corrected 50:50 chi-square mixture)</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Gaussian copula dependence instead of Famoye/Sarmanov</span></span></span>
+<span class="r-in"><span><span class="va">fit_cop</span> <span class="op">&lt;-</span> <span class="fu">fit_bnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
+<span class="r-in"><span>                   dependence <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 9707.814763 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9676.568833</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 9675.718342</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 9675.111657</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 9674.410132</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 9671.936448</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 9669.352861</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 9662.086943</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 9638.110220</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 9633.973407</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 9633.861811</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9633.859385</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9633.859346</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9633.859346</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9633.859346 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-in"><span><span class="va">fit_cop</span><span class="op">$</span><span class="va">cop_tau</span>  <span class="co"># estimated Kendall's tau</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.233012</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -113,11 +271,11 @@ margins) or "famoye" (Famoye/Sarmanov bivariate NB).</p></dd>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

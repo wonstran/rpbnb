@@ -10,7 +10,8 @@ rpbnb_tmb_boundary_tests(
   control = NULL,
   which = c("sd", "dispersion"),
   draws = fit$draws,
-  force_parallel_gaussian = FALSE
+  force_parallel_gaussian = FALSE,
+  sml_fallback = TRUE
 )
 }
 \arguments{
@@ -28,8 +29,21 @@ Defaults to \code{rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requ
 original fit was called with (1 if \code{fit} predates the stored
 \verb{$parallel} field). \code{seed}/\code{method} are taken from \code{fit}, not \code{control}.}
 
-\item{which}{Which boundary parameters to test: \code{"sd"}, \code{"dispersion"}, or
-both (the default).}
+\item{which}{Which parameter groups to test, any subset of \code{"sd"} (the
+random-coefficient scales), \code{"dispersion"} (the NB2 dispersions \code{m1},
+\code{m2}), and \code{"dependence"} (the association parameter). The default is
+\code{c("sd", "dispersion")} -- the two boundary-null groups. \code{"dependence"}
+is opt-in because it costs another full refit and, for three of the four
+families, tests an \emph{interior} null whose ordinary Wald \code{z} in \code{summary()}
+is already valid.
+
+The dependence test refits the model with \code{dependence = "independence"}
+-- the template's own family, which maps \code{z_dep} out of the free
+parameters, giving an exact 1-df restriction on the same draws -- and
+reports one row labelled \code{lam} (Famoye), \code{theta} (Frank / Kimeldorf), or
+\code{rho} (Gaussian). Only Kimeldorf's null (\code{theta > 0}, so \code{theta = 0} is a
+boundary) takes the 50:50 mixture; Famoye, Frank, and Gaussian nulls are
+interior and get an ordinary chi-square(1).}
 
 \item{draws}{Number of Halton simulation draws for the restricted refits.
 Defaults to \code{fit$draws} -- the same number \code{fit} itself used. Raising
@@ -50,6 +64,46 @@ whether the original fit used the override, so passing
 original \code{fit_rpbnb_tmb()}/\code{rpbnb()} call also passed it -- otherwise
 every refit silently falls back to one thread regardless of
 \code{control$n_cores}.}
+
+\item{sml_fallback}{When \code{fit} was estimated by \code{method = "laplace"} and
+a restricted refit's Laplace pair cannot be trusted, re-run \strong{that one
+test's} LR with both sides estimated by \code{method = "sml"} instead of
+reporting \code{NA} (or a clamped 0). Default \code{TRUE}. Two triggers: the
+restricted refit \strong{fails to converge}, or it reports convergence with
+a restricted logLik \emph{above} the full fit's (a negative raw LR). The
+second is not a rounding curiosity: the models are nested, so at true
+optima the restricted logLik can never exceed the full fit's -- a
+negative LR proves at least one Laplace value is wrong, either a full
+fit that stopped short of its optimum (observed at -0.002 to -1.2
+nats: the warm-started restricted refit out-polished it) or a
+restricted fit that climbed a spurious ridge of the approximation
+itself (observed at -3838 nats: near a singular inner Hessian the
+Laplace log-likelihood rises without bound, and nlminb reports code 0
+there). Clamping such a statistic to 0 would silently turn a real
+effect into "no evidence".
+
+This exists because some restrictions leave Laplace no valid optimum to
+converge to. Pinning a margin to Poisson can push the dependence strong
+enough (observed on the truck data's \code{m1} test under a Frank copula:
+theta driven to about 20, Kendall's tau 0.8) that the per-observation
+cell probability is non-log-concave in the random effects -- and the
+Laplace approximation differentiates through an inner Newton that
+requires exactly the log-concavity the restricted model no longer has.
+No inner-solver setting fixes that (\code{tol10 = 0} clears TMB's
+\code{"Newton drop out"} but the outer fit still ends at nlminb
+\verb{false convergence (8)} with a gradient of 1e10); SML has no inner
+Newton and is not exposed to it.
+
+The fallback refits the \strong{full model too} under SML (once, cached
+across tests) at these same \code{draws} and \code{fit$seed}, and takes the LR
+between the two SML fits -- never between a Laplace logLik and an SML
+logLik, which are different approximations of the likelihood and whose
+difference is not an LR statistic. Rows that used the fallback are
+listed in the result's \code{sml_fallback} attribute and announced by a
+\code{\link[=message]{message()}} (silenced by \code{control$print_level = 0} like the other
+announcements). If the SML pair fails to converge as well, the row is
+\code{NA} with a warning, exactly as before. Ignored when \code{fit} itself was
+estimated by SML (there is nothing different to fall back to).}
 }
 \value{
 An object of class \code{rpbnb_boundary_tests} -- the same class
@@ -62,6 +116,11 @@ and dispersion blocks, once \verb{$boundary_tests} is attached to the fit).
 Scale rows are labelled by the distribution's own scale parameter
 (\code{sd} for normal/lognormal, \code{w} for uniform/triangular half-width, \code{s}
 for a lognormal log-scale), matching \code{summary()}'s row names.
+
+The \code{sml_fallback} attribute is a character vector of the \code{Parameter}
+rows whose LR came from the SML fallback pair (see the \code{sml_fallback}
+argument); \code{character(0)} when every test ran under \code{fit}'s own
+estimator.
 }
 \description{
 Runs a likelihood-ratio test for every random-coefficient scale

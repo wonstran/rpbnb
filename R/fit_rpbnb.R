@@ -69,7 +69,11 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
 #' @param seed Random seed for the simulation draws.
 #' @param start Optional starting parameter vector.
 #' @param control An [rpbnb_control()] object. Estimation uses BFGS, the only
-#'   optimizer `control$method` accepts.
+#'   optimizer `control$method` accepts. One control object serves every
+#'   estimator in the package; settings this one does not read -- the TMB knobs
+#'   (`gradtol`, `restarts`, `max_threads`, `max_workload`, `parallel_tape`),
+#'   `hessian`, and `draws_hessian` -- are ignored and listed by
+#'   `print()`/`summary()` of the fit rather than rejected.
 #' @param dependence Dependence structure: "famoye" (default; Famoye/Sarmanov)
 #'   or an [copula()] object for copula dependence (Frank / Gaussian /
 #'   Clayton). Both paths use the multithreaded (OpenMP) C++ simulated
@@ -144,13 +148,18 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   stopifnot(is.data.frame(data))
   .chk_poisson_flag(poisson_1, "poisson_1")
   .chk_poisson_flag(poisson_2, "poisson_2")
+  # One control object serves every estimator; this fills in the maxLik-side
+  # defaults for the fields whose default depends on the estimator and records
+  # which supplied fields this one does not read (reported by print/summary).
+  control <- .resolve_control(control, "classic")
 
   if (inherits(dependence, "rpbnb_copula")) {
-    return(.fit_rpbnb_copula(formula_1, formula_2, data, random_1, random_2,
+    out <- .fit_rpbnb_copula(formula_1, formula_2, data, random_1, random_2,
                              draws, draw_type, seed, start, control,
                              family = dependence$family,
                              poisson_1 = poisson_1, poisson_2 = poisson_2,
-                             .fixed = .fixed, .opt_draws = .opt_draws))
+                             .fixed = .fixed, .opt_draws = .opt_draws)
+    return(.attach_control_note(out, control))
   }
   if (!identical(dependence, "famoye")) {
     stop("`dependence` must be \"famoye\" or a copula() object; got ",
@@ -584,7 +593,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
   convergence <- list(converged = isTRUE(fit$code == 0L), code = fit$code,
                       message = fit$message, iterations = fit$iterations)
 
-  new_rpbnb_fit(
+  out <- new_rpbnb_fit(
     coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
     nobs = length(Y1), npar = npar,
     m1 = m1_hat, m2 = m2_hat, lambda = lambda_hat,
@@ -602,4 +611,5 @@ fit_rpbnb <- function(formula_1, formula_2, data,
                    Z1 = Z1_opt, Z2 = Z2_opt, halton_burn = halton_burn),
     predict_meta = .prep_predict_meta(prep),
     poisson_1 = poisson_1, poisson_2 = poisson_2)
+  .attach_control_note(out, control)
 }

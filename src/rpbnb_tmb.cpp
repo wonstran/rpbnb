@@ -228,7 +228,7 @@ void pois_cdf_pair(int y, Type mu,
   log_pmf_y = log_term;
 }
 
-// Frank's joint probability of the cell (a', a] x (b', b], evaluated as ONE
+// Frank's joint LOG probability of the cell (a', a] x (b', b], evaluated as ONE
 // log1p rather than as the second difference
 // C(a,b) - C(a',b) - C(a,b') + C(a',b').
 //
@@ -251,35 +251,130 @@ void pois_cdf_pair(int y, Type mu,
 // curvature into the inner Hessian (161 of 27,896 latent rows on the truck
 // data), and TMB's inner Newton cannot take even its first step.
 //
+// RETURNING THE LOG, AND TAKING THE MARGINAL MASSES AS LOGS, is what the two
+// paragraphs above do NOT buy on their own, and it is a separate failure.  The
+// telescoped form is cancellation-free but still LINEAR: it forms dA from
+// pmf_a, and the caller floors the result at 1e-300 before logging it.  A cell
+// probability of 1e-300 is not an underflow artefact on this data -- it is an
+// ordinary observation.  The `m1` boundary LR test refits the truck model with
+// margin 1 forced Poisson, and observation 2230 (y = 125 against mu = 0.193)
+// then carries log P(Y1 = 125) = -687.8, giving a cell probability of 1.03e-300
+// -- three ulp above the floor.  One step of TMB's inner Newton moves mu enough
+// to cross it, and on the far side the objective is not the likelihood but the
+// constant -log(1e-300) = 690.776.
+//
+// That clip is a kink, and Laplace differentiates the joint twice.  A centred
+// second difference of -log p in log(mu1) across it returns -12,181 (h = 1e-2)
+// and -94,836 (h = 1e-3) where the true curvature is mu1 = 0.193: the inner
+// Hessian picks up negative curvature of order 1e5 on that one latent row, is
+// no longer positive definite, and TMB reports
+//
+//   Not improving much - will try early exit...PD hess?: FALSE
+//   Error in newton(...): Newton drop out: Too many failed attempts.
+//   Error in ff(x, order = 1): inner newton optimization failed during
+//     gradient calculation
+//
+// followed by a NaN outer gradient, an nlminb "false convergence (8)", and an
+// NA row for `m1` in the boundary-test table.  Accumulating in log space -- the
+// masses arrive as log_pmf_a/log_pmf_b, |dA| is formed as -th*a' + log|expm1|
+// with the log mass carried through, and the return value never passes through
+// the linear representation of the cell -- keeps the true curvature (0.1928 at
+// every step size) and the floor never binds.  This is the same argument
+// pois_cdf_pair() and clayton_cell_prob()'s log_ratio() already make one level
+// down; the caller's 1e-300 floor was re-imposing at the top exactly what they
+// remove underneath.
+//
+// M IS COMPUTED FROM AN IDENTITY, not as written above.  Each factor is
+// exp(-th * C(.,.)), which for saturated corners is exp(-th): 2.5e-9 at the
+// theta = 19.8 this test reaches, and 6.3e-16 at the FRANK_THETA_MAX cap of 35.
+// Forming it as 1 + A B / D recovers that from two O(1) quantities -- 5.6%
+// relative error at the cap, where 6.3e-16 is under three ulp of 1.  Writing
+// p = exp(-th u), q = exp(-th v) and expanding D + A(u) B(v) gives
+//
+//   1 + A(u) B(v) / D = [ p * (1 - q) + q * (1 - exp(-th (1 - v))) ]
+//                       / (1 - exp(-th))
+//
+// whose two numerator terms carry the sign of the denominator for either sign
+// of th, so the quotient is positive BY CONSTRUCTION and every term is accurate
+// to full relative precision.
+//
 // This is Frank-specific: it relies on C being a log of a bilinear form in
-// A(u) and B(v). The Gaussian and Clayton branches below still take the naive
-// second difference and remain subject to the same cancellation.
+// A(u) and B(v). The Gaussian and Clayton branches below still return a linear
+// cell probability and keep the caller's 1e-300 floor, so a Laplace fit whose
+// true cell probabilities reach 1e-300 remains exposed there.
 template<class Type>
-Type frank_cell_prob(Type a, Type am, Type pmf_a,
-                     Type b, Type bm, Type pmf_b, Type th) {
+Type frank_log_cell_prob(Type a, Type am, Type log_pmf_a,
+                         Type b, Type bm, Type log_pmf_b, Type th) {
   Type signed_eps = CppAD::CondExpGe(th, Type(0), Type(1e-5), Type(-1e-5));
   Type safe_th = CppAD::CondExpLt(fabs(th), Type(1e-5), signed_eps, th);
+  Type abs_th = fabs(safe_th);
+  Type log_abs_th = log(abs_th);
+  auto vmax = [](Type u, Type v) { return CppAD::CondExpGt(u, v, u, v); };
 
-  Type D = stable_expm1(-safe_th);
-  Type A_a = stable_expm1(-safe_th * a);
-  Type A_am = stable_expm1(-safe_th * am);
-  Type B_b = stable_expm1(-safe_th * b);
-  Type B_bm = stable_expm1(-safe_th * bm);
-  Type dA = exp(-safe_th * am) * stable_expm1(-safe_th * pmf_a);
-  Type dB = exp(-safe_th * bm) * stable_expm1(-safe_th * pmf_b);
-  // Each factor is exp(-th * C(.,.)) and so is positive for any admissible
-  // Frank argument; the guard below mirrors the one the naive form carried.
-  Type M = (Type(1) + A_am * B_b / D) * (Type(1) + A_a * B_bm / D);
-  Type ratio = dA * dB / (D * M);
-  ratio = CppAD::CondExpLt(ratio, Type(-1.0 + 1e-15),
-                           Type(-1.0 + 1e-15), ratio);
-  Type regular = -stable_log1p(ratio) / safe_th;
+  // log |A(u) - A(u')| = -th u' + log |expm1(-th * pmf)|, with the mass
+  // entering as its LOGARITHM.  x = |th| * pmf underflows to an exact 0 for a
+  // mass below about 1e-309; log x = log|th| + log_pmf never does, and for x
+  // under the switch log|expm1| and log x agree to under half an ulp anyway.
+  // Both CondExp branches are evaluated, so the exact branch gets a floored
+  // argument even where it is not the one selected.
+  auto log_abs_delta = [&](Type um, Type log_pmf) -> Type {
+    Type log_x = log_abs_th + log_pmf;
+    Type x = exp(log_x);
+    Type x_safe = vmax(x, Type(1e-300));
+    Type exact = CppAD::CondExpGt(safe_th, Type(0),
+                                  log(-stable_expm1(-x_safe)),
+                                  log(stable_expm1(x_safe)));
+    return -safe_th * um + CppAD::CondExpLt(x, Type(1e-8), log_x, exact);
+  };
+
+  // log(1 + A(u) B(v) / D) by the identity in the header.
+  auto log_M = [&](Type u, Type v) -> Type {
+    Type t1 = exp(-safe_th * u) * (-stable_expm1(-safe_th * v));
+    Type t2 = exp(-safe_th * v) * (-stable_expm1(-safe_th * (Type(1) - v)));
+    return log((t1 + t2) / (-stable_expm1(-safe_th)));
+  };
+
+  // log |dA * dB / (D * M)|.  The quotient's SIGN is -sign(th) throughout:
+  // dA and dB each carry -sign(th), so their product is positive, M is
+  // positive, and D = expm1(-th) carries -sign(th).
+  Type L = log_abs_delta(am, log_pmf_a) + log_abs_delta(bm, log_pmf_b) -
+    log(fabs(stable_expm1(-safe_th))) - log_M(am, b) - log_M(a, bm);
+
+  // th > 0: ratio = -exp(L), p = -log1p(-exp(L)) / th, and L < 0 is what
+  // keeps the cell probability finite -- the same admissibility the linear
+  // form enforced by clamping ratio at -1 + 1e-15.  For L below the switch,
+  // -log1p(-exp(L)) is exp(L) to well under an ulp, so log p is L itself and
+  // exp(L) is never formed at a magnitude that underflows the log.
+  //
+  // Both CondExp branches are evaluated whichever one is selected, and L runs
+  // to -1e15 here (a Poisson mass against mu at the eta ceiling), so the
+  // unselected log() would otherwise be handed exp(L) = 0 and return -Inf.
+  // Flooring its argument keeps every value on the tape finite.
+  Type L_neg = CppAD::CondExpGt(L, Type(-1e-15), Type(-1e-15), L);
+  Type pos_branch = CppAD::CondExpLt(
+    L_neg, Type(-30),
+    L_neg,
+    log(vmax(-stable_log1p(-exp(L_neg)), Type(1e-300)))
+  );
+  // th < 0: ratio = +exp(L), p = log1p(exp(L)) / |th|.  Three regimes, since
+  // L runs from far below zero (an ordinary tail cell) to about +35 (both
+  // margins saturated against a strongly negative theta), where log1p(exp(L))
+  // is L and exp(L) alone would be the only thing at risk of overflowing.
+  Type L_cap = CppAD::CondExpGt(L, Type(30), Type(30), L);
+  Type neg_branch = CppAD::CondExpGt(
+    L, Type(30), log(vmax(L, Type(1e-300))),
+    CppAD::CondExpLt(L, Type(-30), L,
+                     log(vmax(stable_log1p(exp(L_cap)), Type(1e-300))))
+  );
+  Type regular = CppAD::CondExpGt(safe_th, Type(0), pos_branch, neg_branch) -
+    log_abs_th;
 
   // Second difference of the near-independence expansion the naive form used,
   // C(u,v) ~ u v + th u v (1-u) (1-v) / 2, which telescopes to this in closed
-  // form and so carries no cancellation either.
-  Type near_independence = pmf_a * pmf_b *
-    (Type(1) + th * (Type(1) - a - am) * (Type(1) - b - bm) / Type(2));
+  // form and so carries no cancellation either.  |th| < 1e-5 bounds the log1p
+  // argument by 1e-5 in magnitude, so it cannot approach -1.
+  Type near_independence = log_pmf_a + log_pmf_b +
+    stable_log1p(th * (Type(1) - a - am) * (Type(1) - b - bm) / Type(2));
 
   return CppAD::CondExpLt(fabs(th), Type(1e-5), near_independence, regular);
 }
@@ -1159,12 +1254,24 @@ Type objective_function<Type>::operator() () {
 
         // Every copula family now builds the cell probability directly rather
         // than as a second difference of corner CDFs, so none of them can
-        // return a negative probability.  See frank_cell_prob(),
+        // return a negative probability.  See frank_log_cell_prob(),
         // clayton_cell_prob() and gaussian_cell_prob().
-        Type p_obs = Type(0);
+        //
+        // Frank is the one family that returns the LOG cell probability, and
+        // so is the one family that does not pass through the 1e-300 floor
+        // below.  That floor is not a guard against underflow noise here: it
+        // clips cell probabilities the data genuinely produces (see
+        // frank_log_cell_prob()'s header for the truck observation at
+        // 1.03e-300), and clipping them puts a kink in the objective that
+        // costs Laplace its positive-definite inner Hessian.  Clayton and
+        // Gaussian still return a linear probability and still need it.
         if (family == FAM_FRANK) {
-          p_obs = frank_cell_prob(a1, a1m, pmf1, b1, b1m, pmf2, theta);
-        } else if (family == FAM_GAUSSIAN) {
+          log_draw(r) = frank_log_cell_prob(a1, a1m, lpmf1, b1, b1m, lpmf2,
+                                            theta);
+          continue;
+        }
+        Type p_obs = Type(0);
+        if (family == FAM_GAUSSIAN) {
           // Upper-tail survival, taken from the margin's own special function
           // rather than as 1 - CDF.  Only the Gaussian branch needs it (it is
           // the only family that must pass through qnorm(), singular at 1);

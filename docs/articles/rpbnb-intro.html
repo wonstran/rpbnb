@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,34 +71,108 @@ hospital visits:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_bnb.html">fit_bnb</a></span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span>
 <span>               dependence <span class="op">=</span> <span class="st">"famoye"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; initial  value 16577.658491 </span></span>
+<span><span class="co">#&gt; iter   2 value 15142.325204</span></span>
+<span><span class="co">#&gt; iter   3 value 14710.503331</span></span>
+<span><span class="co">#&gt; iter   4 value 14333.907717</span></span>
+<span><span class="co">#&gt; iter   5 value 14162.447652</span></span>
+<span><span class="co">#&gt; iter   6 value 14076.950085</span></span>
+<span><span class="co">#&gt; iter   7 value 13623.894678</span></span>
+<span><span class="co">#&gt; iter   8 value 13436.688689</span></span>
+<span><span class="co">#&gt; iter   9 value 13264.517777</span></span>
+<span><span class="co">#&gt; iter  10 value 13214.495326</span></span>
+<span><span class="co">#&gt; iter  11 value 13075.322014</span></span>
+<span><span class="co">#&gt; iter  12 value 12780.993726</span></span>
+<span><span class="co">#&gt; iter  13 value 12491.582897</span></span>
+<span><span class="co">#&gt; iter  14 value 11921.168011</span></span>
+<span><span class="co">#&gt; iter  15 value 11753.944382</span></span>
+<span><span class="co">#&gt; iter  16 value 11377.499493</span></span>
+<span><span class="co">#&gt; iter  17 value 10317.762362</span></span>
+<span><span class="co">#&gt; iter  18 value 10251.001528</span></span>
+<span><span class="co">#&gt; iter  19 value 10047.658983</span></span>
+<span><span class="co">#&gt; iter  20 value 9921.406917</span></span>
+<span><span class="co">#&gt; iter  21 value 9883.025635</span></span>
+<span><span class="co">#&gt; iter  22 value 9841.589759</span></span>
+<span><span class="co">#&gt; iter  23 value 9777.676419</span></span>
+<span><span class="co">#&gt; iter  24 value 9740.193415</span></span>
+<span><span class="co">#&gt; iter  25 value 9671.855990</span></span>
+<span><span class="co">#&gt; iter  26 value 9661.429609</span></span>
+<span><span class="co">#&gt; iter  27 value 9660.718514</span></span>
+<span><span class="co">#&gt; iter  28 value 9660.625970</span></span>
+<span><span class="co">#&gt; iter  29 value 9660.618441</span></span>
+<span><span class="co">#&gt; iter  30 value 9660.618315</span></span>
+<span><span class="co">#&gt; iter  30 value 9660.618304</span></span>
+<span><span class="co">#&gt; iter  30 value 9660.618304</span></span>
+<span><span class="co">#&gt; final  value 9660.618304 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="co">#&gt; initial  value 9711.685648 </span></span>
+<span><span class="co">#&gt; iter   2 value 9688.919104</span></span>
+<span><span class="co">#&gt; iter   2 value 9688.919104</span></span>
+<span><span class="co">#&gt; iter   2 value 9688.919104</span></span>
+<span><span class="co">#&gt; final  value 9688.919104 </span></span>
+<span><span class="co">#&gt; converged</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Bivariate NB (famoye) - summary</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; --- Equation 1: docvis ---</span></span>
 <span><span class="co">#&gt;    Parameter Estimate StdErr       z      p Signif</span></span>
-<span><span class="co">#&gt;  (Intercept)   0.9194 0.0336 27.3700 0.0000    ***</span></span>
-<span><span class="co">#&gt;      outwork   0.5401 0.0543  9.9506 0.0000    ***</span></span>
+<span><span class="co">#&gt;  (Intercept)   0.9192 0.0336 27.3602 0.0000    ***</span></span>
+<span><span class="co">#&gt;      outwork   0.5412 0.0543  9.9682 0.0000    ***</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; --- Equation 2: hospvis ---</span></span>
 <span><span class="co">#&gt;    Parameter Estimate StdErr        z      p Signif</span></span>
-<span><span class="co">#&gt;  (Intercept)  -2.2442 0.0900 -24.9496 0.0000    ***</span></span>
-<span><span class="co">#&gt;      outwork   0.3079 0.1381   2.2292 0.0258      *</span></span>
+<span><span class="co">#&gt;  (Intercept)  -2.2454 0.0899 -24.9627 0.0000    ***</span></span>
+<span><span class="co">#&gt;      outwork   0.3069 0.1381   2.2224 0.0263      *</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Natural-scale dispersion / dependence (delta-method SE):</span></span>
-<span><span class="co">#&gt;            Parameter Estimate StdErr</span></span>
-<span><span class="co">#&gt;      m1 (dispersion)   2.3738 0.0725</span></span>
-<span><span class="co">#&gt;      m2 (dispersion)   9.9291 1.0636</span></span>
-<span><span class="co">#&gt;  lambda (dependence)   1.6816 0.1208</span></span>
+<span><span class="co">#&gt;            Parameter Estimate StdErr    LR df       z      p Signif</span></span>
+<span><span class="co">#&gt;      m1 (dispersion)   2.3751 0.0725    NA NA      NA     NA       </span></span>
+<span><span class="co">#&gt;      m2 (dispersion)   9.9295 1.0636    NA NA      NA     NA       </span></span>
+<span><span class="co">#&gt;  lambda (dependence)   1.6906 0.1208    NA NA 13.9949 0.0000    ***</span></span>
+<span><span class="co">#&gt; Note: no Wald z/p or boundary LR test for positive scale/dispersion</span></span>
+<span><span class="co">#&gt;       parameters (SDs, m) above without one; their null is a boundary.</span></span>
+<span><span class="co">#&gt;       Use rpbnb_boundary_tests() (or rpbnb(boundary_tests = TRUE)) to</span></span>
+<span><span class="co">#&gt;       test these.</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; n = 3874   k = 7   logLik = -9660.6217   AIC = 19335.2435   BIC = 19379.0778</span></span></code></pre></div>
+<span><span class="co">#&gt; n = 3874   k = 7   logLik = -9660.6183   AIC = 19335.2366   BIC = 19379.0709</span></span></code></pre></div>
 <p>Goodness of fit:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">g</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bnb_gof.html">bnb_gof</a></span><span class="op">(</span><span class="va">fit</span>, print_output <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; initial  value 16577.658491 </span></span>
+<span><span class="co">#&gt; iter   2 value 14733.497221</span></span>
+<span><span class="co">#&gt; iter   3 value 14016.919440</span></span>
+<span><span class="co">#&gt; iter   4 value 13702.922008</span></span>
+<span><span class="co">#&gt; iter   5 value 13606.765438</span></span>
+<span><span class="co">#&gt; iter   6 value 13566.187688</span></span>
+<span><span class="co">#&gt; iter   7 value 13371.878283</span></span>
+<span><span class="co">#&gt; iter   8 value 13168.988190</span></span>
+<span><span class="co">#&gt; iter   9 value 12888.819381</span></span>
+<span><span class="co">#&gt; iter  10 value 12556.341683</span></span>
+<span><span class="co">#&gt; iter  11 value 11993.172079</span></span>
+<span><span class="co">#&gt; iter  12 value 11944.951434</span></span>
+<span><span class="co">#&gt; iter  13 value 10298.911552</span></span>
+<span><span class="co">#&gt; iter  14 value 10270.789974</span></span>
+<span><span class="co">#&gt; iter  15 value 9920.128844</span></span>
+<span><span class="co">#&gt; iter  16 value 9893.295099</span></span>
+<span><span class="co">#&gt; iter  17 value 9756.488764</span></span>
+<span><span class="co">#&gt; iter  17 value 9756.488764</span></span>
+<span><span class="co">#&gt; final  value 9756.488764 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="co">#&gt; initial  value 9764.540322 </span></span>
+<span><span class="co">#&gt; iter   2 value 9728.967786</span></span>
+<span><span class="co">#&gt; iter   2 value 9728.967786</span></span>
+<span><span class="co">#&gt; iter   2 value 9728.967786</span></span>
+<span><span class="co">#&gt; final  value 9728.967786 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="co">#&gt; Warning: Observed information for the famoye BNB is not positive definite (min</span></span>
+<span><span class="co">#&gt; eigenvalue -30900); a ridge of 30900 was added before inversion. The resulting</span></span>
+<span><span class="co">#&gt; standard errors are regularized, not observed-information SEs -- inspect</span></span>
+<span><span class="co">#&gt; fit$hessian_diag.</span></span>
 <span><span class="va">g</span><span class="op">$</span><span class="va">AIC</span></span>
 <span><span class="co">#&gt; [1] 19335.24</span></span>
 <span><span class="va">g</span><span class="op">$</span><span class="va">pseudoR2</span></span>
 <span><span class="co">#&gt;     McFadden McFadden_adj     CoxSnell   Nagelkerke </span></span>
-<span><span class="co">#&gt;  0.005275862  0.004555093  0.026105666  0.026280303</span></span></code></pre></div>
+<span><span class="co">#&gt;  0.007025358  0.006305857  0.034670956  0.034900839</span></span></code></pre></div>
 <p>Compare against the independence model (two univariate NB2
 margins):</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
@@ -106,13 +180,71 @@ margins):</p>
 <span>                   dependence <span class="op">=</span> <span class="st">"independence"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>famoye <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span>, independence <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit_ind</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;       famoye independence </span></span>
-<span><span class="co">#&gt;    -9660.622    -9707.815</span></span></code></pre></div>
+<span><span class="co">#&gt;    -9660.618    -9707.815</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="copula-dependence">Copula dependence<a class="anchor" aria-label="anchor" href="#copula-dependence"></a>
+</h2>
+<p>As an alternative to Famoye/Sarmanov dependence,
+<code><a href="../reference/fit_bnb.html">fit_bnb()</a></code> also supports a discrete-copula bivariate NB via
+<code>dependence = copula(family)</code>, with <code>family</code> one
+of <code>"frank"</code>, <code>"normal"</code> (Gaussian), or
+<code>"kimeldorf"</code> (Clayton). The dependence parameter is
+estimated from the data rather than fixed.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit_cop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_bnb.html">fit_bnb</a></span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span>
+<span>                   dependence <span class="op">=</span> <span class="fu"><a href="../reference/copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; initial  value 9707.814763 </span></span>
+<span><span class="co">#&gt; iter   2 value 9676.568833</span></span>
+<span><span class="co">#&gt; iter   3 value 9675.718342</span></span>
+<span><span class="co">#&gt; iter   4 value 9675.111657</span></span>
+<span><span class="co">#&gt; iter   5 value 9674.410132</span></span>
+<span><span class="co">#&gt; iter   6 value 9671.936448</span></span>
+<span><span class="co">#&gt; iter   7 value 9669.352861</span></span>
+<span><span class="co">#&gt; iter   8 value 9662.086943</span></span>
+<span><span class="co">#&gt; iter   9 value 9638.110220</span></span>
+<span><span class="co">#&gt; iter  10 value 9633.973407</span></span>
+<span><span class="co">#&gt; iter  11 value 9633.861811</span></span>
+<span><span class="co">#&gt; iter  12 value 9633.859385</span></span>
+<span><span class="co">#&gt; iter  12 value 9633.859346</span></span>
+<span><span class="co">#&gt; iter  12 value 9633.859346</span></span>
+<span><span class="co">#&gt; final  value 9633.859346 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="va">fit_cop</span><span class="op">$</span><span class="va">cop_par</span>   <span class="co"># estimated native parameter (rho, for the Gaussian copula)</span></span>
+<span><span class="co">#&gt; [1] 0.3578966</span></span>
+<span><span class="va">fit_cop</span><span class="op">$</span><span class="va">cop_tau</span>   <span class="co"># implied Kendall's tau</span></span>
+<span><span class="co">#&gt; [1] 0.233012</span></span></code></pre></div>
+<p><code><a href="../reference/fit_rpbnb.html">fit_rpbnb()</a></code> accepts the same
+<code>dependence = copula(...)</code> argument to combine copula
+dependence with random coefficients (see the copula example at the end
+of the next section).</p>
 </div>
 <div class="section level2">
 <h2 id="marginal-effects">Marginal effects<a class="anchor" aria-label="anchor" href="#marginal-effects"></a>
 </h2>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/bnb_marginal_effects.html">bnb_marginal_effects</a></span><span class="op">(</span><span class="va">fit</span>, which <span class="op">=</span> <span class="st">"y1"</span>, type <span class="op">=</span> <span class="st">"AME"</span>, print_output <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="residual-diagnostics">Residual diagnostics<a class="anchor" aria-label="anchor" href="#residual-diagnostics"></a>
+</h2>
+<p>Because these are count models, ordinary residuals are not normal
+even under a correct fit; use <strong>randomized quantile
+residuals</strong> (Dunn–Smyth), which are approximately N(0,1) when the
+model is right. <code><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals()</a></code>, <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code>, and
+<code><a href="../reference/bnb_residual_checks.html">bnb_residual_checks()</a></code> are provided for both
+<code>bnb_fit</code> and <code>rpbnb_fit</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">rq</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"quantile"</span><span class="op">)</span>      <span class="co"># randomized quantile residuals</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fit</span>, margin <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span>                   <span class="co"># 4 panels per margin</span></span>
+<span><span class="fu"><a href="../reference/bnb_residual_checks.html">bnb_residual_checks</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>                      <span class="co"># normality, dispersion, outliers, ...</span></span></code></pre></div>
+<p>The QQ and histogram panels always use the RQR; the scale-location
+and residuals-vs-fitted panels can use Pearson or (for
+<code>bnb_fit</code>) deviance residuals via <code>resid_type=</code> –
+<code>rpbnb_fit</code> does not support
+<code>resid_type = "deviance"</code>. For <code>rpbnb_fit</code> the
+residuals are built on the mixture predictive distribution over the
+random-coefficient draws (consistent with <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>).</p>
 </div>
 <div class="section level2">
 <h2 id="random-parameters">Random parameters<a class="anchor" aria-label="anchor" href="#random-parameters"></a>
@@ -122,24 +254,149 @@ the doctor-visits equation. For a fast vignette we use a small subsample
 and a modest number of simulation draws; in practice use the full data
 with more draws (e.g. <code>draws = 1000</code>) and
 <code>compute_se = TRUE</code>.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">d_small</span> <span class="op">&lt;-</span> <span class="va">d</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span>, <span class="fl">600</span><span class="op">)</span>, <span class="op">]</span></span>
 <span><span class="va">rp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_rpbnb.html">fit_rpbnb</a></span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span> <span class="op">+</span> <span class="va">kids</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d_small</span>,</span>
 <span>                random_1 <span class="op">=</span> <span class="st">"kids"</span>, draws <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>                control <span class="op">=</span> <span class="fu"><a href="../reference/rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span>compute_se <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; initial  value 2531.234135 </span></span>
+<span><span class="co">#&gt; iter   2 value 1987.035624</span></span>
+<span><span class="co">#&gt; iter   3 value 1975.786641</span></span>
+<span><span class="co">#&gt; iter   4 value 1946.770081</span></span>
+<span><span class="co">#&gt; iter   5 value 1922.218782</span></span>
+<span><span class="co">#&gt; iter   6 value 1887.318176</span></span>
+<span><span class="co">#&gt; iter   7 value 1882.602996</span></span>
+<span><span class="co">#&gt; iter   8 value 1846.501645</span></span>
+<span><span class="co">#&gt; iter   9 value 1842.397385</span></span>
+<span><span class="co">#&gt; iter  10 value 1812.496828</span></span>
+<span><span class="co">#&gt; iter  11 value 1757.975445</span></span>
+<span><span class="co">#&gt; iter  12 value 1665.440493</span></span>
+<span><span class="co">#&gt; iter  13 value 1625.413067</span></span>
+<span><span class="co">#&gt; iter  14 value 1607.359047</span></span>
+<span><span class="co">#&gt; iter  15 value 1526.741489</span></span>
+<span><span class="co">#&gt; iter  16 value 1491.807214</span></span>
+<span><span class="co">#&gt; iter  17 value 1478.183001</span></span>
+<span><span class="co">#&gt; iter  18 value 1466.001798</span></span>
+<span><span class="co">#&gt; iter  19 value 1450.887136</span></span>
+<span><span class="co">#&gt; iter  20 value 1449.787564</span></span>
+<span><span class="co">#&gt; iter  21 value 1447.961141</span></span>
+<span><span class="co">#&gt; iter  22 value 1447.259269</span></span>
+<span><span class="co">#&gt; iter  23 value 1446.738334</span></span>
+<span><span class="co">#&gt; iter  24 value 1444.883883</span></span>
+<span><span class="co">#&gt; iter  25 value 1443.150578</span></span>
+<span><span class="co">#&gt; iter  26 value 1442.603624</span></span>
+<span><span class="co">#&gt; iter  27 value 1442.409881</span></span>
+<span><span class="co">#&gt; iter  28 value 1442.240825</span></span>
+<span><span class="co">#&gt; iter  29 value 1442.113512</span></span>
+<span><span class="co">#&gt; iter  30 value 1442.072796</span></span>
+<span><span class="co">#&gt; iter  31 value 1442.065296</span></span>
+<span><span class="co">#&gt; iter  32 value 1442.032413</span></span>
+<span><span class="co">#&gt; iter  33 value 1442.021477</span></span>
+<span><span class="co">#&gt; iter  34 value 1442.014125</span></span>
+<span><span class="co">#&gt; iter  35 value 1442.010310</span></span>
+<span><span class="co">#&gt; iter  36 value 1442.008436</span></span>
+<span><span class="co">#&gt; iter  37 value 1442.007642</span></span>
+<span><span class="co">#&gt; iter  38 value 1442.007225</span></span>
+<span><span class="co">#&gt; iter  39 value 1442.006947</span></span>
+<span><span class="co">#&gt; iter  39 value 1442.006947</span></span>
+<span><span class="co">#&gt; final  value 1442.006947 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="co">#&gt; Warning: The fitted Famoye lambda (1.43392) lies outside the admissible</span></span>
+<span><span class="co">#&gt; interval recomputed at the fitted parameters [-1.03742, 1.03742]. The interval</span></span>
+<span><span class="co">#&gt; used by the likelihood was frozen at the starting values ([-1.73201, 1.73201]),</span></span>
+<span><span class="co">#&gt; so the optimizer was free to leave the valid region: the joint pmf is negative</span></span>
+<span><span class="co">#&gt; somewhere in the count tails and this fit should not be interpreted. Refit from</span></span>
+<span><span class="co">#&gt; starting values closer to the optimum.</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">rp</span><span class="op">)</span></span>
 <span><span class="co">#&gt; b1:(Intercept)     b1:outwork        b1:kids b2:(Intercept)     b2:outwork </span></span>
-<span><span class="co">#&gt;      1.1982893      0.3409856     -0.4985433     -2.5934669      0.5928088 </span></span>
+<span><span class="co">#&gt;      1.1983321      0.3408809     -0.4984653     -2.5936057      0.5931566 </span></span>
 <span><span class="co">#&gt;   log_sd1:kids         log_m1         log_m2       z_lambda </span></span>
-<span><span class="co">#&gt;     -6.4316348      0.9696919      2.5778940      4.3090962</span></span></code></pre></div>
+<span><span class="co">#&gt;     -4.7848101      0.9696582      2.5778295      2.3628078</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="interpreting-random-parameter-fits">Interpreting random-parameter fits<a class="anchor" aria-label="anchor" href="#interpreting-random-parameter-fits"></a>
+</h3>
+<p>For <code><a href="../reference/fit_rpbnb.html">fit_rpbnb()</a></code> models the conditional mean is the
+population average <code>E[exp(x'beta)]</code> integrated over the
+random-coefficient distribution, so marginal effects and elasticities
+are computed on that integrated mean rather than on
+<code>exp(x'beta)</code>. Use <code><a href="../reference/rpbnb_marginal_effects.html">rpbnb_marginal_effects()</a></code> and
+<code><a href="../reference/rpbnb_elasticities.html">rpbnb_elasticities()</a></code> (the random-parameter analogues of
+<code><a href="../reference/bnb_marginal_effects.html">bnb_marginal_effects()</a></code> /
+<code><a href="../reference/bnb_elasticities.html">bnb_elasticities()</a></code>):</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/rpbnb_marginal_effects.html">rpbnb_marginal_effects</a></span><span class="op">(</span><span class="va">rp</span>, which <span class="op">=</span> <span class="st">"both"</span>, type <span class="op">=</span> <span class="st">"AME"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/rpbnb_elasticities.html">rpbnb_elasticities</a></span><span class="op">(</span><span class="va">rp</span>, which <span class="op">=</span> <span class="st">"both"</span>, type <span class="op">=</span> <span class="st">"AME"</span><span class="op">)</span></span></code></pre></div>
+<p>For a continuous covariate the marginal effect averages the per-draw
+realized coefficient times <code>exp(lp)</code>; for a 0/1 covariate it
+is the integrated difference <code>E[Y | x = 1] - E[Y | x = 0]</code>.
+Standard errors come from a numeric delta method over each equation’s
+mean and log-scale parameters.</p>
+<p><code><a href="../reference/fit_rpbnb.html">fit_rpbnb()</a></code> also accepts
+<code>dependence = copula(...)</code> to pair random coefficients with
+copula dependence. Random coefficients are only well identified on
+<strong>continuous</strong> regressors under the copula path – a random
+coefficient on a 0/1 dummy trades off against the NB dispersion and is
+weakly identified at realistic sample sizes, so we put the random
+coefficient on the continuous <code>age</code> variable instead of a
+dummy:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">rp_cop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_rpbnb.html">fit_rpbnb</a></span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span> <span class="op">+</span> <span class="va">age</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d_small</span>,</span>
+<span>                    random_1 <span class="op">=</span> <span class="st">"age"</span>, dependence <span class="op">=</span> <span class="fu"><a href="../reference/copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span><span class="op">)</span>,</span>
+<span>                    draws <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>                    control <span class="op">=</span> <span class="fu"><a href="../reference/rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span>compute_se <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; initial  value 2189.526579 </span></span>
+<span><span class="co">#&gt; iter   2 value 2137.601131</span></span>
+<span><span class="co">#&gt; iter   3 value 1821.190915</span></span>
+<span><span class="co">#&gt; iter   4 value 1785.054267</span></span>
+<span><span class="co">#&gt; iter   5 value 1566.372762</span></span>
+<span><span class="co">#&gt; iter   6 value 1548.103056</span></span>
+<span><span class="co">#&gt; iter   7 value 1535.358009</span></span>
+<span><span class="co">#&gt; iter   8 value 1519.348827</span></span>
+<span><span class="co">#&gt; iter   9 value 1494.945886</span></span>
+<span><span class="co">#&gt; iter  10 value 1477.367335</span></span>
+<span><span class="co">#&gt; iter  11 value 1472.280336</span></span>
+<span><span class="co">#&gt; iter  12 value 1468.223569</span></span>
+<span><span class="co">#&gt; iter  13 value 1459.606468</span></span>
+<span><span class="co">#&gt; iter  14 value 1455.420748</span></span>
+<span><span class="co">#&gt; iter  15 value 1449.228918</span></span>
+<span><span class="co">#&gt; iter  16 value 1445.636157</span></span>
+<span><span class="co">#&gt; iter  17 value 1442.170692</span></span>
+<span><span class="co">#&gt; iter  18 value 1436.951464</span></span>
+<span><span class="co">#&gt; iter  19 value 1434.359101</span></span>
+<span><span class="co">#&gt; iter  20 value 1430.440516</span></span>
+<span><span class="co">#&gt; iter  21 value 1430.055460</span></span>
+<span><span class="co">#&gt; iter  22 value 1427.697754</span></span>
+<span><span class="co">#&gt; iter  23 value 1426.942690</span></span>
+<span><span class="co">#&gt; iter  24 value 1426.855621</span></span>
+<span><span class="co">#&gt; iter  25 value 1426.594423</span></span>
+<span><span class="co">#&gt; iter  26 value 1426.372298</span></span>
+<span><span class="co">#&gt; iter  27 value 1426.191034</span></span>
+<span><span class="co">#&gt; iter  28 value 1426.058654</span></span>
+<span><span class="co">#&gt; iter  29 value 1426.052541</span></span>
+<span><span class="co">#&gt; iter  30 value 1426.030318</span></span>
+<span><span class="co">#&gt; iter  31 value 1426.027231</span></span>
+<span><span class="co">#&gt; iter  32 value 1426.016001</span></span>
+<span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
+<span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
+<span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
+<span><span class="co">#&gt; final  value 1426.015893 </span></span>
+<span><span class="co">#&gt; converged</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">rp_cop</span><span class="op">)</span></span>
+<span><span class="co">#&gt; b1:(Intercept)     b1:outwork         b1:age b2:(Intercept)     b2:outwork </span></span>
+<span><span class="co">#&gt;    -0.46790857     0.25965926     0.03033793    -2.57797458     0.59294841 </span></span>
+<span><span class="co">#&gt;    log_sd1:age         log_m1         log_m2        z_theta </span></span>
+<span><span class="co">#&gt;    -4.56614275     0.76720525     2.57475911     0.33641336</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Hyperbolic.html" class="external-link">tanh</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">rp_cop</span><span class="op">)</span><span class="op">[[</span><span class="st">"z_theta"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>  <span class="co"># estimated copula rho</span></span>
+<span><span class="co">#&gt; [1] 0.3242716</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="simulation">Simulation<a class="anchor" aria-label="anchor" href="#simulation"></a>
 </h2>
 <p>Generate data from a known random-parameter process and recover the
 parameters:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_rpbnb.html">simulate_rpbnb</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  beta1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.2</span>, x1 <span class="op">=</span> <span class="fl">0.4</span><span class="op">)</span>,</span>
 <span>  beta2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.1</span>, x1 <span class="op">=</span> <span class="op">-</span><span class="fl">0.3</span><span class="op">)</span>,</span>
@@ -153,6 +410,27 @@ parameters:</p>
 <span><span class="co">#&gt; 4  7  0  1.5952808</span></span>
 <span><span class="co">#&gt; 5  0  3  0.3295078</span></span>
 <span><span class="co">#&gt; 6  2  0 -0.8204684</span></span></code></pre></div>
+<p><code><a href="../reference/simulate_rpbnb_copula.html">simulate_rpbnb_copula()</a></code> does the same, but from a
+copula-dependent process (the joint pmf is built from the two NB2
+marginal CDFs and a copula CDF, rather than the Famoye/Sarmanov
+tilt):</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sim_cop</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_rpbnb_copula.html">simulate_rpbnb_copula</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fl">1000</span>,</span>
+<span>  beta1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.2</span>, x1 <span class="op">=</span> <span class="fl">0.4</span><span class="op">)</span>,</span>
+<span>  beta2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"(Intercept)"</span> <span class="op">=</span> <span class="fl">0.1</span>, x1 <span class="op">=</span> <span class="op">-</span><span class="fl">0.3</span><span class="op">)</span>,</span>
+<span>  random_1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>x1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sd <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  dispersion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>m1 <span class="op">=</span> <span class="fl">0.4</span>, m2 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>  copula <span class="op">=</span> <span class="fu"><a href="../reference/copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span>, par <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">sim_cop</span><span class="op">$</span><span class="va">data</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   y1 y2         x1</span></span>
+<span><span class="co">#&gt; 1  0  0 -0.6264538</span></span>
+<span><span class="co">#&gt; 2  1  0  0.1836433</span></span>
+<span><span class="co">#&gt; 3  0  0 -0.8356286</span></span>
+<span><span class="co">#&gt; 4  2  1  1.5952808</span></span>
+<span><span class="co">#&gt; 5  4  1  0.3295078</span></span>
+<span><span class="co">#&gt; 6  1  2 -0.8204684</span></span>
+<span><span class="va">sim_cop</span><span class="op">$</span><span class="va">true</span><span class="op">$</span><span class="va">tau</span>   <span class="co"># true Kendall's tau implied by rho = 0.5</span></span>
+<span><span class="co">#&gt; [1] 0.3333333</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
@@ -161,11 +439,11 @@ parameters:</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Project Author.</p>
+  <p>Developed by Zhenyu Wang.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

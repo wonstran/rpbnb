@@ -12,6 +12,11 @@
                               poisson_1 = FALSE, poisson_2 = FALSE,
                               .fixed = NULL, .opt_draws = NULL) {
   draw_type <- match.arg(draw_type, "halton")
+  # Idempotent when fit_rpbnb() already resolved it -- but tests and internal
+  # callers reach this fitter directly, and an unresolved control carries
+  # control$iterlim = NULL, which maxLik::maxControl() rejects with an opaque
+  # "argument is of length zero".
+  control <- .resolve_control(control, "classic")
   spec1 <- parse_rand_spec(random_1); spec2 <- parse_rand_spec(random_2)
 
   prep <- .prepare_bnb_data(formula_1, formula_2, data)

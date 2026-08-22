@@ -26,6 +26,7 @@ print.rpbnb_tmb_fit <- function(x, ...) {
   cat("  Estimator:", if (is.null(x$method)) "sml" else x$method, "\n")
   cat("  Dependence:", deparse(x$dependence), "\n")
   .print_standardize_note(x)
+  .print_control_ignored(x)
   orig <- .rpbnb_orig_units(x)
   cat("\nCoefficients:\n")
   print(round(if (!is.null(orig)) orig$coef else x$coef, 4))
@@ -78,6 +79,7 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   cat("  Estimator:", if (is.null(object$method)) "sml" else object$method,
       "\n")
   .print_standardize_note(object)
+  .print_control_ignored(object)
   cat("\n")
 
   orig <- .rpbnb_orig_units(object)
@@ -285,10 +287,12 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
   # (-1, 1)), where a two-sided Wald test is valid. Kimeldorf (Clayton)
   # constrains theta > 0, so theta = 0 is technically a boundary null there
   # too -- this deliberately mirrors the classic engine's design (R/methods.R,
-  # add_dispersion()'s dependence rows), which always uses the ordinary Wald
-  # test for the dependence parameter regardless of family rather than
-  # boundary-testing it, so the two engines do not disagree about what they
-  # report. dep_val/dep_se are ADREPORTed natural-scale quantities, so the SE
+  # add_dispersion()'s dependence rows), which uses the ordinary Wald test for
+  # the dependence parameter by default regardless of family, so the two
+  # engines do not disagree about what they report. Asking for the dependence
+  # LR test (which = "dependence") replaces that Wald row on BOTH engines, and
+  # only there does the family decide between chi-square(1) and the 50:50
+  # mixture. dep_val/dep_se are ADREPORTed natural-scale quantities, so the SE
   # already reflects TMB's own delta-method transform -- no extra
   # transformation is needed here (contrast the scale blocks above, which
   # apply their own delta method to a log-scale estimate).
@@ -307,16 +311,99 @@ summary.rpbnb_tmb_fit <- function(object, digits = 4L, ...) {
       dep_se  <- sdr_sum[dep_name, "Std. Error"]
       dep_z <- dep_val / dep_se
       dep_p <- 2 * pnorm(-abs(dep_z))
-      dep_tbl <- data.frame(
-        Parameter = dep_name,
-        Estimate = dep_val,
-        `Std. Error` = dep_se,
-        `z value` = dep_z,
-        `Pr(>|z|)` = dep_p,
-        Signif = .signif_stars(dep_p),
-        row.names = NULL, check.names = FALSE
-      )
+      # A dependence LR test (rpbnb_tmb_boundary_tests(which = "dependence"),
+      # attached as $boundary_tests) REPLACES the Wald z/p on this row rather
+      # than sitting beside it: the two answer the same question and printing
+      # both in one row invites reading the wrong column. Absent that row --
+      # the default -- the block is exactly the Wald table it always was.
+      dep_bt <- bt_row(dep_name)
+      dep_tbl <- if (is.null(dep_bt)) {
+        data.frame(
+          Parameter = dep_name,
+          Estimate = dep_val,
+          `Std. Error` = dep_se,
+          `z value` = dep_z,
+          `Pr(>|z|)` = dep_p,
+          Signif = .signif_stars(dep_p),
+          row.names = NULL, check.names = FALSE
+        )
+      } else {
+        data.frame(
+          Parameter = dep_name,
+          Estimate = dep_val,
+          `Std. Error` = dep_se,
+          LR = dep_bt$LR, df = dep_bt$df,
+          `Pr(>chisq)` = dep_bt$p.value,
+          Signif = .signif_stars(dep_bt$p.value),
+          row.names = NULL, check.names = FALSE
+        )
+      }
       .print_tbl(dep_tbl, digits)
+      if (!is.null(dep_bt)) {
+        cat("LR/df/Pr(>chisq): likelihood-ratio test against the independence\n",
+            "restriction (see rpbnb_tmb_boundary_tests(which = \"dependence\")).\n",
+            "Chi-square(1); the 50:50 boundary mixture is used only for\n",
+            "Kimeldorf, whose theta > 0 makes its null a boundary.\n", sep = "")
+      }
+      # The dispersion block above explains its own NAs; this one used to print
+      # bare NAs, which reads as a malfunction rather than as the deliberate
+      # refusal it is. An NA here means the boundary scan in R/tmb_inference.R
+      # (near_smooth_cap()/clamp_reached()/flag()) found the estimate pinned
+      # against an implementation bound, or its delta-method derivative
+      # collapsed, and nulled the standard error on purpose.
+      if (is.na(dep_se)) {
+        side <- NA_character_
+        if (!is.null(object$boundary_report) &&
+            dep_name %in% object$boundary_report) {
+          side <- object$boundary_sides[[match(dep_name, object$boundary_report)]]
+        }
+        # A non-positive-definite Hessian nulls the WHOLE covariance, so every
+        # standard error in this summary is NA and none of them says anything
+        # about the dependence parameter specifically. Blaming an
+        # implementation bound there would be a confidently wrong diagnosis
+        # pointing at the wrong remedy, so that case is separated out first
+        # and only reached when nothing was actually flagged.
+        # The interpolated pieces below vary in length, so the paragraphs are
+        # wrapped rather than hand-broken -- a fixed break point would leave
+        # one line running well past the width of the tables above.
+        say <- function(...) {
+          cat(paste(strwrap(paste0(...), width = 70), collapse = "\n"),
+              "\n", sep = "")
+        }
+        pd_ok <- tryCatch(isTRUE(sdr$pdHess), error = function(e) TRUE)
+        if (is.na(side) && !pd_ok) {
+          say("Std. Error/z/p are NA for EVERY parameter above, not just ",
+              dep_name, ": the Hessian is not positive definite ",
+              "(fit$sdreport$pdHess is FALSE), so no standard errors are ",
+              "available. That is a property of the fit as a whole -- check ",
+              "for a rank-deficient design or a parameter pinned at a clamp.")
+        } else {
+          why <- if (identical(side, "degenerate")) {
+            "its delta-method derivative has collapsed"
+          } else if (!is.na(side)) {
+            paste0("it is pinned against its ", side, " implementation bound")
+          } else {
+            "it is not identified at this optimum"
+          }
+          say("No Wald z/p for ", dep_name, ": ", why, ", so the estimate is ",
+              "set by the implementation rather than by the data (see ",
+              "fit$boundary_report and fit$boundary_sides). Use ",
+              "rpbnb_tmb_dependence_profile() for a likelihood-based interval.")
+          # Famoye is the one family whose bounds are frozen at the starting
+          # values, so its profile cannot escape the same box -- and when that
+          # box is parameter-independent (lambda_bounds identical to
+          # lambda_bounds_at_optimum) restarting cannot widen it either, which
+          # is the difference between "refit better" and "change the family".
+          if (identical(dep_name, "lam")) {
+            say("That interval is mapped through the same frozen lambda box ",
+                "(fit$lambda_bounds), so widen the box before reading it as ",
+                "a rescue. If the box is parameter-independent -- ",
+                "lambda_bounds equal to lambda_bounds_at_optimum -- ",
+                "refitting cannot widen it and the cap is structural: use a ",
+                "copula dependence instead.")
+          }
+        }
+      }
     } else {
       cat("  (dependence parameter not in sdreport)\n")
     }

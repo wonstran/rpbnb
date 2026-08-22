@@ -45,7 +45,8 @@ sim <- simulate_rpbnb(n = 2000,
   NB2 margins) or `"famoye"` (Famoye/Sarmanov dependence).
 - `rpbnb()` — random-parameter BNB through either engine (see below).
 - `fit_rpbnb()` — bivariate random-parameter NB via maximum simulated likelihood
-  with normal random coefficients and Halton draws.
+  with normal random coefficients and randomized (Cranley-Patterson-shifted)
+  Halton draws.
 - `simulate_rpbnb()` — simulate data from a random-parameter NB process.
 - Diagnostics: `bnb_gof()`, `bnb_marginal_effects()`, `bnb_elasticities()`.
 - Standard methods: `coef()`, `vcov()`, `logLik()`, `AIC()`, `BIC()`, `predict()`,
@@ -60,7 +61,7 @@ exported and can be called directly.
 | --- | --- | --- |
 | likelihood | Rcpp + OpenMP simulated likelihood | TMB automatic differentiation |
 | optimizer | `maxLik::maxLik(method = "BFGS")` | `stats::nlminb` + restart polish |
-| control | `rpbnb_control()` | `rpbnb_tmb_control()` |
+| control | `rpbnb_control()` | `rpbnb_control()` (one object for both) |
 | `offset()` in a formula | yes | no (errors) |
 | `dependence = "independence"` | no (use `fit_bnb()`) | yes |
 | extras | boundary tests, LR tests, residual plots | Laplace estimator, dependence profiling, memory-aware workload sizing |

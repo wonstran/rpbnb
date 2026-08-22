@@ -14,7 +14,7 @@ simulate_rpbnb(
   dispersion = c(m1 = 0.5, m2 = 0.5),
   lambda = 0,
   covariates = NULL,
-  seed = 1234
+  seed = NULL
 )
 ```
 
@@ -31,8 +31,12 @@ simulate_rpbnb(
 
 - random_1, random_2:
 
-  Named lists giving random coefficients, e.g.
-  `list(x1 = list(sd = 0.5))`. Means come from `beta1`/`beta2`.
+  Named lists giving random coefficients. Each value is a list with
+  `dist` (one of "normal", "lognormal", "uniform", "triangular"; default
+  "normal"), `scale` (or `sd`) for the dispersion, and `sign` (-1/1,
+  lognormal only). Means come from `beta1`/`beta2`; for a lognormal
+  coefficient the `beta` entry is the log-location and the realized
+  coefficient is `sign * exp(log_location + scale * z)`.
 
 - dispersion:
 
@@ -49,7 +53,9 @@ simulate_rpbnb(
 
 - seed:
 
-  Random seed.
+  Optional random seed. If `NULL` (default) the RNG is left untouched
+  and draws continue from the caller's current stream, so repeated calls
+  yield distinct datasets; supply an integer for reproducible output.
 
 ## Value
 

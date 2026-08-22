@@ -2,13 +2,13 @@
 % Please edit documentation in R/control.R
 \name{rpbnb_control}
 \alias{rpbnb_control}
-\title{Control parameters for rpbnb estimators}
+\title{Control parameters for every rpbnb estimator}
 \usage{
 rpbnb_control(
   method = c("BFGS"),
-  iterlim = 300L,
+  iterlim = NULL,
   reltol = 1e-08,
-  print_level = 2L,
+  print_level = NULL,
   draws_hessian = 100L,
   halton_burn = 300L,
   n_cores = 1L,
@@ -16,30 +16,41 @@ rpbnb_control(
   hessian = c("numeric", "analytic"),
   se_method = c("numeric", "opg", "analytic"),
   hess_eps = 1e-05,
-  hess_r = 4L
+  hess_r = 4L,
+  gradtol = 1e-05,
+  restarts = 10L,
+  max_threads = NULL,
+  max_workload = NULL,
+  parallel_tape = FALSE
 )
 }
 \arguments{
-\item{method}{Optimizer used by the fitters. Only "BFGS" is implemented and
-wired through; it is the sole accepted value.}
+\item{method}{Optimizer used by the \code{maxLik} fitters. Only "BFGS" is
+implemented and wired through; it is the sole accepted value.}
 
-\item{iterlim}{Maximum optimizer iterations.}
+\item{iterlim}{Maximum optimizer iterations. \code{NULL} (default) uses 300 for
+the \code{maxLik} fitters and 500 for the TMB engine's \code{nlminb}.}
 
 \item{reltol}{Relative convergence tolerance.}
 
-\item{print_level}{Verbosity passed to the optimizer (0 = silent, default = 2 for detailed progress).}
+\item{print_level}{Optimizer verbosity, and the switch that silences the
+boundary-test progress messages. \code{NULL} (default) uses 2 for the \code{maxLik}
+fitters and 0 (silent) for the TMB engine.}
 
-\item{draws_hessian}{Retained for backward compatibility but currently unused:
-the random-parameter numeric Hessian is now taken with the same optimization
-draws that produced the estimate (same-draw curvature), so it no longer
-resimulates a separate Hessian draw set. Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
+\item{draws_hessian}{Retained for backward compatibility but unused by every
+estimator: the random-parameter numeric Hessian is taken with the same
+optimization draws that produced the estimate (same-draw curvature), so it
+no longer resimulates a separate Hessian draw set. Supplying it is always
+reported as an ignored setting.}
 
 \item{halton_burn}{Number of leading Halton points discarded before forming
 the simulation draws.}
 
-\item{n_cores}{Worker processes for the optional cluster path (1 = sequential).}
+\item{n_cores}{Worker processes for \code{\link[=fit_rpbnb]{fit_rpbnb()}}'s optional cluster path, or
+OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases).}
 
-\item{compute_se}{If FALSE, skip the Hessian and standard errors.}
+\item{compute_se}{If FALSE, skip the Hessian and standard errors. The TMB
+engine has its own \code{inference} argument for this instead.}
 
 \item{hessian}{How \code{\link[=fit_bnb]{fit_bnb()}} (famoye) computes the Hessian for standard
 errors: "numeric" (default, \code{\link[numDeriv:hessian]{numDeriv::hessian()}}) or "analytic" (the
@@ -56,19 +67,108 @@ per-observation scores -- fastest, but relies on the information-matrix
 equality so it is unreliable for parameters at a boundary (e.g. a random-
 coefficient SD estimated near 0). For copula dependence (\code{\link[=fit_rpbnb]{fit_rpbnb()}} with
 \code{dependence = copula(...)}), only "opg" (recommended) and "numeric" are
-available; "analytic" is not implemented for the copula path and errors.
-Ignored by \code{\link[=fit_bnb]{fit_bnb()}}.}
+available; "analytic" is not implemented for the copula path and errors.}
 
 \item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}
-(used only when \code{hessian = "numeric"}).}
+(used only when the numeric Hessian is selected).}
+
+\item{gradtol}{Stationarity tolerance for the TMB engine's score, applied
+\emph{relative} to the objective: the fit is treated as stationary once
+\code{max(abs(gradient))} falls below \code{gradtol * max(1, abs(nll))}.
+\code{nlminb()} declares convergence from its relative function test,
+which can fire while the score is still far from zero; a Hessian taken
+there is not a curvature and its inverse can carry negative variances. The
+fit is restarted until the gradient clears this tolerance; missing it is
+not warned about on its own, because the copula families legitimately
+optimise against a clamp or a probability floor where no step improves the
+objective, but it is reported in the warning raised when the Hessian
+actually fails to factor, and is kept on the fit as
+\code{optimizer$max_abs_gradient}. The scaling matters because the score
+is a sum over observations, so an absolute cutoff would tighten with
+sample size for no statistical reason.}
+
+\item{restarts}{Maximum number of times to restart \code{nlminb()} from its
+own answer while \code{gradtol} is unmet. Restarting resets the trust
+region and step scaling that stalled the first solve. Set to \code{0L} for
+the single-call behaviour of earlier versions.}
+
+\item{max_threads}{Maximum OpenMP threads permitted for one TMB fit.
+\code{NULL} (default) means \code{n_cores}, so threads are not capped unless
+set explicitly below \code{n_cores}.}
+
+\item{max_workload}{Maximum weighted observation-draw evaluations permitted before TMB tape construction; \code{Inf} disables the guard. The default and every figure here are derived from \code{TAPE_CALIBRATION}, so this text cannot drift from the shipped behaviour.
+
+With the default \code{parallel_tape = FALSE} the budget is per fit; with \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
+
+One unit is one weighted observation-draw. All figures are measured by \code{inst/benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
+
+Retained tape size depends on \code{n * draws} alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).
+
+The budget is set on \emph{peak} working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.
+
+Families cost different amounts per unit, so each carries a weight -- the largest \emph{peak} ratio to Famoye observed at matched workload, rounded up to the next tenth: independence 0.7, famoye 1, frank 3.6, gaussian 0.9, clayton 1.1. Frank peaks at over three and a half times Famoye, so treating it as unweighted would under-budget it more than threefold.
+
+Raise \code{max_workload} deliberately against the memory you actually have, not to make one particular dataset fit.
+
+As of \code{rpbnb_tmb_max_workload()}, the value \code{rpbnb_tmb_control()} actually uses by default is no longer the fixed figure above: it will auto-detect available memory and budget 80\% of it, falling back to the fixed 8 GiB figure only when detection is unavailable on the current platform. Call \code{\link{rpbnb_tmb_max_workload}} directly to set your own budget or detection fraction.}
+
+\item{parallel_tape}{Construct per-thread TMB tapes concurrently. The
+default \code{FALSE} constructs them sequentially to reduce peak memory;
+objective and gradient evaluation remains parallel.}
 }
 \value{
-An object of class \code{rpbnb_control} (a named list).
+An object of class \code{c("rpbnb_control", "rpbnb_tmb_control")} (a named
+list). It carries both class names so that every historical
+\code{inherits(control, ...)} check in the package and in user code accepts it.
 }
 \description{
-Control parameters for rpbnb estimators
+One control object for all of the package's fitters -- \code{\link[=fit_bnb]{fit_bnb()}},
+\code{\link[=fit_rpbnb]{fit_rpbnb()}}, \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}, and \code{\link[=rpbnb]{rpbnb()}} with either \code{engine}. It
+carries the union of the tuning knobs the estimators use; each fitter reads
+the ones that apply to it and \strong{ignores the rest}, reporting the ignored
+names in \code{print()}/\code{summary()} of the resulting fit rather than erroring.
+That is what makes a script able to flip \code{engine = "classic"} to \code{"tmb"}
+without rewriting its control call.
 }
+\section{Which parameters apply to which estimator}{
+\tabular{llll}{
+   Parameter \tab \code{\link[=fit_bnb]{fit_bnb()}} \tab \code{\link[=fit_rpbnb]{fit_rpbnb()}} \tab \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} \cr
+   \code{method}, \code{compute_se}, \code{hess_eps}, \code{hess_r} \tab yes \tab yes \tab ignored \cr
+   \code{iterlim}, \code{reltol}, \code{print_level} \tab yes \tab yes \tab yes \cr
+   \code{halton_burn}, \code{n_cores} \tab ignored \tab yes \tab yes \cr
+   \code{hessian} \tab yes \tab ignored \tab ignored \cr
+   \code{se_method} \tab ignored \tab yes \tab ignored \cr
+   \code{gradtol}, \code{restarts}, \code{max_threads}, \code{max_workload}, \code{parallel_tape} \tab ignored \tab ignored \tab yes \cr
+   \code{draws_hessian} \tab ignored \tab ignored \tab ignored \cr
+}
+
+
+Note that \code{iterlim} and \code{n_cores} mean different things to different
+estimators -- a \code{maxLik} BFGS iteration limit versus an \code{nlminb} one, worker
+\emph{processes} versus OpenMP \emph{threads}. They are not translated; each estimator
+reads the number and applies its own meaning to it.
+}
+
+\section{Defaults that depend on the estimator}{
+
+
+\code{iterlim} and \code{print_level} default to \code{NULL}, which means "this estimator's
+own long-standing default": \code{iterlim} is 300 under \code{maxLik} and 500 under
+\code{nlminb}; \code{print_level} is 2 (progress) under \code{maxLik} and 0 (silent) under
+\code{nlminb}. Supplying either explicitly overrides that for every estimator.
+\code{max_threads} defaults to \code{n_cores} and \code{max_workload} is computed from
+available memory by \code{\link[=rpbnb_tmb_max_workload]{rpbnb_tmb_max_workload()}} the first time a TMB fit
+needs it (so a non-TMB fit never pays for the memory probe).
+}
+
 \examples{
 rpbnb_control(method = "BFGS", iterlim = 200)
 rpbnb_control(hessian = "analytic")
+# The same object drives either engine; the TMB-only knobs are simply
+# ignored by the classic one (and reported as ignored in its summary).
+rpbnb_control(n_cores = 4, gradtol = 1e-6, se_method = "opg")
+}
+\seealso{
+\code{\link[=rpbnb_tmb_max_workload]{rpbnb_tmb_max_workload()}}, \code{\link[=rpbnb]{rpbnb()}}, \code{\link[=fit_rpbnb]{fit_rpbnb()}},
+\code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}, \code{\link[=fit_bnb]{fit_bnb()}}
 }

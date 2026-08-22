@@ -63,11 +63,15 @@ draws <- 300L
 method <- "sml"
 # Same knob as rpbnb_truck.R: "famoye" or a copula() object. Kept identical
 # between the two scripts so their output is directly comparable.
-dependence <- copula("normal") #copula("kimeldorf")
-# One restricted refit per random-coefficient scale (3 here) plus one per
-# dispersion (2), each run at boundary_draws (see the header), so this adds
-# real time on top of the main fit.
-boundary_tests <- TRUE
+dependence <- copula("frank") #copula("kimeldorf")
+# Which groups of parameters to LR-test after the fit; same switch as
+# rpbnb_truck.R. FALSE runs none, TRUE is the historical
+# c("sd", "dispersion"), and any subset of "sd" / "dispersion" / "dependence"
+# (or "all") can be named. One restricted refit per random-coefficient scale
+# (3 here), one per free dispersion (2), and one for the dependence parameter,
+# each run at boundary_draws (see the header), so this adds real time on top
+# of the main fit.
+boundary_tests <- c("sd", "dispersion", "dependence")
 # rpbnb(boundary_draws = )'s own knob for the restricted refits -- NULL would
 # fall back to the main fit's `draws` (500 here); set independently so the
 # restricted refits can trade precision for speed (fewer draws, cheaper) or
@@ -91,7 +95,9 @@ cat(sprintf("=== rpbnb(engine = \"tmb\", method = \"%s\") on truck all crashes (
 cat("Dependence   :", dep_desc, "\n")
 cat("Cores asked  :", n_cores, "\n")
 cat("Draws        :", draws, "\n")
-cat("Boundary draws:", if (boundary_tests) boundary_draws else "n/a (boundary_tests = FALSE)", "\n")
+cat("Boundary draws:",
+    if (length(boundary_tests) && !identical(boundary_tests, FALSE)) boundary_draws
+    else "n/a (no boundary tests requested)", "\n")
 
 # Same formulas as rpbnb_truck.R / rpbnb_frank_open.R: random slopes on
 # SR40_MI3 and MPD_ME in eq 1, SR40_MI3 only in eq 2 (weakly identified
@@ -128,10 +134,13 @@ t_fit <- system.time(
     # No max_workload override beyond Inf: the guard's default calibration
     # under-estimates this data's per-draw cost (see the header), so leaving
     # it engaged would block the fit rather than just warn.
-    force_parallel_gaussian = TRUE,
+    # force_parallel_gaussian = TRUE,
     boundary_tests = boundary_tests,
     #boundary_draws = boundary_draws,
-    control        = rpbnb_tmb_control(
+    # rpbnb_control(), not rpbnb_tmb_control(): the two were merged in 0.4.1
+    # and one object now drives either engine. The old name still works and
+    # returns exactly this object.
+    control        = rpbnb_control(
       print_level  = 1,
       n_cores      = n_cores,
       max_threads  = n_cores,
@@ -141,7 +150,8 @@ t_fit <- system.time(
 )[["elapsed"]]
 
 cat(sprintf("\nEstimation finished in %.2f s%s\n", t_fit,
-            if (boundary_tests) " (includes the boundary LR refits)" else ""))
+            if (length(boundary_tests) && !identical(boundary_tests, FALSE))
+              " (includes the boundary LR refits)" else ""))
 # Deliberately not reporting gc() figures: the TMB tape lives on the C++ heap
 # and is invisible to R's garbage collector, so gc() would understate exactly
 # the quantity this script exists to test. Watch the process working set
@@ -211,13 +221,14 @@ cat("\n")
 # printed again here on its own for the raw LR/df/p table with its Signif
 # stars, matching rpbnb_truck.R's equivalent section.
 if (!is.null(fit$boundary_tests)) {
-  sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
+  sep(); cat("LR TESTS (", paste(boundary_tests, collapse = ", "), ")\n", sep = "")
+  sep()
   print(fit$boundary_tests)
 } else {
-  sep(); cat("BOUNDARY LR TESTS (random-coefficient scales and dispersions)\n"); sep()
-  cat("Skipped (boundary_tests = FALSE). Set boundary_tests <- TRUE at the top\n")
-  cat("of this script to run them (folded into the rpbnb() call above via\n")
-  cat("boundary_tests = TRUE, at boundary_draws draws).\n")
+  sep(); cat("LR TESTS\n"); sep()
+  cat("Skipped (boundary_tests names no group). Set boundary_tests at the top\n")
+  cat("of this script -- e.g. \"all\", or c(\"dispersion\", \"dependence\") -- to\n")
+  cat("run them (folded into the rpbnb() call above, at boundary_draws draws).\n")
 }
 cat("\n")
 
