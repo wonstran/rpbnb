@@ -1,3 +1,10 @@
+# rpbnb 0.4.2
+
+* Regenerated `ref/rpbnb_0.4.2.pdf` (the CRAN-style PDF reference manual)
+  from current Rd files, and clarified in README that `fit_rpbnb()`'s Halton
+  draws are Cranley-Patterson-shifted (randomized quasi-Monte Carlo), not
+  digit-scrambled.
+
 # rpbnb 0.4.1
 
 ## Breaking-ish: one control object for every estimator
