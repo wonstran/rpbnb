@@ -20,6 +20,9 @@ renv/lock/
 renv/python/
 renv/staging/
 
+# JAX experiment virtualenv
+.venv-jax/
+
 # OS / editor
 .DS_Store
 Thumbs.db
