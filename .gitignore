@@ -23,6 +23,10 @@ renv/staging/
 # JAX experiment virtualenv
 .venv-jax/
 
+# Python bytecode and test caches
+__pycache__/
+.pytest_cache/
+
 # OS / editor
 .DS_Store
 Thumbs.db
