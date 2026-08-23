@@ -265,6 +265,14 @@ def _dependence(z_dep, family, lamLo, lamHi):
     raise NotImplementedError(f"no dependence link for family {family}")
 
 
+# Families _dependence() has a link for. Kept beside it so the two cannot
+# drift, and checked at construction alongside _LOG_DRAW: without it, a
+# family wired into _LOG_DRAW but missing a link here would raise on the
+# first fn() call -- i.e. from inside stats::nlminb() -- which is the exact
+# timing the family check was hoisted out of.
+_DEPENDENCE_FAMILIES = frozenset({FAM_INDEP, FAM_FAMOYE})
+
+
 def _famoye_c(mu, m, is_pois):
     """src/rpbnb_tmb.cpp:1198-1203.
 
@@ -338,12 +346,15 @@ def build_objective(data, layout, obs_chunk=256):
         raise ValueError(f"obs_chunk must be positive, got {obs_chunk}")
 
     spec = _spec_from_data(data)
-    if spec.family not in _LOG_DRAW:
-        # At construction, not on the first fn() call -- which would surface
-        # from inside stats::nlminb(). Same timing as the est_method check.
+    # Both halves are checked, because a family needs an entry in each: an
+    # adapter in _LOG_DRAW and a link in _dependence(). At construction, not
+    # on the first fn() call -- which would surface from inside
+    # stats::nlminb(). Same timing as the est_method check above.
+    if spec.family not in _LOG_DRAW or spec.family not in _DEPENDENCE_FAMILIES:
+        supported = sorted(set(_LOG_DRAW) & _DEPENDENCE_FAMILIES)
         raise NotImplementedError(
             f"family {spec.family} lands in a later task; this build "
-            f"supports {sorted(_LOG_DRAW)}")
+            f"supports {supported}")
     log_draw_fn = _LOG_DRAW[spec.family]
 
     def nll(free_vec):
