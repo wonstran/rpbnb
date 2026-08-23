@@ -72,6 +72,26 @@ The bracketed sum depends only on `r`, which is a scalar shared by every observa
 
 **JAX builtins replace the stability shims.** `stable_expm1`/`stable_log1p` (`src/rpbnb_tmb.cpp:81-97`) exist only because CppAD lacks `expm1`/`log1p`. JAX has both natively with correct derivatives, so they become `jnp.expm1`/`jnp.log1p`. Likewise `log_add_exp` → `jnp.logaddexp`, `qnorm` → `jax.scipy.special.ndtri`, `pnorm` → `jax.scipy.stats.norm.cdf`, `pgamma(mu, shape)` → `jax.scipy.special.gammainc(shape, mu)`.
 
+**Known divergence: the NB2 margin at the `eta` floor. The JAX port is the accurate one; do not "fix" it to match.**
+
+Measured on 2026-08-23. `nb2_eta_floor()` (`src/rpbnb_tmb.cpp:1024-1029`) places `log(m) + eta` at exactly `-35.0`. The template then calls `dnbinom2(y, mu, mu + m*mu^2)`, and TMB's `dnbinom2` (`TMB/include/lgamma.hpp:130-136`) forms `log_var_minus_mu = log(var - mu)` — recovering `m*mu^2` by float subtraction from a sum that has already rounded it — and hands `dnbinom_robust` a size of `mu^2/(var - mu)`.
+
+At the floor that subtraction retains **1.5 significant bits**. The recovered size is 1.866 against a true `1/m` of 1.667 (12% relative error), worth about 0.10 nats per observation, in the gradient as well as the value. Measured error in the recovered size against `log(m) + eta`:
+
+| `log(m) + eta` | bits left in `var - mu` | size rel. error |
+|---|---|---|
+| -35.0 (the floor) | 1.5 | 1.2e-01 |
+| -32 | 5.8 | 1.3e-04 |
+| -29 | 10.2 | 6.2e-04 |
+| -25 | 15.9 | 4.2e-06 |
+| -22 | 20.3 | 8.8e-08 |
+
+The C++ comment identifies the right threshold (`-36.04 = log(2^-52)`, where the increment vanishes entirely) but sets the floor only one nat above it. `margins.py` computes `r = 1/m` directly and never forms the difference, so it is exact — which is why a saturating-floor parity case fails by ~2.5 nats. That is TMB's error, not the port's.
+
+Consequences for this plan: parity fixtures must stay out of the saturated-floor regime (the `eta` **ceiling** agrees to 4.5e-12 and is fine); and Task 7's end-to-end fit comparison must treat a floor-saturating fit as expected-to-diverge rather than as a port defect.
+
+The fix on the TMB side is small and removes the need for this floor entirely: call `dnbinom_robust(y, log_mu, log(m) + 2*log_mu)` directly, giving `size = exp(-log m) = 1/m` exactly with no subtraction anywhere. Verified accurate to 5e-15 at every `eta` tested. Filed separately; out of scope here.
+
 **Zero-count safety comes free.** `nb2_cdf_pair` leaves `log_cdf_ym1` at `log P(Y = 0)` for `y = 0` rather than `-inf` (`src/rpbnb_tmb.cpp:157`). Under `vmap` all Clayton branches evaluate for every observation, and that convention is exactly what keeps the unused branch finite. Do not "fix" it to `-inf`.
 
 ---
