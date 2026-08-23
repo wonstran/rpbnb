@@ -35,7 +35,9 @@ This is the exact analogue of the repeated note in the C++ that "both CondExp br
 
 | Path | Responsibility |
 |---|---|
-| `inst/python/rpbnb_jax/__init__.py` | x64 config; re-export `build_objective` |
+| `inst/python/rpbnb_jax/__init__.py` | x64 config (env var, `config.update`, and a hard import-time post-condition); cross-language constants |
+| `inst/python/tests/conftest.py` | puts `inst/python` on `sys.path` so pytest runs from the repo root |
+| `.Rbuildignore` | exclude `.venv-jax/` and `__pycache__` from the built tarball |
 | `inst/python/rpbnb_jax/margins.py` | NB2 / Poisson log-pmf, and the CDF-pair triple (`log_cdf_y`, `log_cdf_ym1`, `log_pmf_y`) |
 | `inst/python/rpbnb_jax/frank.py` | `frank_log_cell_prob` |
 | `inst/python/rpbnb_jax/clayton.py` | `clayton_cell_prob` |
@@ -149,7 +151,7 @@ DIST_LOGNORMAL = 1
 DIST_UNIFORM = 2
 DIST_TRIANGULAR = 3
 
-# Must match FRANK_THETA_MAX in src/rpbnb_tmb.cpp:37 and R/utilities.R.
+# Must match FRANK_THETA_MAX in src/rpbnb_tmb.cpp:37 and R/tmb_utilities.R:10.
 FRANK_THETA_MAX = 35.0
 
 # log(1e15); the shared ceiling on every linear predictor.
