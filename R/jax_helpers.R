@@ -104,9 +104,10 @@
 #'   log_m2, z_dep.
 #' @param free Logical vector over `start`; `FALSE` pins a coordinate, which
 #'   is this engine's analogue of a `map = list(x = factor(NA))` entry.
-#' @param obs_chunk Observation block size for the copula path. Unused by the
-#'   independence and Famoye families, which never build the count grid it
-#'   exists to bound.
+#' @param obs_chunk Observation block size for the copula path. Accepted and
+#'   validated but not yet applied: Frank is the first family to build the
+#'   `(n, R, kmax + 1)` count grid this exists to bound, and the grid only
+#'   becomes large enough to need blocking at truck scale.
 #' @keywords internal
 #' @noRd
 .make_rpbnb_jax_object <- function(data, start, free, obs_chunk = 256L) {

@@ -6,11 +6,13 @@ random-coefficient model hands `rand_idx1` over as an int rather than a
 sequence.
 """
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from rpbnb_jax import FAM_FAMOYE, FAM_FRANK, FAM_INDEP
-from rpbnb_jax.objective import _spec_from_data, build_objective
+from rpbnb_jax import FAM_CLAYTON, FAM_FAMOYE, FAM_FRANK, FAM_INDEP
+from rpbnb_jax.objective import (Margin, _linear_corners, _spec_from_data,
+                                 build_objective)
 from rpbnb_jax.packing import Layout
 
 
@@ -83,15 +85,67 @@ def test_laplace_est_method_is_refused():
 def test_unsupported_family_raises_at_construction_not_at_first_call():
     lay = Layout(2, 2, 1, 1, np.zeros(9), np.arange(9))
     with pytest.raises(NotImplementedError, match="lands in a later task"):
-        build_objective(_data(family=FAM_FRANK), lay)
+        build_objective(_data(family=FAM_CLAYTON), lay)
 
 
 def test_supported_families_build():
     lay = Layout(2, 2, 1, 1, np.zeros(9), np.arange(9))
-    for family in (FAM_INDEP, FAM_FAMOYE):
+    for family in (FAM_INDEP, FAM_FAMOYE, FAM_FRANK):
         v, g = build_objective(_data(family=family), lay)(np.zeros(9))
-        assert np.isfinite(v)
+        assert np.isfinite(v), family
         assert g.shape == (9,)
+        # z_dep = 0 puts Frank exactly on its removable singularity, which is
+        # the point R's start offset avoids (R/fit_rpbnb_tmb.R:358-363). The
+        # JAX link is smooth through it, so the SCORE must be finite here --
+        # a NaN would mean the near-independence branch is leaking.
+        assert np.all(np.isfinite(g)), family
+
+
+def test_kmax_defaults_to_the_largest_observed_count():
+    spec = _spec_from_data(_data())
+    assert spec.kmax == 3          # max(Y1) = 2, max(Y2) = 3
+    assert _spec_from_data(_data(), kmax=9).kmax == 9
+
+
+def test_kmax_below_an_observed_count_is_refused_at_construction():
+    # Must fire when the Spec is built. _count_index()'s own bound check
+    # cannot: the counts arrive at the CDF triples as tracers, so it takes
+    # its tracer branch, and the grid's mode="fill" backstop then returns a
+    # NaN that the sum over observations spreads to every parameter.
+    lay = Layout(2, 2, 1, 1, np.zeros(9), np.arange(9))
+    with pytest.raises(ValueError, match="below max"):
+        build_objective(_data(family=FAM_FRANK), lay, kmax=1)
+
+
+def test_non_integral_counts_are_refused_at_construction():
+    # The counts are DATA, so this must fire when the Spec is built, not on
+    # the first traced evaluation. margins.py:106-112 owns the tolerance.
+    with pytest.raises(ValueError, match="whole numbers"):
+        _spec_from_data(_data(Y1=np.array([0.0, 1.0, 2.7])))
+
+
+def test_counts_reach_the_grid_as_integers():
+    spec = _spec_from_data(_data())
+    assert np.issubdtype(np.asarray(spec.margin1.y_int).dtype, np.integer)
+
+
+def test_linear_lower_corner_is_exactly_zero_at_a_zero_count():
+    # TMB's two accumulators disagree at y = 0 deliberately: the LINEAR
+    # cdf_ym1 is F(-1) = 0 (src/rpbnb_tmb.cpp:169 and :176, which overwrites
+    # it only `if (y > 0)`), while log_cdf_ym1 is left at log P(Y = 0) for
+    # Clayton's benefit (:157-159). Frank takes the linear corner, and
+    # reading exp(log_cdf_ym1) instead cost 6.0 nats and reversed the sign of
+    # the z_dep score against TMB on the R parity fixture.
+    mar = Margin(y=jnp.array([[0.0], [2.0]]),
+                 y_int=jnp.array([[0], [2]]),
+                 mu=jnp.array([[1.5], [1.5]]),
+                 m=jnp.asarray(0.5), is_pois=False)
+    a, am, log_pmf = _linear_corners(mar, 8)
+    assert float(am[0, 0]) == 0.0
+    # The positive count keeps the real F(y - 1), strictly inside (0, F(y)).
+    assert 0.0 < float(am[1, 0]) < float(a[1, 0])
+    # The MASS at y = 0 is untouched by the convention; only the corner is.
+    assert float(log_pmf[0, 0]) == pytest.approx(float(jnp.log(a[0, 0])))
 
 
 def test_obs_chunk_is_validated_even_though_this_path_ignores_it():

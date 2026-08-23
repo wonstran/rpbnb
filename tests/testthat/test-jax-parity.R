@@ -153,3 +153,29 @@ test_that("JAX matches TMB for triangular random coefficients", {
     0L, list(jax_start(0.3), jax_start(-0.8)),
     fixture = jax_fixture(0L, dist1 = 3L, dist2 = 3L))
 })
+
+# --- Copula families ------------------------------------------------------
+# The first family to reach the count CDF triples at all: every test above
+# takes a closed-form log mass and never builds the (n, R, kmax+1) grid.
+
+test_that("JAX matches TMB for the Frank copula", {
+  skip_if_not(.rpbnb_jax_available(), "jax not installed")
+  # theta = 35 * tanh(z_dep / 35), so these are z_dep = 0.1 -> 0.0999,
+  # 2.0 -> 1.996 and -1.5 -> -1.499. The first two take the kernel's th > 0
+  # branch and the third its three-regime th < 0 branch; 0.1 is also the
+  # value R starts Frank at (R/fit_rpbnb_tmb.R:358-363), so it is the point
+  # a real fit's first gradient is taken at.
+  expect_jax_parity(1L, list(jax_start(0.1), jax_start(2.0), jax_start(-1.5)))
+})
+
+test_that("JAX matches TMB for Frank at exact independence", {
+  skip_if_not(.rpbnb_jax_available(), "jax not installed")
+  # z_dep = 0 gives theta = 0 exactly, the copula's removable singularity and
+  # the only point that selects frank_log_cell_prob()'s |th| < 1e-5
+  # expansion -- a third of the kernel, and untested against the reference by
+  # the three points above. R avoids starting a fit here because TMB's tape
+  # loses the dependence score at exactly 0 (R/fit_rpbnb_tmb.R:358-363); that
+  # is a property of where the fit BEGINS, not of the value at this point,
+  # and both engines agree here to 2e-13 on fn and 5e-14 on gr.
+  expect_jax_parity(1L, list(jax_start(0), jax_start(1e-6)))
+})
