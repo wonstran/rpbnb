@@ -20,18 +20,39 @@
   }
 }
 
+#' Point reticulate at the project-local .venv-jax
+#'
+#' Must run before reticulate initialises Python, or it silently keeps
+#' whatever interpreter it bootstrapped for itself. Both the availability
+#' predicate and the object constructor call this, deliberately: an earlier
+#' version selected the venv only in `.rpbnb_jax_available()`, so any caller
+#' that skipped the predicate got reticulate's own ephemeral Python and a
+#' bare "No module named 'jax'". That coupling is invisible in the test file
+#' (skip_if_not() happens to run the predicate first) and would surface only
+#' once something wired this engine into a fit.
+#'
+#' Returns invisibly; selection failure is not an error, because the caller's
+#' `py_module_available()` check is the real verdict.
+#' @keywords internal
+#' @noRd
+.rpbnb_use_jax_venv <- function() {
+  root <- .rpbnb_project_root()
+  if (is.na(root)) return(invisible(FALSE))
+  venv <- file.path(root, ".venv-jax")
+  if (!dir.exists(venv)) return(invisible(FALSE))
+  ok <- tryCatch({
+    reticulate::use_virtualenv(venv, required = FALSE)
+    TRUE
+  }, error = function(e) FALSE, warning = function(w) FALSE)
+  invisible(ok)
+}
+
 #' Is the JAX engine importable?
 #' @keywords internal
 #' @noRd
 .rpbnb_jax_available <- function() {
   if (!requireNamespace("reticulate", quietly = TRUE)) return(FALSE)
-  root <- .rpbnb_project_root()
-  if (!is.na(root)) {
-    venv <- file.path(root, ".venv-jax")
-    if (dir.exists(venv)) {
-      try(reticulate::use_virtualenv(venv, required = FALSE), silent = TRUE)
-    }
-  }
+  .rpbnb_use_jax_venv()
   isTRUE(reticulate::py_module_available("jax"))
 }
 
@@ -63,6 +84,13 @@
 #' @keywords internal
 #' @noRd
 .make_rpbnb_jax_object <- function(data, start, free, obs_chunk = 256L) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("the JAX engine needs the reticulate package.", call. = FALSE)
+  }
+  # Not just in .rpbnb_jax_available() -- see .rpbnb_use_jax_venv(). This
+  # constructor must stand on its own, because a fit path has no reason to
+  # call the predicate first.
+  .rpbnb_use_jax_venv()
   py_dir <- .rpbnb_python_dir()
   if (!nzchar(py_dir)) {
     stop("cannot locate the rpbnb_jax Python sources", call. = FALSE)
