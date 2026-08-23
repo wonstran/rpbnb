@@ -1,4 +1,5 @@
 import jax
+import jax.extend
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -48,6 +49,10 @@ def test_pois_cdf_triple_matches_scipy():
     lc, lcm, lp = pois_cdf_triple(jnp.asarray(y), mu, kmax)
     np.testing.assert_allclose(np.exp(lc), poisson.cdf(y, mu), rtol=1e-11)
     np.testing.assert_allclose(np.exp(lp), poisson.pmf(y, mu), rtol=1e-11)
+    # Same y = 0 convention as NB2. src/rpbnb_tmb.cpp:186-187.
+    np.testing.assert_allclose(np.exp(lcm[1:]), poisson.cdf(y[1:] - 1, mu),
+                               rtol=1e-11)
+    np.testing.assert_allclose(np.exp(lcm[0]), poisson.pmf(0, mu), rtol=1e-11)
 
 
 def test_deep_tail_mass_survives_where_linear_space_underflows():
@@ -226,10 +231,70 @@ def test_a_bad_kmax_or_negative_count_is_rejected():
         pois_cdf_triple(jnp.asarray([-1]), 3.1, 10)
 
 
+def test_a_non_integral_y_is_rejected_not_silently_misread():
+    # The bound check and the gather disagreed once: int(30.7) == 30 passed
+    # the check, round(30.7) == 31 then indexed off the grid, and log_pmf_y
+    # came back NaN while both CDF slots stayed finite. Rounding both halves
+    # is not sufficient on the low side -- round() is half-to-even, so -0.5
+    # becomes -0.0 and reads as a legitimate y = 0. Integrality is checked
+    # to the same 1e-8 .check_counts() uses (R/data_prep.R:22-27).
+    for y in ([30.7], [-0.5], [0.0, 4.4]):
+        with pytest.raises(ValueError, match="whole numbers"):
+            pois_cdf_triple(jnp.asarray(y), 3.1, 30)
+        with pytest.raises(ValueError, match="whole numbers"):
+            nb2_cdf_triple(jnp.asarray(y), 2.4, 1.6, 30)
+    # An integral double above the grid is still caught by the bound check.
+    with pytest.raises(ValueError, match="below max"):
+        pois_cdf_triple(jnp.asarray([31.0]), 3.1, 30)
+
+
+def test_a_float_y_that_is_a_whole_number_indexes_that_number():
+    # The production path hands over an R integer vector (.check_counts(),
+    # R/data_prep.R:22-27, returns as.integer(round(y))); doubles arrive only
+    # from the parity fixture. Rounding is therefore the right policy -- but
+    # it must be pinned, since nothing else exercises it.
+    y_int = jnp.asarray(np.array([0, 4, 12], dtype=np.int32))
+    for y_float in (jnp.asarray([0.0, 4.0, 12.0]),
+                    jnp.asarray([0.0, 4.0 - 1e-12, 12.0 + 1e-12])):
+        for want, got in zip(pois_cdf_triple(y_int, 3.1, 30),
+                             pois_cdf_triple(y_float, 3.1, 30)):
+            np.testing.assert_allclose(np.asarray(want), np.asarray(got),
+                                       rtol=0)
+
+
 def test_kmax_must_be_static():
     # kmax sets an array dimension, so a tracer must not reach it.
-    with pytest.raises(Exception):
+    with pytest.raises(jax.errors.ConcretizationTypeError,
+                       match="Abstract tracer value"):
         jax.jit(lambda k: pois_cdf_triple(jnp.asarray([2]), 3.1, k))(10)
+
+
+def test_an_array_r_is_rejected_and_the_increment_stays_one_dimensional():
+    # A per-observation r would turn the (kmax,) increment into
+    # (n, R, kmax): 266 doubles against 2.2 GB on the truck workload.
+    with pytest.raises(ValueError, match="must be a scalar size"):
+        nb2_cdf_triple(jnp.asarray([[0], [4]]), jnp.ones((2, 3)),
+                       jnp.ones((2, 3)) * 1.6, 12)
+
+    n, R, kmax = 4, 3, 12
+    y = jnp.asarray(np.array([[0], [2], [6], [12]]))
+    jx = jax.make_jaxpr(
+        lambda mu: nb2_cdf_triple(y, mu, 1.6, kmax))(jnp.ones((n, R)))
+
+    def shapes(jaxpr):
+        """Every intermediate shape, descending into sub-jaxprs (jnp.cumsum
+        lowers inside a `jit` equation, so a top-level scan misses it)."""
+        for eq in jaxpr.eqns:
+            for v in eq.outvars:
+                if hasattr(v.aval, "shape"):
+                    yield tuple(v.aval.shape)
+            for sub in jax.extend.core.jaxprs_in_params(eq.params):
+                yield from shapes(sub)
+
+    seen = set(shapes(jx.jaxpr))
+    assert (kmax,) in seen, f"expected a ({kmax},) increment, saw {sorted(seen)}"
+    assert (n, R, kmax) not in seen, (
+        f"the increment gained a batch dimension: {(n, R, kmax)} in {sorted(seen)}")
 
 
 def test_a_traced_count_above_the_grid_gives_nan_not_a_plausible_number():
