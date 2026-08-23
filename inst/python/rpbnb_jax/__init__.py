@@ -7,12 +7,17 @@ records a measured failure of the textbook alternative.
 
 import os
 
-# Set before jax is imported anywhere in the process. jax reads this at import
-# time, so it is immune to the import-ordering problem that the config.update()
-# below has. Verified: this variable alone yields float64 with no other call.
-# setdefault, not assignment, so an explicit setting in the environment is
-# still visible here rather than being clobbered -- though config.update()
-# below will in practice still force x64 on afterwards.
+# Set before jax is imported anywhere in the process, because it is the only
+# thing that can act DURING `import jax` -- config.update() below cannot run
+# until that import has already finished. Measured: this variable alone yields
+# float64 with no other call.
+#
+# It is the order-dependent half of the pair, not the robust one. If jax was
+# already imported by someone else, setdefault is a no-op and config.update()
+# is what rescues x64. The two cover different windows; neither is redundant.
+#
+# setdefault, not assignment, so an explicit setting in the environment stays
+# visible here -- though config.update() below forces x64 on regardless.
 os.environ.setdefault("JAX_ENABLE_X64", "1")
 
 import jax  # noqa: E402  (must follow the environment setup above)
@@ -27,11 +32,19 @@ jax.config.update("jax_enable_x64", True)
 
 # Post-condition. A silently-float32 process produces plausible, wrong numbers
 # everywhere downstream, so this raises rather than warns.
+#
+# No reachable failure path is known on jax 0.11.1: config.update() was found
+# to recover float64 even with jax pre-imported, a float32 array already
+# created, and JAX_ENABLE_X64=0 set hostilely. So this is an assertion against
+# a future jax changing that, not a tested guarantee -- which is why the
+# message does not name a cause. If it ever fires, BOTH mechanisms above
+# failed, and the reason is not one we have seen.
 if jnp.zeros(()).dtype != jnp.float64:  # pragma: no cover
     raise RuntimeError(
-        "jax_enable_x64 did not take effect; every downstream result would "
-        "be silently wrong. Something imported jax and created an array "
-        "before this module."
+        "jax_enable_x64 did not take effect despite both the JAX_ENABLE_X64 "
+        "environment variable and jax.config.update(); every downstream "
+        "result would be silently wrong. Cause unknown -- check whether this "
+        "jax version still honours either mechanism."
     )
 
 FAM_INDEP = -1
