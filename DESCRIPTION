@@ -37,7 +37,8 @@ Suggests:
     testthat (>= 3.1.5),
     knitr,
     rmarkdown,
-    pkgload
+    pkgload,
+    reticulate
 SystemRequirements: GNU make
 Config/testthat/edition: 3
 VignetteBuilder: knitr
