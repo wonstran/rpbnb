@@ -80,6 +80,16 @@ Also measured: `jax.scipy.special.logsumexp` in JAX 0.11.1 has **no `initial=` p
 
 **Known divergence: the NB2 margin at the `eta` floor. The JAX port is the accurate one; do not "fix" it to match.**
 
+> **STATUS, verified 2026-08-23 against this repository — read before acting on anything below.**
+>
+> A TMB-side fix has been *drafted* but is **not in this repository's history**. `master` is still at `139cc7b`; `git grep dnbinom_robust master -- src/rpbnb_tmb.cpp` finds nothing, `nb2_eta_floor` is still present on both `master` and `jax-engine`, and `tests/testthat/test-nb2-saturation.R` does not exist on any branch.
+>
+> The draft lives as **uncommitted working-tree changes** in the worktree `.claude/worktrees/serene-chaum-eabaf0` (branch `claude/serene-chaum-eabaf0`, itself sitting at `139cc7b`): modified `src/rpbnb_tmb.cpp` and `NEWS.md`, plus an untracked `tests/testthat/test-nb2-saturation.R`. An earlier revision of this section described that work as landed and rewrote the `_eta_floor` draft below to a flat `ETA_FLOOR = -35.0`. **That rewrite has been reverted.**
+>
+> **Do NOT flatten `_eta_floor()` in `objective.py`.** This branch's `src/rpbnb_tmb.cpp:1024-1031` still carries the m-dependent floor, so the port must keep mirroring it or parity breaks — for every `m < 1` the port's floor would sit *above* TMB's, which is the same class of failure this note documents, with the sign reversed.
+>
+> When that work is committed and merged into `jax-engine`, then and only then: flatten `_eta_floor` to `-35.0`, re-run the full parity suite, and confirm the deltas rather than assuming them. The claimed improvement (46 nats → 2e-11 on a 200-observation independence fixture) is that session's measurement, unverified here.
+
 Measured on 2026-08-23. `nb2_eta_floor()` (`src/rpbnb_tmb.cpp:1024-1029`) places `log(m) + eta` at exactly `-35.0`. The template then calls `dnbinom2(y, mu, mu + m*mu^2)`, and TMB's `dnbinom2` (`TMB/include/lgamma.hpp:130-136`) forms `log_var_minus_mu = log(var - mu)` — recovering `m*mu^2` by float subtraction from a sum that has already rounded it — and hands `dnbinom_robust` a size of `mu^2/(var - mu)`.
 
 At the floor that subtraction retains **1.5 significant bits**. The recovered size is 1.866 against a true `1/m` of 1.667 (12% relative error), worth about 0.10 nats per observation, in the gradient as well as the value. Measured error in the recovered size against `log(m) + eta`:
@@ -92,11 +102,13 @@ At the floor that subtraction retains **1.5 significant bits**. The recovered si
 | -25 | 15.9 | 4.2e-06 |
 | -22 | 20.3 | 8.8e-08 |
 
-The C++ comment identifies the right threshold (`-36.04 = log(2^-52)`, where the increment vanishes entirely) but sets the floor only one nat above it. `margins.py` computes `r = 1/m` directly and never forms the difference, so it is exact — which is why a saturating-floor parity case fails by ~2.5 nats. That is TMB's error, not the port's.
+The C++ comment identified the right threshold (`-36.04 = log(2^-52)`, where the increment vanishes entirely) but set the floor only one nat above it. `margins.py` computes `r = 1/m` directly and never forms the difference, so it is exact — which is why a saturating-floor parity case failed by ~2.5 nats. That was TMB's error, not the port's.
 
-Consequences for this plan: parity fixtures must stay out of the saturated-floor regime (the `eta` **ceiling** agrees to 4.5e-12 and is fine); and Task 7's end-to-end fit comparison must treat a floor-saturating fit as expected-to-diverge rather than as a port defect.
+The mid-table rows are a quantization lottery, not a smooth curve: at *b* surviving bits the recovered size is quantized to a grid of spacing `2^-b`, so any single `eta` lands somewhere in an envelope of width `~2^-(b+1)` rather than on a determinate value. Re-measuring on a slightly different `eta` grid reproduces the floor row exactly and the `-32`/`-29` rows only to an order of magnitude. Only the floor row and the trend matter.
 
-The fix on the TMB side is small and removes the need for this floor entirely: call `dnbinom_robust(y, log_mu, log(m) + 2*log_mu)` directly, giving `size = exp(-log m) = 1/m` exactly with no subtraction anywhere. Verified accurate to 5e-15 at every `eta` tested. Filed separately; out of scope here.
+Consequences while the TMB side stands as it is on this branch: parity fixtures must stay out of the saturated-**floor** regime (the `eta` **ceiling** agrees to 4.5e-12 and is fine); and Task 7's end-to-end fit comparison must treat a floor-saturating fit as expected-to-diverge rather than as a port defect. `objective.py`'s `_eta_floor()` mirrors the m-dependent floor and is correct as it stands.
+
+The fix on the TMB side is small and removes the need for this floor entirely: call `dnbinom_robust(y, log_mu, log(m) + 2*log_mu)` directly, giving `size = exp(-log m) = 1/m` exactly with no subtraction anywhere. Verified here accurate to 5e-15 at every `eta` tested. Drafted in a worktree, not yet committed — see the status box above before relying on it.
 
 **Zero-count safety comes free.** `nb2_cdf_pair` leaves `log_cdf_ym1` at `log P(Y = 0)` for `y = 0` rather than `-inf` (`src/rpbnb_tmb.cpp:157`). Under `vmap` all Clayton branches evaluate for every observation, and that convention is exactly what keeps the unused branch finite. Do not "fix" it to `-inf`.
 
@@ -422,7 +434,9 @@ def _eta(X, beta, rand_idx, dev):
 
 
 def _eta_floor(log_m_clamped, is_pois):
-    """src/rpbnb_tmb.cpp:1024-1031."""
+    """src/rpbnb_tmb.cpp:1024-1031. The floor MOVES WITH m and must keep
+    doing so while this branch's template does -- see the status box in
+    "Known Design Decisions" before flattening it."""
     if is_pois:
         return -35.0
     return -35.0 - jnp.minimum(log_m_clamped, 0.0)
