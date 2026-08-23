@@ -70,6 +70,12 @@ The bracketed sum depends only on `r`, which is a scalar shared by every observa
 
 **No tape, so no atomic.** `REGISTER_ATOMIC(gauss_cell_vec)` (`src/rpbnb_tmb.cpp:781`), `parallel_accumulator`, `TMB::config(tape.parallel=)`, and the `TAPE_CALIBRATION` workload guard all exist to manage TMB tape size. XLA fuses the quadrature with no tape at all, so none of them port. The Gaussian single-thread SIGSEGV cap in `.resolve_gaussian_threads()` (`R/tmb_helpers.R:32`) likewise has no analogue.
 
+**The real NaN source is an input-dependent `-inf`, not the mask.** Measured in Task 3. A masked-out *literal* `-inf` differentiates cleanly; a masked-out `-inf` that carries a dependence on the differentiated input gives `NaN` regardless of whether it is masked by `where=`, `jnp.where`, or a select to `-1e30`. So the remedy is always to floor the *input* (Rule 2), never to sanitise the reduction. `mu` and `r` are floored at `1e-300` before any `log()`: `mu = 0` and, worse, a subnormal `mu` that XLA flushes to zero both give `log(mu) = -inf` and then `0 * -inf = NaN` in the **value**, not merely the gradient.
+
+Also measured: `jax.scipy.special.logsumexp` in JAX 0.11.1 has **no `initial=` parameter** (signature `(a, axis, b, keepdims, return_sign, where)`), and out-of-bounds `jnp.take_along_axis` returns `NaN` rather than clamping — so an unguarded count above `KMAX` poisons every parameter's gradient through the sum-over-observations reduction rather than quietly returning the wrong mass.
+
+**Accuracy note for later parity work.** At `mu = 1e-8, r = 200` the `log_q = log(mu) - log(r + mu)` form beats `scipy.stats.nbinom.logpmf` — relative error 4e-18 against a `longdouble` reference, versus 4.5e-9 for scipy, which forms `1 - p`. Same failure class as the TMB `eta`-floor divergence above. A parity test against scipy in that regime must not tighten `rtol` past ~1e-8.
+
 **JAX builtins replace the stability shims.** `stable_expm1`/`stable_log1p` (`src/rpbnb_tmb.cpp:81-97`) exist only because CppAD lacks `expm1`/`log1p`. JAX has both natively with correct derivatives, so they become `jnp.expm1`/`jnp.log1p`. Likewise `log_add_exp` → `jnp.logaddexp`, `qnorm` → `jax.scipy.special.ndtri`, `pnorm` → `jax.scipy.stats.norm.cdf`, `pgamma(mu, shape)` → `jax.scipy.special.gammainc(shape, mu)`.
 
 **Known divergence: the NB2 margin at the `eta` floor. The JAX port is the accurate one; do not "fix" it to match.**
@@ -741,13 +747,14 @@ def _triple_from_grid(log_pmf_all, y, kmax):
     """
     ks = jnp.arange(kmax + 1)
     yb = jnp.asarray(y)[..., None]
-    log_cdf_y = logsumexp(log_pmf_all, axis=-1, where=(ks <= yb),
-                          initial=-jnp.inf)
-    # where= with an all-false row would give -inf and a NaN gradient, so the
-    # y = 0 row is given a true mask and then overwritten below.
+    log_cdf_y = logsumexp(log_pmf_all, axis=-1, where=(ks <= yb))
+    # An all-false row would give a -inf VALUE, so the y = 0 row gets a true
+    # mask and the P(Y = 0) convention of src/rpbnb_tmb.cpp:157. Note this is
+    # a value concern, not a gradient one: `where=` masking was measured
+    # against sanitising to -1e30 and gives identical values and gradients
+    # wherever the mask has any true entry.
     mask_m1 = jnp.where(yb == 0, ks == 0, ks <= yb - 1)
-    log_cdf_ym1 = logsumexp(log_pmf_all, axis=-1, where=mask_m1,
-                            initial=-jnp.inf)
+    log_cdf_ym1 = logsumexp(log_pmf_all, axis=-1, where=mask_m1)
     log_pmf_y = jnp.take_along_axis(log_pmf_all, yb, axis=-1)[..., 0]
     return log_cdf_y, log_cdf_ym1, log_pmf_y
 
