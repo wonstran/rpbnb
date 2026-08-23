@@ -38,6 +38,16 @@ class Layout:
                     self.k1 + self.k2 + self.q1 + self.q2 + 3))
 
     def unpack(self, free_vec):
+        # .at[idx].set() BROADCASTS, so a length-1 free_vec would set every
+        # free coordinate to that one scalar and return a finite, wrong
+        # objective -- silently. Length 3 against 9 free raises; only the
+        # length-1 case is silent, and length 1 is exactly what a scalar
+        # argument from R collapses to. n_free exists for this check.
+        free_vec = jnp.asarray(free_vec)
+        if free_vec.shape != (self.n_free,):
+            raise ValueError(
+                "free_vec must have shape ({},), got {}".format(
+                    self.n_free, tuple(free_vec.shape)))
         full = self.template.at[self.free_idx].set(free_vec)
         k1, k2, q1, q2 = self.k1, self.k2, self.q1, self.q2
         a = k1

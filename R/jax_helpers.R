@@ -1,11 +1,14 @@
 # R side of the JAX engine (branch: jax-engine). The Python lives in
 # inst/python/rpbnb_jax/ and mirrors src/rpbnb_tmb.cpp with est_method = 0.
 
-#' Locate the package root from the current working directory
+#' Locate the rpbnb package root from the current working directory
 #'
 #' `.rpbnb_jax_available()` needs the project-local `.venv-jax`, and testthat
 #' runs with the working directory set to `tests/testthat/`, so `getwd()`
-#' alone finds nothing. Walk up until a directory holding DESCRIPTION appears.
+#' alone finds nothing. Walk up until a directory holding rpbnb's own
+#' DESCRIPTION appears -- the `Package:` field is checked, because any
+#' unrelated R project between here and the filesystem root would otherwise
+#' claim the search and hand back a `.venv-jax` that is not ours.
 #' Returns `NA_character_` when there is no such ancestor (an installed
 #' package, say), which the callers treat as "no project venv".
 #' @keywords internal
@@ -13,7 +16,12 @@
 .rpbnb_project_root <- function(start = getwd()) {
   path <- normalizePath(start, winslash = "/", mustWork = FALSE)
   repeat {
-    if (file.exists(file.path(path, "DESCRIPTION"))) return(path)
+    desc <- file.path(path, "DESCRIPTION")
+    if (file.exists(desc)) {
+      pkg <- tryCatch(unname(read.dcf(desc, "Package")[1L, 1L]),
+                      error = function(e) NA_character_)
+      if (identical(pkg, "rpbnb")) return(path)
+    }
     parent <- dirname(path)
     if (identical(parent, path)) return(NA_character_)
     path <- parent
@@ -31,8 +39,12 @@
 #' (skip_if_not() happens to run the predicate first) and would surface only
 #' once something wired this engine into a fit.
 #'
-#' Returns invisibly; selection failure is not an error, because the caller's
-#' `py_module_available()` check is the real verdict.
+#' Returns `TRUE` invisibly when a `.venv-jax` was found and handed to
+#' `use_virtualenv()`. Selection failure is not itself an error -- whether the
+#' engine is usable is decided by a `py_module_available("jax")` check in the
+#' caller -- but it is reported, because that check cannot distinguish "no
+#' venv on disk" from "venv selected, jax missing from it", and the two want
+#' different advice.
 #' @keywords internal
 #' @noRd
 .rpbnb_use_jax_venv <- function() {
@@ -40,6 +52,8 @@
   if (is.na(root)) return(invisible(FALSE))
   venv <- file.path(root, ".venv-jax")
   if (!dir.exists(venv)) return(invisible(FALSE))
+  # use_virtualenv() errors once Python is already bound to a different
+  # interpreter, which is a legitimate state rather than a fault here.
   ok <- tryCatch({
     reticulate::use_virtualenv(venv, required = FALSE)
     TRUE
@@ -72,6 +86,18 @@
 #' Returns a list exposing `par`, `fn`, `gr` and `env$last.par.best` -- the
 #' surface `fit_rpbnb_tmb()` consumes from `TMB::MakeADFun()`.
 #'
+#' Two deliberate divergences from that surface, both benign for the callers
+#' in this package but worth knowing before wiring anything new to it:
+#'
+#' * `gr()` returns a length-p numeric vector where `TMB::MakeADFun()` returns
+#'   a 1 x p matrix. `stats::nlminb()`, `stats::optimHess()` and
+#'   `max(abs(g))` are indifferent; anything that indexes the result as
+#'   `g[1, ]` is not.
+#' * `env$last.par.best` is updated on `gr()` as well as `fn()`, because one
+#'   JAX call produces both and the cache makes the two indistinguishable.
+#'   TMB updates it only in `fn()`. The recorded point is the same either way;
+#'   only the call that records it differs.
+#'
 #' @param data The list `.build_tmb_data()` produces.
 #' @param start Full parameter template, in the declaration order of
 #'   `src/rpbnb_tmb.cpp:977-983`: beta1, beta2, log_sd1, log_sd2, log_m1,
@@ -90,20 +116,30 @@
   # Not just in .rpbnb_jax_available() -- see .rpbnb_use_jax_venv(). This
   # constructor must stand on its own, because a fit path has no reason to
   # call the predicate first.
-  .rpbnb_use_jax_venv()
+  selected <- .rpbnb_use_jax_venv()
+  if (!isTRUE(reticulate::py_module_available("jax"))) {
+    stop(sprintf(
+      paste0("the JAX engine needs jax in the project-local .venv-jax ",
+             "(%s). Run `Rscript tools/jax-setup.R` from the package root ",
+             "to create it."),
+      if (selected) {
+        "the virtualenv was found and selected, but jax is not importable from it"
+      } else {
+        "no .venv-jax was found above the working directory"
+      }
+    ), call. = FALSE)
+  }
   py_dir <- .rpbnb_python_dir()
   if (!nzchar(py_dir)) {
     stop("cannot locate the rpbnb_jax Python sources", call. = FALSE)
   }
-  reticulate::py_run_string(sprintf(
-    "import sys; p = r'%s'\nif p not in sys.path: sys.path.insert(0, p)",
-    py_dir))
-  # Submodules are imported by name rather than reached as attributes of
-  # rpbnb_jax: `import rpbnb_jax` does not bind them, and having __init__.py
-  # pull them in would make the constants it defines a circular import.
-  rj_packing <- reticulate::import("rpbnb_jax.packing", delay_load = FALSE)
-  rj_objective <- reticulate::import("rpbnb_jax.objective",
-                                     delay_load = FALSE)
+  # import_from_path() rather than py_run_string(sprintf(...)): the latter
+  # builds Python source text out of a filesystem path, so an apostrophe in
+  # it -- legal on Windows -- is a SyntaxError rather than a bad path.
+  rj_packing <- reticulate::import_from_path(
+    "rpbnb_jax.packing", path = py_dir, delay_load = FALSE)
+  rj_objective <- reticulate::import_from_path(
+    "rpbnb_jax.objective", path = py_dir, delay_load = FALSE)
 
   k1 <- ncol(data$X1); k2 <- ncol(data$X2)
   q1 <- length(data$rand_idx1); q2 <- length(data$rand_idx2)
@@ -116,9 +152,10 @@
   fg <- rj_objective$build_objective(data, layout,
                                      obs_chunk = as.integer(obs_chunk))
 
+  n_free <- sum(free)
   env <- new.env(parent = emptyenv())
   env$last.par.best <- NULL
-  env$best_value <- Inf
+  env$value.best <- Inf
   cache <- new.env(parent = emptyenv())
   cache$par <- NULL
 
@@ -126,19 +163,31 @@
   # optimizer here, and one JAX call already produces both, so the second
   # call is served from the cache rather than re-evaluated.
   evaluate <- function(par) {
-    # TMB's obj$fn() with no argument re-evaluates at env$last.par; without
-    # this the advertised `par = NULL` default would hand numeric(0) to a
-    # jitted function expecting n_free coordinates.
+    # TMB's obj$fn() with no argument re-evaluates at the fixed-effect slice
+    # of the last parameter vector, env$last.par[env$lfixed()]; here the free
+    # vector is already that slice. Without this, the advertised
+    # `par = NULL` default would hand numeric(0) to a jitted function
+    # expecting n_free coordinates.
     if (is.null(par)) {
       par <- if (!is.null(cache$par)) cache$par else start[free]
+    }
+    # Checked on this side as well as in Layout.unpack() so the condition
+    # carries the R call rather than surfacing as a Python exception. A
+    # length-1 par is the dangerous one: reticulate turns an R scalar into a
+    # length-1 array, which index assignment would broadcast across every
+    # free coordinate.
+    if (length(par) != n_free) {
+      stop(sprintf(
+        "the JAX objective takes %d free parameter(s), got %d",
+        n_free, length(par)))
     }
     if (!is.null(cache$par) && identical(cache$par, par)) return(cache$out)
     res <- fg(as.numeric(par))
     out <- list(value = as.numeric(res[[1]]), grad = as.numeric(res[[2]]))
     cache$par <- par
     cache$out <- out
-    if (is.finite(out$value) && out$value < env$best_value) {
-      env$best_value <- out$value
+    if (is.finite(out$value) && out$value < env$value.best) {
+      env$value.best <- out$value
       env$last.par.best <- par
     }
     out
