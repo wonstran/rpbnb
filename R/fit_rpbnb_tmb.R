@@ -12,11 +12,17 @@
 #'   \code{"triangular"}).
 #' @param draws Number of Halton simulation draws. Under
 #'   \code{method = "sml"} this sets the simulation grid the likelihood is
-#'   averaged over, and tape size scales with \code{nrow(data) * draws}. Under
-#'   \code{method = "laplace"} it does not affect the likelihood or the tape,
-#'   but still sizes the Halton grid used for the frozen Famoye lambda bounds
-#'   and for the post-estimation averaging in \code{predict()} and the
-#'   marginal-effect functions.
+#'   averaged over. Tape size scales with \code{nrow(data) * draws} unless
+#'   the fit draw-chunks (see \code{control$tape_chunks} at
+#'   [rpbnb_control()]): when the weighted workload exceeds
+#'   \code{control$max_workload}, the fit is split into several equal-sized
+#'   draw chunks replayed over one smaller TMB tape, dropping peak memory to
+#'   \code{nrow(data) * ceiling(draws / chunks)} at the cost of somewhat
+#'   slower gradient evaluations -- exact for the requested \code{draws}, not
+#'   an approximation. Under \code{method = "laplace"} \code{draws} does not
+#'   affect the likelihood, the tape, or chunking, but still sizes the Halton
+#'   grid used for the frozen Famoye lambda bounds and for the post-estimation
+#'   averaging in \code{predict()} and the marginal-effect functions.
 #' @param seed Random seed for draws.
 #' @param start Optional starting parameter vector (named or positional).
 #' @param dependence Dependence structure: "famoye", "independence", or a
@@ -320,14 +326,36 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     max_threads = effective_max_threads,
     parallel_tape = effective_parallel_tape
   )
-  .check_tmb_workload(
-    n = n,
-    draws = effective_draws,
-    family_code = family_code,
-    max_workload = control$max_workload,
-    n_threads = configured_threads,
-    parallel_tape = effective_parallel_tape
-  )
+  # Laplace never chunks -- its `draws` dimension is not a draw dimension at
+  # all (effective_draws is the LATENT count, total_rand), so a draw-chunk
+  # layout would be meaningless. It keeps the older hard-stop-only guard;
+  # SML uses the auto-chunking resolver (R/tmb_chunked.R's layout, and see
+  # .resolve_tape_chunks()'s own "PROVISIONAL" note on its calibration
+  # constants).
+  chunk_resolution <- if (identical(method, "laplace")) {
+    .check_tmb_workload(
+      n = n,
+      draws = effective_draws,
+      family_code = family_code,
+      max_workload = control$max_workload,
+      n_threads = configured_threads,
+      parallel_tape = effective_parallel_tape
+    )
+    list(C = 1L, chunked = 0L, workload = NA_real_, message = NULL)
+  } else {
+    .resolve_tape_chunks(
+      n = n,
+      draws = effective_draws,
+      family_code = family_code,
+      max_workload = control$max_workload,
+      tape_chunks = control$tape_chunks,
+      n_threads = configured_threads,
+      parallel_tape = effective_parallel_tape
+    )
+  }
+  if (!is.null(chunk_resolution$message) && control$print_level != 0L) {
+    message(chunk_resolution$message)
+  }
 
   # Generate Halton draws
   set.seed(seed)
@@ -477,13 +505,40 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # Build TMB object
   # Under Laplace the template never indexes a draw dimension; Z1/Z2 stay real
   # in R because the lambda-bound loop and rp_meta still consume them.
-  Z1_tmb <- if (identical(method, "laplace")) matrix(0, 1, q1) else Z1
-  Z2_tmb <- if (identical(method, "laplace")) matrix(0, 1, q2) else Z2
+  #
+  # Under SML with chunk_resolution$C > 1, the TMB object is built at
+  # CHUNK 1's draws (Rc rows, not the full `draws`), chunked = 1, and
+  # chunk 1's mask -- .make_chunked_tmb_objective() below then replays it
+  # over the remaining chunks via DATA_UPDATE(). `layout` is NULL whenever
+  # this fit does not chunk (Laplace, or SML with C == 1), in which case
+  # tmb_data keeps today's full-Z1/Z2, chunked = 0 shape exactly.
+  layout <- if (!identical(method, "laplace") && chunk_resolution$C > 1L) {
+    .resolve_chunk_layout(draws, chunk_resolution$C)
+  } else {
+    NULL
+  }
+  Z1_tmb <- if (identical(method, "laplace")) {
+    matrix(0, 1, q1)
+  } else if (!is.null(layout)) {
+    Z1[layout$chunks[[1L]]$pad_rows, , drop = FALSE]
+  } else {
+    Z1
+  }
+  Z2_tmb <- if (identical(method, "laplace")) {
+    matrix(0, 1, q2)
+  } else if (!is.null(layout)) {
+    Z2[layout$chunks[[1L]]$pad_rows, , drop = FALSE]
+  } else {
+    Z2
+  }
   tmb_data <- .build_tmb_data(Y1, Y2, X1, X2, rand_idx1, rand_idx2,
                               Z1_tmb, Z2_tmb, dist1, dist2, sign1, sign2,
                               family_code, poisson_1, poisson_2,
                               lamLo, lamHi,
-                              est_method = if (identical(method, "laplace")) 1L else 0L)
+                              est_method = if (identical(method, "laplace")) 1L else 0L,
+                              chunked = if (is.null(layout)) 0L else chunk_resolution$chunked,
+                              w = if (is.null(layout)) NULL else rep(1, n),
+                              draw_w = if (is.null(layout)) NULL else layout$chunks[[1L]]$draw_w)
   # Map fixed parameters (e.g., pinned log_m for Poisson margins).
   #
   # Two shapes. log_m1/log_m2 are SCALAR template parameters whose par_names
@@ -552,6 +607,18 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     parallel_tape = effective_parallel_tape
   )
   obj <- configured$obj
+  # `fit_obj` is what the optimizer, recovery, restart loop, and inference
+  # actually drive: the raw TMB object when this fit does not chunk, or the
+  # R/tmb_chunked.R wrapper (a full-objective replay over `layout`'s chunks)
+  # when it does. `obj` itself is kept only to build that wrapper (and, for
+  # keep = "full", is superseded by fit_obj in the stored result below) --
+  # every fn()/gr() call below this point should go through fit_obj, never
+  # obj directly, so a chunked fit's optimizer sees the full-R objective.
+  fit_obj <- if (is.null(layout)) {
+    obj
+  } else {
+    .make_chunked_tmb_objective(obj, layout, Z1, Z2)
+  }
 
   # Optimize with nlminb
   nlminb_control <- list(
@@ -582,20 +649,25 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # recovered `opt` is marked convergence = 1 (not converged) so summary()/
   # print() and the restart loop's own gradient check treat it exactly like
   # any other stalled fit rather than a false success.
+  #
+  # fit_obj$env$last.par.best works identically whether fit_obj is the raw
+  # TMB object (TMB's own bookkeeping) or the chunked wrapper (its own
+  # fn()-maintained bookkeeping -- see R/tmb_chunked.R), so this recovery
+  # closure needs no chunked-specific branch.
   opt <- tryCatch(
     stats::nlminb(
-      start = obj$par,
-      objective = obj$fn,
-      gradient = obj$gr,
+      start = fit_obj$par,
+      objective = fit_obj$fn,
+      gradient = fit_obj$gr,
       control = nlminb_control
     ),
     error = function(e) {
-      recovered <- obj$env$last.par.best
+      recovered <- fit_obj$env$last.par.best
       if (!grepl("NA/NaN", conditionMessage(e), fixed = TRUE) ||
           is.null(recovered) || !all(is.finite(recovered))) {
         stop(e)
       }
-      recovered_obj <- try(obj$fn(recovered), silent = TRUE)
+      recovered_obj <- try(fit_obj$fn(recovered), silent = TRUE)
       if (inherits(recovered_obj, "try-error") ||
           !is.finite(recovered_obj)) {
         stop(e)
@@ -604,8 +676,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
            iterations = 0L, evaluations = 0L,
            message = paste0(
              "nlminb aborted (", conditionMessage(e), "); recovered at ",
-             "obj$env$last.par.best, the best finite objective seen before ",
-             "the abort. Not converged -- see restarts/max_abs_gradient."
+             "fit_obj$env$last.par.best, the best finite objective seen ",
+             "before the abort. Not converged -- see restarts/max_abs_gradient."
            ))
     }
   )
@@ -630,7 +702,7 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   # be driven to stationarity says so instead of reporting code 0 and leaving
   # the reader to infer it from NA standard errors.
   max_abs_gradient <- function(par) {
-    g <- try(obj$gr(par), silent = TRUE)
+    g <- try(fit_obj$gr(par), silent = TRUE)
     if (inherits(g, "try-error") || !all(is.finite(g))) return(NA_real_)
     max(abs(g))
   }
@@ -653,8 +725,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     candidate <- try(
       stats::nlminb(
         start = opt$par,
-        objective = obj$fn,
-        gradient = obj$gr,
+        objective = fit_obj$fn,
+        gradient = fit_obj$gr,
         control = nlminb_control
       ),
       silent = TRUE
@@ -690,7 +762,7 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   ll_hat <- -value  # nll -> logLik
 
   inference_result <- .rpbnb_inference(
-    obj = obj,
+    obj = fit_obj,
     par = opt$par,
     coef = coef_vec,
     par_names = par_names,
@@ -829,7 +901,26 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
     model_meta = model_meta,
     optimizer = opt,
     sdreport = inference_result$sdreport,
-    obj = if (keep == "full") obj else NULL,
+    # fit_obj, not the raw TMB obj: the chunked wrapper (R/tmb_chunked.R)
+    # when this fit chunked, so fit$obj$fn()/gr() always describe the FULL
+    # requested-draw objective, matching what optimizer/inference above
+    # actually used.
+    obj = if (keep == "full") fit_obj else NULL,
+    # Draw-chunking policy actually used, for boundary refits
+    # (rpbnb_tmb_boundary_tests()) to reconstruct a safe layout instead of
+    # defaulting to max_workload = Inf and rebuilding one full tape -- see
+    # the reviewed plan's boundary-refit propagation section. draws_effective
+    # equals `draws` by construction (chunking never rounds the requested
+    # draw count; see R/tmb_chunked.R's header).
+    tape_integration = list(
+      draws_requested = draws,
+      draws_effective = effective_draws,
+      chunks = chunk_resolution$C,
+      chunked = chunk_resolution$chunked,
+      max_workload = control$max_workload,
+      n_threads = configured_threads,
+      parallel_tape = effective_parallel_tape
+    ),
     inference = inference,
     method = method,
     boundary_report = inference_result$boundary_report,

@@ -426,3 +426,133 @@ test_that(".resolve_tape_chunks() parallel_tape multiplies the one-draw workload
                                 parallel_tape = TRUE)
   expect_equal(par_r$workload, 8 * seq_r$workload)
 })
+
+# ---- End-to-end: fit_rpbnb_tmb() wired to the chunked wrapper -----------
+#
+# The unit-level fixtures above pin the tape/wrapper mechanism directly.
+# These exercise the full fit_rpbnb_tmb() call: control$tape_chunks wiring,
+# the resolver's auto-chunk message, fit$obj's class and fit$tape_integration,
+# and that a chunked optimization run converges to the same estimates as the
+# unchunked one run on identical data/seed.
+
+.tape_chunk_e2e_data <- function() {
+  # seed = 1 lands at an interior optimum with independence dependence
+  # (no boundary-pinned lam/z_dep, no non-PD Hessian) -- picked precisely so
+  # this fixture tests chunking's effect on convergence, not a boundary
+  # fit's inherent sensitivity to floating-point path (already understood
+  # and unrelated to chunking -- see the auto-chunk extreme-C test below,
+  # which deliberately DOES hit that regime and is toleranced accordingly).
+  set.seed(1)
+  x <- seq(-1, 1, length.out = 80)
+  data.frame(
+    y1 = stats::rnbinom(80, size = 4, mu = exp(0.2 + 0.3 * x)),
+    y2 = stats::rnbinom(80, size = 5, mu = exp(-0.1 - 0.2 * x)),
+    x = x
+  )
+}
+
+test_that("a pinned tape_chunks fit matches the unchunked fit's coefficients and logLik", {
+  d <- .tape_chunk_e2e_data()
+  ctl <- function(tape_chunks = NULL) {
+    rpbnb_tmb_control(iterlim = 200L, n_cores = 1L, tape_chunks = tape_chunks)
+  }
+  fit_ref <- fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+    dependence = "independence", draws = 20L, seed = 99L, keep = "full",
+    control = ctl()
+  )
+  expect_identical(fit_ref$tape_integration$chunks, 1L)
+  expect_identical(fit_ref$tape_integration$chunked, 0L)
+  expect_false(inherits(fit_ref$obj, "rpbnb_chunked_objective"))
+
+  # C = 4 (even split) and C = 7 (20 %% 7 != 0, exercises padding).
+  for (C in c(4L, 7L)) {
+    fit_c <- fit_rpbnb_tmb(
+      y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+      dependence = "independence", draws = 20L, seed = 99L, keep = "full",
+      control = ctl(C)
+    )
+    info <- paste("C =", C)
+    expect_identical(fit_c$tape_integration$chunks, C, info = info)
+    expect_identical(fit_c$tape_integration$chunked, 1L, info = info)
+    expect_identical(fit_c$tape_integration$draws_requested, 20L, info = info)
+    expect_identical(fit_c$tape_integration$draws_effective, 20L, info = info)
+    expect_s3_class(fit_c$obj, "rpbnb_chunked_objective")
+
+    expect_equal(coef(fit_c), coef(fit_ref), tolerance = 1e-3, info = info)
+    expect_equal(logLik(fit_c), logLik(fit_ref), tolerance = 1e-6, info = info)
+    expect_true(all(is.finite(fit_c$se)))
+  }
+})
+
+test_that("auto-chunking triggers with a message and still converges near the unchunked fit", {
+  d <- .tape_chunk_e2e_data()
+  fit_ref <- fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+    dependence = "independence", draws = 20L, seed = 99L, keep = "full",
+    control = rpbnb_tmb_control(iterlim = 200L, n_cores = 1L)
+  )
+  # The auto-chunk message() is gated by print_level != 0, matching the
+  # existing convention (rpbnb_tmb_boundary_tests()'s own refit message).
+  expect_message(
+    fit_auto <- fit_rpbnb_tmb(
+      y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+      dependence = "independence", draws = 20L, seed = 99L, keep = "full",
+      control = rpbnb_tmb_control(iterlim = 200L, n_cores = 1L,
+                                  print_level = 1L, max_workload = 100)
+    ),
+    "splitting 20 requested draws"
+  )
+  # max_workload = 100 against this fixture's workload forces the most
+  # extreme layout (C = 20, one draw per chunk); the unit-level fixtures
+  # above already prove fn()/gr() exact to ~1e-14 at FIXED parameter
+  # vectors, so this end-to-end check is deliberately loose -- it is
+  # asking whether 20 independent single-draw chunk evaluations per
+  # gradient step still drive nlminb to the same basin, not re-litigating
+  # exactness. tolerance = 5e-2 comfortably separates "same basin" from a
+  # real divergence (a wrong combination formula would be off by orders
+  # of magnitude, not a few percent).
+  expect_gt(fit_auto$tape_integration$chunks, 1L)
+  expect_equal(coef(fit_auto), coef(fit_ref), tolerance = 5e-2)
+})
+
+test_that("tape_chunks > draws is rejected with a clear fit-time error", {
+  d <- .tape_chunk_e2e_data()
+  expect_error(
+    fit_rpbnb_tmb(
+      y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+      dependence = "famoye", draws = 20L,
+      control = rpbnb_tmb_control(tape_chunks = 50L)
+    ),
+    "cannot exceed draws"
+  )
+})
+
+test_that("no-random-coefficient SML never chunks even with tape_chunks pinned", {
+  # effective_draws is forced to 1L when there are no random coefficients
+  # (R/fit_rpbnb_tmb.R); a pinned tape_chunks > 1 is then a request for more
+  # chunks than there is anything to chunk, and .resolve_tape_chunks()
+  # reports that as the same "cannot exceed draws" validation error.
+  d <- .tape_chunk_e2e_data()
+  expect_error(
+    fit_rpbnb_tmb(
+      y1 ~ x, y2 ~ x, data = d, dependence = "independence",
+      control = rpbnb_tmb_control(tape_chunks = 3L)
+    ),
+    "cannot exceed draws"
+  )
+})
+
+test_that("a chunked fit's profile-CI path falls back to Wald with a clear reason", {
+  d <- .tape_chunk_e2e_data()
+  fit_c <- fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d, random_1 = "x", random_2 = "x",
+    dependence = copula("frank"), draws = 20L, seed = 99L, keep = "full",
+    control = rpbnb_tmb_control(iterlim = 200L, n_cores = 1L, tape_chunks = 4L)
+  )
+  expect_warning(
+    pr <- rpbnb_tmb_dependence_profile(fit_c, method = "profile"),
+    "draw-chunked objective"
+  )
+  expect_identical(unique(pr$method), "wald")
+})
