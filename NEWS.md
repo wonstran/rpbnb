@@ -1,5 +1,37 @@
 # rpbnb 0.4.2
 
+* **TMB engine: exact draw chunking fixes out-of-memory failures at large
+  `draws`.** SML tape size used to scale as `nrow(data) * draws` with no
+  mitigation beyond a pre-flight refusal
+  (`Weighted TMB workload is ... above max_workload`). `fit_rpbnb_tmb()` now
+  auto-splits large-workload fits into several draw chunks replayed over one
+  smaller TMB tape via `DATA_UPDATE()`, cutting peak memory to
+  `nrow(data) * ceiling(draws / chunks)` — exact for the requested `draws`,
+  not an approximation (see `docs/TMB_SML_large_draws_OOM_guide.md`).
+  `control$tape_chunks` (new; see `?rpbnb_control`) pins a layout explicitly
+  instead of relying on the auto-threshold, which — pending a follow-up
+  calibration pass measuring the chunked tape's own memory profile — is
+  currently derived from the pre-chunking calibration and should be treated
+  as provisional. `rpbnb_tmb_boundary_tests()` propagates a chunked fit's
+  memory policy to its restricted refits, so LR tests on a large fit stay
+  chunked instead of rebuilding one full tape. A chunked fit has no taped
+  Hessian: `confint(method = "profile")`/`rpbnb_tmb_dependence_profile()`
+  fall back to a Wald interval with a warning; Wald/`optimHess` inference
+  (the default) is unaffected. Also hoists several per-draw redundant
+  computations in the independence/Famoye NB2/Poisson log-likelihood,
+  shrinking the tape further for fits that do not chunk.
+* `rpbnb_boundary_tests()` (the classic/simulated-ML engine) no longer reports
+  spuriously negative LR statistics — the
+  `Restricted model has the higher log-likelihood ... Clamping the statistic to 0`
+  warning — for random-coefficient scale and dependence rows. The classic
+  engine maximizes a simulated likelihood with a single BFGS run, so near a
+  boundary parameter the full fit could stop just below a restricted refit that
+  was warm-started from it; the TMB engine's exact-gradient Laplace fit with
+  `restarts` did not show this. When a restricted fit now comes out ahead, the
+  full model is re-optimized from the restricted optimum re-expressed in the
+  full parameterization (the point where it provably attains the restricted
+  likelihood) and the better of the two full-model optima defines the
+  statistic, so `LR >= 0` holds by construction rather than by clamping.
 * Regenerated `ref/rpbnb_0.4.2.pdf` (the CRAN-style PDF reference manual)
   from current Rd files, and clarified in README that `fit_rpbnb()`'s Halton
   draws are Cranley-Patterson-shifted (randomized quasi-Monte Carlo), not
