@@ -160,6 +160,155 @@
   invisible(workload)
 }
 
+#' Resolve a safe draw-chunk layout for a TMB SML fit
+#'
+#' Successor to [.check_tmb_workload()]: instead of only refusing to run
+#' above `max_workload`, this auto-selects (or validates a user-pinned)
+#' number of draw chunks so the fit's tape stays within budget (see
+#' R/tmb_chunked.R). `C == 1` reproduces today's single-tape path exactly
+#' (`chunked = 0L`); `C > 1` builds a chunked wrapper.
+#'
+#' PROVISIONAL: this still reads family weights from the STATIC-graph
+#' `TAPE_CALIBRATION` (the same constants `.check_tmb_workload()` uses).
+#' The reviewed plan calls for a shared conservative calibration measured
+#' on both the static and chunked (`chunked = 1`) graphs before this
+#' resolver's auto-chunking threshold can be trusted quantitatively -- see
+#' the "Phase 3" section of the plan. Until that measurement exists, an
+#' explicit `tape_chunks` (bypassing the auto-threshold's accuracy concern
+#' entirely -- the user states the layout directly) is the dependable way
+#' to use this function; auto-selection is functional but its threshold is
+#' not yet calibrated against the graph it actually authorizes.
+#'
+#' Resolved in draws-per-tape space, not by inverting a continuous ratio:
+#' `draws_per_chunk_max = floor(max_workload / one_draw_workload)` bounds
+#' the tape size directly, and the realized per-tape workload
+#' (`ceiling(draws / C) * one_draw_workload`) is re-checked after every
+#' integer rounding step, so an approved layout cannot round back over
+#' budget (see review round 1's counterexample: `draws = 10`,
+#' `max_workload` admitting a fractional `C = 10/3.9`).
+#'
+#' @param n,draws,family_code,n_threads,parallel_tape As [.check_tmb_workload()].
+#' @param max_workload As [.check_tmb_workload()]; `Inf` disables the guard
+#'   for both the auto path (silently `C = 1`) and a pinned `tape_chunks`
+#'   (honored with no budget check).
+#' @param tape_chunks `NULL` (auto) or a user-pinned positive whole number
+#'   of chunks, `<= draws`.
+#' @return A list: `C` (chunk count), `chunked` (`0L`/`1L`, the template's
+#'   `DATA_INTEGER(chunked)`), `workload` (the realized per-tape weighted
+#'   workload, or `NA_real_` when the guard is disabled), and `message`
+#'   (a `character(1)` to `message()` when auto-chunking kicked in, else
+#'   `NULL`).
+#' @keywords internal
+#' @noRd
+.resolve_tape_chunks <- function(n, draws, family_code, max_workload,
+                                 tape_chunks = NULL,
+                                 n_threads = 1L, parallel_tape = FALSE) {
+  # Step 0: Inf disables the guard entirely on both branches -- auto stays
+  # at today's silent one-tape path, and a pinned layout is honored without
+  # any budget arithmetic (never `floor(Inf / x)`).
+  if (is.infinite(max_workload)) {
+    if (is.null(tape_chunks)) {
+      return(list(C = 1L, chunked = 0L, workload = NA_real_, message = NULL))
+    }
+    if (tape_chunks > draws) {
+      stop(sprintf(
+        "control$tape_chunks (%d) cannot exceed draws (%d).",
+        tape_chunks, draws
+      ), call. = FALSE)
+    }
+    return(list(
+      C = as.integer(tape_chunks),
+      chunked = if (tape_chunks == 1L) 0L else 1L,
+      workload = NA_real_, message = NULL
+    ))
+  }
+
+  family_weight <- unname(TAPE_CALIBRATION$family_weight[[
+    match(family_code, c(-1L, 0L, 1L, 2L, 3L))
+  ]])
+  tape_multiplier <- if (isTRUE(parallel_tape)) as.double(n_threads) else 1
+  one_draw_workload <- as.double(n) * family_weight * tape_multiplier
+
+  # Honest refusal: n itself is too large for any chunk layout to help.
+  if (!is.finite(one_draw_workload) || one_draw_workload > max_workload) {
+    stop(sprintf(
+      paste0(
+        "Even a single draw's weighted TMB workload is %s, above ",
+        "max_workload = %s. Reduce observations, or explicitly increase ",
+        "control$max_workload (Inf disables this guard)."
+      ),
+      format(one_draw_workload, scientific = FALSE, trim = TRUE),
+      format(max_workload, scientific = FALSE, trim = TRUE)
+    ), call. = FALSE)
+  }
+
+  .realized <- function(C) {
+    Rc <- ceiling(draws / C)
+    list(Rc = Rc, workload = Rc * one_draw_workload)
+  }
+
+  if (!is.null(tape_chunks)) {
+    if (tape_chunks > draws) {
+      stop(sprintf(
+        "control$tape_chunks (%d) cannot exceed draws (%d).",
+        tape_chunks, draws
+      ), call. = FALSE)
+    }
+    r <- .realized(tape_chunks)
+    if (r$workload > max_workload) {
+      draws_per_chunk_max <- floor(max_workload / one_draw_workload)
+      min_C <- ceiling(draws / max(1L, draws_per_chunk_max))
+      stop(sprintf(
+        paste0(
+          "control$tape_chunks = %d yields a per-tape workload of %s ",
+          "(chunk size %d draws), above max_workload = %s. The smallest ",
+          "sufficient control$tape_chunks for this budget is %d."
+        ),
+        tape_chunks, format(r$workload, scientific = FALSE, trim = TRUE),
+        r$Rc, format(max_workload, scientific = FALSE, trim = TRUE), min_C
+      ), call. = FALSE)
+    }
+    return(list(
+      C = as.integer(tape_chunks),
+      chunked = if (tape_chunks == 1L) 0L else 1L,
+      workload = r$workload, message = NULL
+    ))
+  }
+
+  # Auto. C == 1 first: reproduces today's silent path exactly whenever the
+  # unchunked workload already fits.
+  whole_workload <- draws * one_draw_workload
+  if (whole_workload <= max_workload) {
+    return(list(C = 1L, chunked = 0L, workload = whole_workload, message = NULL))
+  }
+
+  draws_per_chunk_max <- floor(max_workload / one_draw_workload)
+  C <- ceiling(draws / max(1L, draws_per_chunk_max))
+  r <- .realized(C)
+  # Re-check after rounding (review P1): ceiling(draws / C) can land back
+  # over budget for some (draws, max_workload) combinations even after
+  # deriving C from the draws-per-chunk bound: bump C until it does not.
+  while (r$workload > max_workload) {
+    C <- C + 1L
+    r <- .realized(C)
+  }
+
+  msg <- sprintf(
+    paste0(
+      "TMB SML workload (%s weighted observation-draws) exceeds ",
+      "max_workload = %s; splitting %d requested draws into %d chunks of ",
+      "%d (predicted peak ~%s units per tape). Gradient evaluations will ",
+      "be slower -- each chunk's contribution is recomputed every ",
+      "evaluation. Set control$tape_chunks to pin a layout, or ",
+      "control$max_workload to change the budget (Inf disables this guard)."
+    ),
+    format(whole_workload, scientific = FALSE, trim = TRUE),
+    format(max_workload, scientific = FALSE, trim = TRUE),
+    draws, C, r$Rc, format(r$workload, scientific = FALSE, trim = TRUE)
+  )
+  list(C = C, chunked = 1L, workload = r$workload, message = msg)
+}
+
 #' Build the TMB data list for the RP-BNB model
 #' @keywords internal
 #' @noRd
