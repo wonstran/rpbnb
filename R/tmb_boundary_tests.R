@@ -57,9 +57,16 @@
 #'   a manual call needs `rpbnb:::.apply_scaling(data, fit$scaling)`).
 #' @param control An [rpbnb_tmb_control()] for the restricted refits.
 #'   Defaults to `rpbnb_tmb_control(print_level = 1, n_cores =
-#'   fit$parallel$requested, max_workload = Inf)` -- the same `n_cores` the
-#'   original fit was called with (1 if `fit` predates the stored
-#'   `$parallel` field). `seed`/`method` are taken from `fit`, not `control`.
+#'   fit$parallel$requested, max_workload = <propagated>)` -- the same
+#'   `n_cores` the original fit was called with (1 if `fit` predates the
+#'   stored `$parallel` field). `max_workload` propagates `fit`'s own value
+#'   when `fit` draw-chunked (see `draws` at [fit_rpbnb_tmb()]), so a
+#'   restricted refit re-chunks to stay in budget instead of rebuilding one
+#'   full tape; it is `Inf` when `fit` did not chunk (or predates
+#'   `$tape_integration`), matching the pre-chunking default. Each refit
+#'   below re-resolves its own chunk layout fresh for whatever `draws` it
+#'   actually uses, so this stays correct even when `draws` differs from
+#'   `fit$draws`. `seed`/`method` are taken from `fit`, not `control`.
 #' @param which Which parameter groups to test, any subset of `"sd"` (the
 #'   random-coefficient scales), `"dispersion"` (the NB2 dispersions `m1`,
 #'   `m2`), and `"dependence"` (the association parameter). The default is
@@ -210,8 +217,26 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
     } else {
       1L
     }
+    # max_workload = Inf here would let a restricted refit build one full,
+    # unchunked tape even when the original fit needed to draw-chunk to
+    # stay in budget -- recreating the exact OOM the chunking feature
+    # exists to prevent, on every boundary test. Propagate the ORIGINAL
+    # fit's own max_workload when that fit actually chunked (stored on
+    # fit$tape_integration by fit_rpbnb_tmb()); each refit below then
+    # re-resolves its own safe chunk layout fresh, via the same
+    # .resolve_tape_chunks() call fit_rpbnb_tmb() always makes, appropriate
+    # to whatever `draws` that particular refit uses -- so a `draws`
+    # argument that differs from fit$draws is never stuck with a stale
+    # layout. An unchunked original fit (or one predating $tape_integration)
+    # keeps today's Inf default: there is no policy to propagate, and Inf
+    # is the documented default for a bare NULL control here.
+    default_max_workload <- if (isTRUE(fit$tape_integration$chunked == 1L)) {
+      fit$tape_integration$max_workload
+    } else {
+      Inf
+    }
     control <- rpbnb_tmb_control(print_level = 1L, n_cores = default_cores,
-                                 max_workload = Inf)
+                                 max_workload = default_max_workload)
   }
   if (!inherits(control, "rpbnb_control")) {
     stop("`control` must be an `rpbnb_control` object from rpbnb_control() ",

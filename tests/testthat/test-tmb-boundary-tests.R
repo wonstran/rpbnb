@@ -337,6 +337,62 @@ test_that("default control falls back to n_cores = 1 when $parallel is absent", 
   expect_identical(captured, 1L)
 })
 
+test_that("default control propagates max_workload from a chunked original fit, not Inf", {
+  # Without this, every boundary refit of an auto-chunked fit would rebuild
+  # one full unchunked tape (max_workload = Inf), recreating the exact OOM
+  # the draw-chunking feature exists to prevent -- see
+  # docs/TMB_SML_large_draws_OOM_guide.md and the reviewed plan's
+  # boundary-refit propagation section.
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  fit$tape_integration <- list(chunks = 4L, chunked = 1L,
+                               max_workload = 12345, draws_requested = 20L,
+                               draws_effective = 20L)
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., control) {
+      captured <<- control$max_workload
+      stop("stop-early-for-test")
+    }
+  )
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured, 12345)
+})
+
+test_that("default control stays Inf for an unchunked original fit or one predating $tape_integration", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., control) {
+      captured <<- control$max_workload
+      stop("stop-early-for-test")
+    }
+  )
+
+  # $tape_integration absent (older fit).
+  fit_old <- fit
+  fit_old$tape_integration <- NULL
+  expect_error(rpbnb_tmb_boundary_tests(fit_old, d), "stop-early-for-test")
+  expect_identical(captured, Inf)
+
+  # $tape_integration present but chunked = 0L (this fit did not chunk).
+  captured <- NULL
+  fit_unchunked <- fit
+  fit_unchunked$tape_integration <- list(chunks = 1L, chunked = 0L,
+                                         max_workload = 999,
+                                         draws_requested = 20L,
+                                         draws_effective = 20L)
+  expect_error(rpbnb_tmb_boundary_tests(fit_unchunked, d), "stop-early-for-test")
+  expect_identical(captured, Inf)
+})
+
 test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every refit", {
   skip_on_cran()
   d <- .tmb_boundary_fixture()
