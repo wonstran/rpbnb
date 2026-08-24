@@ -109,6 +109,24 @@
     set_reason("no_objective", "fit$obj is NULL (not retained by the fit).")
     return(NULL)
   }
+  # A draw-chunked fit's fit$obj (R/tmb_chunked.R) has no taped Hessian and
+  # is not TMB::tmbprofile()-shaped -- it only implements the fn()/gr()/
+  # report()/he() contract .rpbnb_inference() and this function's OWN
+  # liveness probe below need, not tmbprofile()'s internal expectations of
+  # a real MakeADFun object. Refuse before touching obj$env at all, rather
+  # than let tmbprofile() fail in some less legible way.
+  if (inherits(obj, "rpbnb_chunked_objective")) {
+    set_reason(
+      "chunked_objective",
+      paste0(
+        "fit$obj is a draw-chunked objective (see R/tmb_chunked.R): no ",
+        "taped Hessian exists to profile. Wald/optimHess inference (the ",
+        "default) is unaffected; profile-likelihood confidence intervals ",
+        "are not available for a chunked fit."
+      )
+    )
+    return(NULL)
+  }
 
   # `obj` is fit$obj's environment, not a copy of it, so the last.par.best
   # write below is visible to the caller's fit too. Capture the pre-call
@@ -740,6 +758,9 @@ rpbnb_tmb_dependence_profile <- function(fit, level = 0.95,
         tmbprofile_error = paste0(
           "TMB::tmbprofile() failed (", detail, "), so no profile can be ",
           "computed; falling back to a Wald interval on the working scale."
+        ),
+        chunked_objective = paste0(
+          detail, " Falling back to a Wald interval on the working scale."
         ),
         paste0(
           "No profile could be computed, for an unrecognized reason; ",
