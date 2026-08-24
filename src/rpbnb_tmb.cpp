@@ -972,6 +972,31 @@ Type objective_function<Type>::operator() () {
   // 0 = simulated maximum likelihood (Halton draws)
   // 1 = Laplace approximation (latent u1/u2 integrated by TMB)
   DATA_INTEGER(est_method);
+  // Selects between two SML tapes that share all the code above and below
+  // this block: 0 keeps today's single-shot tape untouched -- no dynamic
+  // data, no weighting -- so an unchunked fit's tape and fn()/gr() values
+  // are unaffected by any of this; 1 registers Z1/Z2/w/draw_w as
+  // DATA_UPDATE()'d, so an R-side wrapper can replay this one fixed-size
+  // tape over successive draw chunks without retaping (see
+  // R/tmb_chunked.R). A plain (non-updatable) DATA_INTEGER, fixed for the
+  // life of this TMB object, so the branch not taken costs nothing on
+  // either tape -- the same pattern `family`/`pois1`/`pois2` already use.
+  DATA_INTEGER(chunked);
+  // w: per-observation weight combining this chunk's contribution into the
+  // full-draw log-likelihood gradient (see the R wrapper's pass-1/pass-2).
+  // draw_w: per-draw 0/1 validity mask, so a chunk shorter than this tape's
+  // fixed draw count can be padded up to it by duplicating one of its own
+  // valid draws. Both default to all-ones and are only DATA_UPDATE()'d --
+  // i.e. only re-read from R between fn()/gr() calls without retaping --
+  // when chunked == 1.
+  DATA_VECTOR(w);
+  DATA_VECTOR(draw_w);
+  if (chunked) {
+    DATA_UPDATE(Z1);
+    DATA_UPDATE(Z2);
+    DATA_UPDATE(w);
+    DATA_UPDATE(draw_w);
+  }
 
   // ---- Parameters ----
   PARAMETER_VECTOR(beta1);
@@ -1179,6 +1204,13 @@ Type objective_function<Type>::operator() () {
   // configured OpenMP regions while keeping each draw reduction local.
   parallel_accumulator<Type> nll(this);
   const Type logR = log(Type(R));
+  // Per-observation SML log-likelihood, read by the R wrapper's pass-1 (a
+  // double-mode report() call, so this costs nothing on the fn()/gr() AD
+  // tape) to combine chunks and derive weights. Left at 0 under
+  // est_method == 1 (Laplace never chunks) and under chunked == 0 (nothing
+  // reads it there).
+  vector<Type> obs_loglik(n);
+  obs_loglik.setZero();
 
   for (int i = 0; i < n; i++) {
     vector<Type> log_draw(R);
@@ -1364,14 +1396,37 @@ Type objective_function<Type>::operator() () {
         max_log = CppAD::CondExpGt(log_draw(r), max_log,
                                    log_draw(r), max_log);
       }
-      Type scaled_sum = Type(0);
-      for (int r = 0; r < R; r++) {
-        scaled_sum += exp(log_draw(r) - max_log);
+      // max_log is shared: padded rows (chunked == 1) duplicate a genuinely
+      // valid draw, so they can only tie this running max, never distort it,
+      // whether or not this build ever chunks.
+      if (chunked) {
+        // Mask-aware reduction: draw_w(r) == 0 drops a padded duplicate row
+        // (see R/tmb_chunked.R's balanced chunk layout) from both the sum
+        // and the normalizing draw count, so this chunk's contribution is
+        // exact for its valid draws only -- no log(0)/-Inf is ever formed.
+        Type scaled_sum = Type(0);
+        Type valid_r = Type(0);
+        for (int r = 0; r < R; r++) {
+          scaled_sum += draw_w(r) * exp(log_draw(r) - max_log);
+          valid_r += draw_w(r);
+        }
+        Type log_contribution = max_log + log(scaled_sum) - log(valid_r);
+        obs_loglik(i) = log_contribution;
+        // w(i) combines this chunk's contribution into the full-draw
+        // log-likelihood; see R/tmb_chunked.R's fn()/gr().
+        nll -= w(i) * log_contribution;
+      } else {
+        Type scaled_sum = Type(0);
+        for (int r = 0; r < R; r++) {
+          scaled_sum += exp(log_draw(r) - max_log);
+        }
+        Type log_contribution = max_log + log(scaled_sum) - logR;
+        nll -= log_contribution;
       }
-      Type log_contribution = max_log + log(scaled_sum) - logR;
-      nll -= log_contribution;
     }
   }
+
+  REPORT(obs_loglik);
 
   // ---- REPORT derived parameters for sdreport ----
   ADREPORT(m1);

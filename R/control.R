@@ -33,7 +33,8 @@
 .CONTROL_ALL_FIELDS <- c(
   "method", "iterlim", "reltol", "print_level", "draws_hessian", "halton_burn",
   "n_cores", "compute_se", "hessian", "se_method", "hess_eps", "hess_r",
-  "gradtol", "restarts", "max_threads", "max_workload", "parallel_tape"
+  "gradtol", "restarts", "max_threads", "max_workload", "parallel_tape",
+  "tape_chunks"
 )
 
 # Which fields each estimator actually READS. Derived by hand from the
@@ -56,7 +57,7 @@
   # fit_rpbnb_tmb() -- nlminb + restart polish over a TMB tape.
   tmb     = c("iterlim", "reltol", "print_level", "halton_burn", "n_cores",
               "gradtol", "restarts", "max_threads", "max_workload",
-              "parallel_tape")
+              "parallel_tape", "tape_chunks")
 )
 
 # The fields whose two historical constructors disagreed (see the header note).
@@ -201,7 +202,8 @@ rpbnb_control <- function(method = c("BFGS"),
                           restarts = 10L,
                           max_threads = NULL,
                           max_workload = NULL,
-                          parallel_tape = FALSE) {
+                          parallel_tape = FALSE,
+                          tape_chunks = NULL) {
   # match.call() names positionally-supplied arguments too (this function has no
   # `...`), so this is the set of names the caller actually wrote -- which is
   # what the ignored-settings report must be based on. Reporting every
@@ -265,6 +267,11 @@ rpbnb_control <- function(method = c("BFGS"),
       is.na(compute_se)) {
     stop("compute_se must be one non-missing logical value.", call. = FALSE)
   }
+  # NULL or a positive whole number only: a control object is reusable
+  # across fits with different draw counts, so the constructor cannot
+  # validate tape_chunks <= draws here. That check happens in
+  # .resolve_tape_chunks() at fit time, where both values are known.
+  if (!is.null(tape_chunks)) .whole_scalar(tape_chunks, "tape_chunks", 1)
 
   n_cores <- as.integer(n_cores)
   structure(
@@ -286,7 +293,8 @@ rpbnb_control <- function(method = c("BFGS"),
          # it is resolved here rather than in .resolve_control().
          max_threads = if (is.null(max_threads)) n_cores else as.integer(max_threads),
          max_workload = if (is.null(max_workload)) NULL else as.numeric(max_workload),
-         parallel_tape = parallel_tape),
+         parallel_tape = parallel_tape,
+         tape_chunks = if (is.null(tape_chunks)) NULL else as.integer(tape_chunks)),
     supplied = supplied,
     class = c("rpbnb_control", "rpbnb_tmb_control")
   )
@@ -320,7 +328,8 @@ rpbnb_tmb_control <- function(iterlim = NULL,
                               max_threads = NULL,
                               max_workload = NULL,
                               parallel_tape = FALSE,
-                              halton_burn = 300L) {
+                              halton_burn = 300L,
+                              tape_chunks = NULL) {
   # Forward only what the caller wrote, so `supplied` on the returned object
   # records the caller's intent and not this wrapper's own signature -- an
   # untouched field must not be reported as an ignored setting later.

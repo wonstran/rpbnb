@@ -166,7 +166,15 @@
 .build_tmb_data <- function(Y1, Y2, X1, X2, rand_idx1, rand_idx2,
                             Z1, Z2, dist1, dist2, sign1, sign2,
                             family_code, pois1, pois2,
-                            lamLo, lamHi, est_method) {
+                            lamLo, lamHi, est_method,
+                            chunked = 0L, w = NULL, draw_w = NULL) {
+  # w/draw_w default to all-ones (no-op weighting/masking) so every existing
+  # caller keeps building the ordinary unchunked tape. `chunked` gates the
+  # DATA_UPDATE()'d path in src/rpbnb_tmb.cpp entirely, but the template
+  # always reads w/draw_w as plain DATA_VECTOR()s, so they must be present
+  # (and correctly sized) in the data list regardless of `chunked`.
+  if (is.null(w)) w <- rep(1, length(Y1))
+  if (is.null(draw_w)) draw_w <- rep(1, max(1L, nrow(as.matrix(Z1))))
   list(
     Y1 = Y1, Y2 = Y2,
     X1 = unname(as.matrix(X1)), X2 = unname(as.matrix(X2)),
@@ -178,6 +186,9 @@
     family = as.integer(family_code),
     pois1 = as.integer(pois1), pois2 = as.integer(pois2),
     lamLo = as.numeric(lamLo), lamHi = as.numeric(lamHi),
-    est_method = as.integer(est_method)
+    est_method = as.integer(est_method),
+    chunked = as.integer(chunked),
+    w = as.numeric(w),
+    draw_w = as.numeric(draw_w)
   )
 }
