@@ -204,3 +204,141 @@ test_that("Phase 0 fixture: unused dispersion/dependence parameters have exactly
     }
   }
 })
+
+# ---- Phase 2: draw chunking (the primary OOM fix) ----------------------
+#
+# .make_chunked_tmb_objective() wraps a chunk-sized TMB object (built with
+# chunked = 1L) so it replays over successive draw chunks via DATA_UPDATE()
+# instead of retaping. Exact for the requested R draws (see R/tmb_chunked.R
+# header); these tests pin that exactness against the SAME unchunked
+# reference values above, plus the wrapper's documented contract.
+
+#' Build a chunk-sized `chunked = 1L` TMB object for one family/chunk layout
+#' @keywords internal
+.tape_chunk_chunked_obj <- function(fam, layout, Z1_full, Z2_full) {
+  n <- 12L
+  x <- seq(-0.9, 0.9, length.out = n)
+  X1 <- cbind(`(Intercept)` = 1, x1 = x, x2 = x^2)
+  X2 <- cbind(`(Intercept)` = 1, x1 = x, x2 = x^2)
+  Y1 <- c(0, 1, 2, 0, 3, 1, 0, 2, 1, 4, 0, 2)
+  Y2 <- c(1, 0, 2, 3, 0, 1, 2, 0, 4, 1, 2, 0)
+  rand_idx1 <- c(2L, 3L); rand_idx2 <- c(2L, 3L)
+  dist1 <- c(0L, 2L); sign1 <- c(1L, 1L)
+  dist2 <- c(1L, 3L); sign2 <- c(1L, 1L)
+  z_dep <- switch(
+    as.character(fam$code),
+    `-1` = 0, `0` = 0.3, `1` = 1.5, `2` = atanh(0.25), `3` = log(0.5)
+  )
+  parameters <- list(
+    beta1 = c(0.1, 0.15, -0.05), beta2 = c(-0.05, 0.1, 0.05),
+    log_sd1 = log(c(0.25, 0.2)), log_sd2 = log(c(0.2, 0.3)),
+    log_m1 = log(0.5), log_m2 = log(0.6), z_dep = z_dep,
+    u1 = matrix(0, n, 2L), u2 = matrix(0, n, 2L)
+  )
+  map <- list(u1 = factor(rep(NA_integer_, n * 2L)),
+              u2 = factor(rep(NA_integer_, n * 2L)))
+  first <- layout$chunks[[1L]]
+  data <- .build_tmb_data(
+    Y1 = Y1, Y2 = Y2, X1 = X1, X2 = X2,
+    rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
+    Z1 = Z1_full[first$pad_rows, , drop = FALSE],
+    Z2 = Z2_full[first$pad_rows, , drop = FALSE],
+    dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
+    family_code = fam$code, pois1 = fam$pois1, pois2 = fam$pois2,
+    lamLo = -1, lamHi = 1, est_method = 0L,
+    chunked = 1L, w = rep(1, n), draw_w = first$draw_w
+  )
+  .make_rpbnb_tmb_object(data = data, parameters = parameters,
+                         map = map, n_cores = 1L)$obj
+}
+
+test_that("chunked wrapper fn/gr match the unchunked reference at C in {1,2,3,4,12}, all families", {
+  R_full <- 12L
+  set.seed(20260824)
+  Z <- .tmb_halton_uniform(R_full, 4L, burn = 50L)
+  Z1_full <- Z[, 1:2, drop = FALSE]
+  Z2_full <- Z[, 3:4, drop = FALSE]
+
+  for (nm in names(.tape_chunk_families)) {
+    fam <- .tape_chunk_families[[nm]]
+    ref <- .tape_chunk_reference[[nm]]
+    fixture <- .tape_chunk_fixture(fam$code, fam$pois1, fam$pois2)
+    ref_obj <- .make_rpbnb_tmb_object(
+      data = fixture$data, parameters = fixture$parameters,
+      map = fixture$map, n_cores = 1L
+    )$obj
+    par0 <- unname(ref_obj$par)
+    par1 <- par0 + c(rep(0.05, length(par0) - 1L), 0.1) *
+      seq_along(par0) / length(par0)
+
+    for (C in c(1L, 2L, 3L, 4L, 12L)) {
+      layout <- .resolve_chunk_layout(R_full, C)
+      obj_c <- .tape_chunk_chunked_obj(fam, layout, Z1_full, Z2_full)
+      wrapper <- .make_chunked_tmb_objective(obj_c, layout, Z1_full, Z2_full)
+
+      # Regression for the explicit report(par)/gr(par) requirement (review
+      # P1): a stale obj$env$last.par must not affect the wrapper's result.
+      obj_c$env$last.par <- par0 * 0 + 999
+
+      info <- paste(nm, "C =", C)
+      expect_equal(wrapper$fn(par0), ref$fn0, tolerance = 1e-9, info = info)
+      expect_equal(as.numeric(wrapper$gr(par0)), ref$gr0,
+                  tolerance = 1e-7, info = info)
+      expect_equal(wrapper$fn(par1), ref$fn1, tolerance = 1e-9, info = info)
+      expect_equal(as.numeric(wrapper$gr(par1)), ref$gr1,
+                  tolerance = 1e-7, info = info)
+    }
+  }
+})
+
+test_that("balanced chunk layout has no empty chunks for the reviewed regression cases", {
+  # (R, C) = (10, 6) and (5, 4): "full chunks + one short final chunk" gives
+  # an empty final chunk here (third follow-up review); the balanced
+  # small/large-size layout must not.
+  for (case in list(c(R = 10L, C = 6L), c(R = 5L, C = 4L), c(R = 12L, C = 12L))) {
+    layout <- .resolve_chunk_layout(case[["R"]], case[["C"]])
+    counts <- vapply(layout$chunks, `[[`, integer(1), "Rc_valid")
+    expect_length(counts, case[["C"]])
+    expect_true(all(counts >= 1L), info = paste(case, collapse = ","))
+    expect_equal(sum(counts), case[["R"]])
+    expect_true(all(diff(sort(counts)) %in% c(0L, 1L)))
+    for (ch in layout$chunks) {
+      expect_length(ch$pad_rows, layout$Rc)
+      expect_length(ch$draw_w, layout$Rc)
+      expect_equal(sum(ch$draw_w), ch$Rc_valid)
+    }
+  }
+})
+
+test_that("chunked wrapper: report() full-draw semantics and per-chunk weights sum to one", {
+  R_full <- 12L
+  set.seed(20260824)
+  Z <- .tmb_halton_uniform(R_full, 4L, burn = 50L)
+  Z1_full <- Z[, 1:2, drop = FALSE]
+  Z2_full <- Z[, 3:4, drop = FALSE]
+  fam <- .tape_chunk_families$independence
+  fixture <- .tape_chunk_fixture(fam$code, fam$pois1, fam$pois2)
+  par0 <- unname(.make_rpbnb_tmb_object(
+    data = fixture$data, parameters = fixture$parameters,
+    map = fixture$map, n_cores = 1L
+  )$obj$par)
+
+  layout <- .resolve_chunk_layout(R_full, 5L)  # uneven: 3,3,2,2,2
+  obj_c <- .tape_chunk_chunked_obj(fam, layout, Z1_full, Z2_full)
+  wrapper <- .make_chunked_tmb_objective(obj_c, layout, Z1_full, Z2_full)
+
+  rep0 <- wrapper$report(par0)
+  expect_equal(sum(rep0$obs_loglik), -wrapper$fn(par0), tolerance = 1e-9)
+  expect_true(!is.null(rep0$openmp_compiled))
+
+  expect_error(wrapper$he(par0), "no taped Hessian")
+
+  # Raw obj$env$data is restored to chunk-1/all-ones after every call.
+  wrapper$gr(par0)
+  expect_true(all(obj_c$env$data$w == 1))
+  expect_equal(obj_c$env$data$draw_w, layout$chunks[[1L]]$draw_w)
+})
+
+test_that("chunk layout resolver rejects C > R", {
+  expect_error(.resolve_chunk_layout(5L, 6L))
+})
