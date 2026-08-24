@@ -1015,6 +1015,17 @@ Type objective_function<Type>::operator() () {
   Type r1 = 1.0 / m1;
   Type r2 = 1.0 / m2;
 
+  // Hoisted for the hand-rolled NB2 log-pmf below (FAM_FAMOYE / FAM_INDEP,
+  // see nb2_logpmf()): lgamma(r) and r*log(r) depend only on the fit's
+  // dispersion parameter, not on the observation or draw, so recomputing
+  // them at every (i, draw) pair -- as dnbinom2()'s dnbinom_logit() does
+  // internally via lbeta() -- wastes n*R AD-tape nodes for a value that is
+  // identical across all of them.
+  Type lgamma_r1 = lgamma(r1);
+  Type r1_log_r1 = r1 * log(r1);
+  Type lgamma_r2 = lgamma(r2);
+  Type r2_log_r2 = r2 * log(r2);
+
   // dnbinom2(y, mu, mu + m*mu*mu) evaluates log(var - mu).  The variance
   // increment m*mu*mu is lost to rounding once it falls below ulp(mu), i.e.
   // once log(m) + log(mu) drops under about -36.04 = log(2^-52).  Clamping
@@ -1083,6 +1094,23 @@ Type objective_function<Type>::operator() () {
       return s * (2.0 * base - 1.0);
     // triangular
     return s * base;
+  };
+
+  // Hand-rolled NB2/Poisson log-pmf for the FAM_FAMOYE / FAM_INDEP branches,
+  // replacing dnbinom2()/dpois(). Algebraically identical to TMB's
+  // dnbinom2() -- itself dnbinom_robust() -> dnbinom_logit(), verified by
+  // hand against TMB/include/lgamma.hpp's lbeta()/logspace_add() form --
+  // but (a) reuses the already-clamped eta_c instead of a redundant log(mu)
+  // call, since mu = exp(eta_c) exactly, and (b) takes lgamma(y + r) and
+  // lgamma(r)/r*log(r) as pre-hoisted arguments (see above and the
+  // per-observation hoist below) instead of recomputing them per draw.
+  auto nb2_logpmf = [](Type lgamma_y_plus_r, Type y, Type mu, Type r,
+                       Type lgamma_r, Type r_log_r, Type eta_c) -> Type {
+    return lgamma_y_plus_r - lgamma_r - lgamma(y + Type(1)) +
+      r_log_r - (r + y) * log(r + mu) + y * eta_c;
+  };
+  auto pois_logpmf = [](Type y, Type mu, Type eta_c) -> Type {
+    return y * eta_c - mu - lgamma(y + Type(1));
   };
 
   // Famoye constant d = 1 - exp(-1) (loop-invariant)
@@ -1155,6 +1183,19 @@ Type objective_function<Type>::operator() () {
   for (int i = 0; i < n; i++) {
     vector<Type> log_draw(R);
 
+    // Hoisted once per observation (not per draw): the dispersion parameter
+    // r1/r2 and the observed count Y1(i)/Y2(i) are both invariant across
+    // the R draws for this i, so lgamma(y + r) is the same value at every
+    // draw. Guarded by `family` and `pois1`/`pois2`, both tape-construction-
+    // time constants, so this costs nothing for families/margins that never
+    // read it (see nb2_logpmf() above).
+    Type lgamma_y1_plus_r1 = Type(0);
+    Type lgamma_y2_plus_r2 = Type(0);
+    if (family == FAM_FAMOYE || family == FAM_INDEP) {
+      if (!pois1) lgamma_y1_plus_r1 = lgamma(Y1(i) + r1);
+      if (!pois2) lgamma_y2_plus_r2 = lgamma(Y2(i) + r2);
+    }
+
     for (int r = 0; r < R; r++) {
       Type eta1 = xb1(i);
       Type eta2 = xb2(i);
@@ -1182,18 +1223,20 @@ Type objective_function<Type>::operator() () {
         eta2 += X2(i, col) * d;
       }
 
-      Type mu1 = exp(clamp_ad(eta1, eta_floor1,
-                              Type(34.538776394910684)));
-      Type mu2 = exp(clamp_ad(eta2, eta_floor2,
-                              Type(34.538776394910684)));
+      Type eta1_c = clamp_ad(eta1, eta_floor1, Type(34.538776394910684));
+      Type eta2_c = clamp_ad(eta2, eta_floor2, Type(34.538776394910684));
+      Type mu1 = exp(eta1_c);
+      Type mu2 = exp(eta2_c);
 
       if (family == FAM_FAMOYE) {
-        Type lnb1 = pois1 ? dpois(Y1(i), mu1, true)
-                          : dnbinom2(Y1(i), mu1,
-                                     mu1 + m1 * mu1 * mu1, true);
-        Type lnb2 = pois2 ? dpois(Y2(i), mu2, true)
-                          : dnbinom2(Y2(i), mu2,
-                                     mu2 + m2 * mu2 * mu2, true);
+        Type lnb1 = pois1
+          ? pois_logpmf(Y1(i), mu1, eta1_c)
+          : nb2_logpmf(lgamma_y1_plus_r1, Y1(i), mu1, r1,
+                      lgamma_r1, r1_log_r1, eta1_c);
+        Type lnb2 = pois2
+          ? pois_logpmf(Y2(i), mu2, eta2_c)
+          : nb2_logpmf(lgamma_y2_plus_r2, Y2(i), mu2, r2,
+                      lgamma_r2, r2_log_r2, eta2_c);
 
         Type c1 = pois1
           ? exp(-famoye_d * mu1)
@@ -1223,12 +1266,14 @@ Type objective_function<Type>::operator() () {
         log_draw(r) = lnb1 + lnb2 + log(safe_dep) -
           invalid_dep * Type(1e10);
       } else if (family == FAM_INDEP) {
-        Type lnb1 = pois1 ? dpois(Y1(i), mu1, true)
-                          : dnbinom2(Y1(i), mu1,
-                                     mu1 + m1 * mu1 * mu1, true);
-        Type lnb2 = pois2 ? dpois(Y2(i), mu2, true)
-                          : dnbinom2(Y2(i), mu2,
-                                     mu2 + m2 * mu2 * mu2, true);
+        Type lnb1 = pois1
+          ? pois_logpmf(Y1(i), mu1, eta1_c)
+          : nb2_logpmf(lgamma_y1_plus_r1, Y1(i), mu1, r1,
+                      lgamma_r1, r1_log_r1, eta1_c);
+        Type lnb2 = pois2
+          ? pois_logpmf(Y2(i), mu2, eta2_c)
+          : nb2_logpmf(lgamma_y2_plus_r2, Y2(i), mu2, r2,
+                      lgamma_r2, r2_log_r2, eta2_c);
         log_draw(r) = lnb1 + lnb2;
       } else {
         // Y1_int/Y2_int are cast from data, so these two flags are ordinary
