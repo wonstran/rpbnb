@@ -342,3 +342,87 @@ test_that("chunked wrapper: report() full-draw semantics and per-chunk weights s
 test_that("chunk layout resolver rejects C > R", {
   expect_error(.resolve_chunk_layout(5L, 6L))
 })
+
+# ---- .resolve_tape_chunks(): the auto-chunking workload resolver -------
+#
+# PROVISIONAL, per R/tmb_helpers.R's own doc comment: uses the static-graph
+# TAPE_CALIBRATION constants, not yet the Phase-3 shared conservative
+# calibration. These tests pin the RESOLVER'S ARITHMETIC (draws-per-tape
+# rounding, the Inf opt-out, honest refusal, tape_chunks validation), which
+# does not depend on which calibration constants are plugged in.
+
+test_that(".resolve_tape_chunks() stays within budget on the review's fractional-boundary case", {
+  # draws = 10, one-draw workload = 1 (n = 1, independence weight = 1),
+  # max_workload = 3.9. The OLD ceiling(10/3.9) = 3 -> Rc = ceiling(10/3) =
+  # 4 -> workload 4 > 3.9 rule failed here; deriving C from
+  # draws_per_chunk_max = floor(3.9/1) = 3 must not.
+  r <- .resolve_tape_chunks(n = 1L, draws = 10L, family_code = -1L,
+                            max_workload = 3.9, tape_chunks = NULL)
+  expect_lte(r$workload, 3.9)
+  expect_gt(r$C, 1L)
+  expect_identical(r$chunked, 1L)
+})
+
+test_that(".resolve_tape_chunks() Inf disables the guard on both the auto and pinned paths", {
+  auto <- .resolve_tape_chunks(n = 1e6, draws = 1e6, family_code = 1L,
+                               max_workload = Inf, tape_chunks = NULL)
+  expect_identical(auto, list(C = 1L, chunked = 0L, workload = NA_real_,
+                              message = NULL))
+
+  pinned <- .resolve_tape_chunks(n = 1e6, draws = 1000L, family_code = 1L,
+                                 max_workload = Inf, tape_chunks = 50L)
+  expect_identical(pinned$C, 50L)
+  expect_identical(pinned$chunked, 1L)
+  expect_true(is.na(pinned$workload))
+
+  # The one-draw hard stop is bypassed too when the guard is disabled.
+  huge <- .resolve_tape_chunks(n = 1e15, draws = 1L, family_code = 0L,
+                               max_workload = Inf, tape_chunks = NULL)
+  expect_identical(huge$C, 1L)
+})
+
+test_that(".resolve_tape_chunks() auto path reproduces the unchunked default when the budget already fits", {
+  r <- .resolve_tape_chunks(n = 100L, draws = 100L, family_code = 0L,
+                            max_workload = 1e12)
+  expect_identical(r, list(C = 1L, chunked = 0L, workload = 1e4, message = NULL))
+})
+
+test_that(".resolve_tape_chunks() refuses outright when even one draw exceeds budget", {
+  expect_error(
+    .resolve_tape_chunks(n = 1e15, draws = 100L, family_code = 0L,
+                         max_workload = 1e6),
+    "single draw"
+  )
+})
+
+test_that(".resolve_tape_chunks() validates a pinned tape_chunks against draws and budget", {
+  expect_error(
+    .resolve_tape_chunks(n = 100L, draws = 10L, family_code = 0L,
+                         max_workload = 1e12, tape_chunks = 20L),
+    "cannot exceed draws"
+  )
+  expect_error(
+    .resolve_tape_chunks(n = 1e6, draws = 1000L, family_code = 0L,
+                         max_workload = 1e6, tape_chunks = 2L),
+    "smallest sufficient"
+  )
+})
+
+test_that(".resolve_tape_chunks() auto-chunks a realistic large workload within budget", {
+  r <- .resolve_tape_chunks(n = 5000L, draws = 1000L, family_code = 0L,
+                            max_workload = 1e6)
+  expect_gt(r$C, 1L)
+  expect_identical(r$chunked, 1L)
+  expect_lte(r$workload, 1e6)
+  expect_match(r$message, "splitting 1000 requested draws")
+})
+
+test_that(".resolve_tape_chunks() parallel_tape multiplies the one-draw workload", {
+  seq_r <- .resolve_tape_chunks(n = 1000L, draws = 100L, family_code = 0L,
+                                max_workload = 1e12, n_threads = 8L,
+                                parallel_tape = FALSE)
+  par_r <- .resolve_tape_chunks(n = 1000L, draws = 100L, family_code = 0L,
+                                max_workload = 1e12, n_threads = 8L,
+                                parallel_tape = TRUE)
+  expect_equal(par_r$workload, 8 * seq_r$workload)
+})
