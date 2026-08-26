@@ -57,16 +57,22 @@
 #'   a manual call needs `rpbnb:::.apply_scaling(data, fit$scaling)`).
 #' @param control An [rpbnb_tmb_control()] for the restricted refits.
 #'   Defaults to `rpbnb_tmb_control(print_level = 1, n_cores =
-#'   fit$parallel$requested, max_workload = <propagated>)` -- the same
-#'   `n_cores` the original fit was called with (1 if `fit` predates the
-#'   stored `$parallel` field). `max_workload` propagates `fit`'s own value
-#'   when `fit` draw-chunked (see `draws` at [fit_rpbnb_tmb()]), so a
-#'   restricted refit re-chunks to stay in budget instead of rebuilding one
-#'   full tape; it is `Inf` when `fit` did not chunk (or predates
-#'   `$tape_integration`), matching the pre-chunking default. Each refit
-#'   below re-resolves its own chunk layout fresh for whatever `draws` it
-#'   actually uses, so this stays correct even when `draws` differs from
-#'   `fit$draws`. `seed`/`method` are taken from `fit`, not `control`.
+#'   fit$parallel$requested, max_workload = <propagated>, tape_chunks =
+#'   <propagated>)` -- the same `n_cores` the original fit was called with
+#'   (1 if `fit` predates the stored `$parallel` field). `max_workload`
+#'   propagates `fit`'s own value when `fit` draw-chunked (see `draws` at
+#'   [fit_rpbnb_tmb()]), so a restricted refit re-chunks to stay in budget
+#'   instead of rebuilding one full tape; both stay at today's pre-chunking
+#'   defaults (`Inf`, `NULL`) when `fit` did not chunk (or predates
+#'   `$tape_integration`). When this `draws` equals `fit$draws` (the
+#'   default), `tape_chunks` also propagates `fit`'s own resolved chunk
+#'   count -- needed because a PINNED `tape_chunks` can coexist with
+#'   `max_workload = Inf` (propagating budget alone would then give the
+#'   refit no way to reconstruct that layout, and it would silently build
+#'   one full tape). A `draws` that differs from `fit$draws` gets a fresh
+#'   layout resolved from the propagated `max_workload` alone, never a
+#'   stale chunk count carried over from a different draw request.
+#'   `seed`/`method` are taken from `fit`, not `control`.
 #' @param which Which parameter groups to test, any subset of `"sd"` (the
 #'   random-coefficient scales), `"dispersion"` (the NB2 dispersions `m1`,
 #'   `m2`), and `"dependence"` (the association parameter). The default is
@@ -222,21 +228,45 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
     # stay in budget -- recreating the exact OOM the chunking feature
     # exists to prevent, on every boundary test. Propagate the ORIGINAL
     # fit's own max_workload when that fit actually chunked (stored on
-    # fit$tape_integration by fit_rpbnb_tmb()); each refit below then
-    # re-resolves its own safe chunk layout fresh, via the same
-    # .resolve_tape_chunks() call fit_rpbnb_tmb() always makes, appropriate
-    # to whatever `draws` that particular refit uses -- so a `draws`
-    # argument that differs from fit$draws is never stuck with a stale
-    # layout. An unchunked original fit (or one predating $tape_integration)
-    # keeps today's Inf default: there is no policy to propagate, and Inf
-    # is the documented default for a bare NULL control here.
-    default_max_workload <- if (isTRUE(fit$tape_integration$chunked == 1L)) {
+    # fit$tape_integration by fit_rpbnb_tmb()). An unchunked original fit
+    # (or one predating $tape_integration) keeps today's Inf default: there
+    # is no policy to propagate, and Inf is the documented default for a
+    # bare NULL control here.
+    #
+    # max_workload alone is NOT sufficient when the original fit's own
+    # tape_chunks was PINNED rather than auto-resolved: a pin can coexist
+    # with max_workload = Inf (this data's own truck scripts do exactly
+    # that, deliberately, because the calibration under-estimates its
+    # per-draw cost -- see inst/rpbnb_truck_open_v2.R), and Inf alone gives
+    # the refit's resolver no budget to auto-derive a layout from, so it
+    # would silently fall back to C = 1 and reproduce the same OOM this is
+    # meant to prevent. Propagating tape_chunks = fit$tape_integration$chunks
+    # too fixes that -- but ONLY when this refit's `draws` matches the
+    # original fit's, so a `draws` argument that legitimately differs is
+    # never stuck reusing a stale layout; that case re-resolves fresh from
+    # the propagated max_workload alone, via the same .resolve_tape_chunks()
+    # call fit_rpbnb_tmb() always makes.
+    chunked_original <- isTRUE(fit$tape_integration$chunked == 1L)
+    default_max_workload <- if (chunked_original) {
       fit$tape_integration$max_workload
     } else {
       Inf
     }
+    # Numeric equality, not identical(): `draws` defaults to `fit$draws`
+    # (so it is normally the very same integer), but a caller who passes
+    # e.g. `draws = 1000` (a plain double) matching fit$draws (stored as
+    # 1000L) by VALUE must still match here -- identical() would say no
+    # and skip the propagation for no real reason.
+    default_tape_chunks <- if (chunked_original && length(draws) == 1L &&
+                               is.numeric(draws) && !is.na(draws) &&
+                               draws == fit$draws) {
+      fit$tape_integration$chunks
+    } else {
+      NULL
+    }
     control <- rpbnb_tmb_control(print_level = 1L, n_cores = default_cores,
-                                 max_workload = default_max_workload)
+                                 max_workload = default_max_workload,
+                                 tape_chunks = default_tape_chunks)
   }
   if (!inherits(control, "rpbnb_control")) {
     stop("`control` must be an `rpbnb_control` object from rpbnb_control() ",
