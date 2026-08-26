@@ -36,8 +36,16 @@ setwd("C:\\Users\\zwang9\\repos\\rpbnb")
 
 # ---- Knobs ------------------------------------------------------------------
 n_cores <- 16L
-draws   <- 300L
+draws   <- 1000L
 seed    <- 20240712L
+# Draw-chunk count for the TMB engine's SML tape (see ?rpbnb_control's
+# tape_chunks and docs/TMB_SML_large_draws_OOM_guide.md). At draws = 1000 this
+# script exists specifically to exercise draw chunking: pinned explicitly
+# because max_workload is disabled below (its calibration doesn't fit this
+# data), so the auto-chunking resolver would otherwise never engage and this
+# would build one full [n x 1000] tape instead. NULL falls back to the
+# resolver's C = 1 default under max_workload = Inf -- i.e. no chunking.
+tape_chunks <- 10L
 # "sml" (simulated ML) or "laplace" (TMB's memory-saving alternative).
 tmb_method <- "sml"
 # Same knob as rpbnb_truck.R / rpbnb_truck_tmb.R: "famoye" or a copula()
@@ -69,6 +77,9 @@ cat("=== rpbnb(engine = \"tmb\") on truck all crashes, open sections (",
 cat("Observations   :", nrow(data), "\n")
 cat("Cores asked    :", n_cores, "\n")
 cat("Draws          :", draws, "\n")
+cat("Tape chunks    :",
+    if (is.null(tape_chunks)) "NULL (auto; C = 1 under max_workload = Inf)"
+    else tape_chunks, "\n")
 cat("LR test groups :",
     if (isFALSE(boundary_tests)) "none" else paste(boundary_tests, collapse = ", "),
     "\n")
@@ -94,8 +105,11 @@ ctrl <- rpbnb_control(
   max_threads  = n_cores,
   # The default workload guard's calibration under-estimates this data's
   # per-draw cost (see inst/rpbnb_truck_tmb.R's header), so leaving it engaged
-  # would block the fit rather than warn.
+  # would block the fit rather than warn. tape_chunks (set above) stands in
+  # for it: at draws = 1000 this pins the layout directly instead of relying
+  # on a workload estimate that is Inf (disabled) for exactly that reason.
   max_workload = Inf,
+  tape_chunks  = tape_chunks,
   parallel_tape = FALSE
 )
 

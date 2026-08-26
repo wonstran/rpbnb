@@ -393,6 +393,55 @@ test_that("default control stays Inf for an unchunked original fit or one predat
   expect_identical(captured, Inf)
 })
 
+test_that("default control also propagates a PINNED tape_chunks when max_workload was Inf", {
+  # Regression for a real crash: a fit built with control$tape_chunks set
+  # explicitly (bypassing the workload budget entirely) alongside
+  # max_workload = Inf -- the exact pattern inst/rpbnb_truck_open_v2.R uses
+  # deliberately, because the workload calibration under-estimates that
+  # data's per-draw cost. Propagating max_workload alone (Inf) gives the
+  # refit's resolver no budget to derive a layout from, so it silently fell
+  # back to C = 1 and rebuilt one full tape -- reproducing
+  # `std::bad_alloc` in MakeADFunObject() during a boundary LR test refit.
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+  fit$tape_integration <- list(chunks = 10L, chunked = 1L,
+                               max_workload = Inf, draws_requested = 20L,
+                               draws_effective = 20L)
+
+  captured <- list()
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., control) {
+      captured$max_workload <<- control$max_workload
+      captured$tape_chunks <<- control$tape_chunks
+      stop("stop-early-for-test")
+    }
+  )
+
+  # draws unspecified -> defaults to fit$draws (20): the pinned layout
+  # propagates alongside max_workload.
+  expect_error(rpbnb_tmb_boundary_tests(fit, d), "stop-early-for-test")
+  expect_identical(captured$max_workload, Inf)
+  expect_identical(captured$tape_chunks, 10L)
+
+  # An explicit draws EQUAL to fit$draws by value (a plain double, not the
+  # same object) must still count as "unchanged" -- identical() would say
+  # no here even though nothing about the workload changed.
+  captured <- list()
+  expect_error(rpbnb_tmb_boundary_tests(fit, d, draws = 20),
+               "stop-early-for-test")
+  expect_identical(captured$tape_chunks, 10L)
+
+  # draws DIFFERS from fit$draws -> the stale chunk count must not be
+  # reused; only max_workload propagates, and the refit re-resolves fresh.
+  captured <- list()
+  expect_error(rpbnb_tmb_boundary_tests(fit, d, draws = 40),
+               "stop-early-for-test")
+  expect_identical(captured$max_workload, Inf)
+  expect_null(captured$tape_chunks)
+})
+
 test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every refit", {
   skip_on_cran()
   d <- .tmb_boundary_fixture()
