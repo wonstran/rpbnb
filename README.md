@@ -29,6 +29,8 @@ interchangeable engines.
 - [Function reference](#function-reference)
 - [Usage examples](#usage-examples)
 - [TMB engine: inference and memory](#tmb-engine-inference-and-memory)
+  - [Exact draw chunking](#exact-draw-chunking-new)
+  - [Laplace approximation](#laplace-approximation)
 - [Known issue: multithreaded Gaussian copula](#known-issue-multithreaded-gaussian-copula)
 - [Example datasets](#example-datasets)
 - [Documentation](#documentation)
@@ -345,15 +347,53 @@ default `inference = "full"`/`"diag"`) is unaffected. See
 [docs/TMB_SML_large_draws_OOM_guide.md](docs/TMB_SML_large_draws_OOM_guide.md)
 for the full design writeup.
 
-All of the above bounds the *simulated* likelihood. `method = "laplace"`
-integrates the random coefficients with TMB's Laplace approximation instead,
-taping one conditional evaluation per observation and integrating the latents
-through a sparse Hessian. Tape size then scales with `nrow(data)` alone and
-the draw budget (and chunking) do not apply. That is the option to reach for
-when a fit exhausts memory during `MakeADFun()` and chunking is not enough,
-rather than raising `max_workload` against RAM you do not have. It supports
-normal and lognormal random coefficients, and it is a different approximation
-to the same integral — see `?fit_rpbnb_tmb`.
+### Laplace approximation
+
+All of the above (draws, `max_workload`, draw chunking) bounds the
+*simulated* likelihood. `fit_rpbnb_tmb(..., method = "laplace")` sidesteps
+simulation entirely: it integrates the random coefficients with TMB's Laplace
+approximation instead, taping one conditional evaluation per observation and
+integrating the latents through a sparse Hessian. Tape size then scales with
+`nrow(data)` alone — `draws` no longer affects the likelihood or the tape at
+all — and the draw budget (and chunking) do not apply. This is the option to
+reach for when a fit exhausts memory during `MakeADFun()` and chunking is not
+enough, rather than raising `max_workload` against RAM you do not have.
+
+```r
+fit <- fit_rpbnb_tmb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                     random_1 = "outwork", method = "laplace")
+fit$method   # "laplace" -- print()/summary() display it too
+```
+
+**Constraints:**
+
+- Needs at least one random coefficient (`random_1`/`random_2`); `method =
+  "laplace"` with no random coefficients errors, pointing at `method =
+  "sml"` instead.
+- Random coefficients must be `"normal"` or `"lognormal"` — `"uniform"` and
+  `"triangular"` error under Laplace (their inverse-CDF isn't the smooth
+  `qnorm()` transform the Laplace path relies on); use `method = "sml"` for
+  those.
+- No restriction on `dependence` — `"famoye"`, `"independence"`, or a
+  `copula()` all work under Laplace.
+
+**Not a drop-in reproduction of an SML fit.** SML and Laplace are two
+different approximations to the same integral: they agree asymptotically but
+need not agree closely on any given dataset. `summary()` reports AIC/BIC for
+either estimator, but a Laplace fit's AIC is computed from an *approximated*
+marginal likelihood, not the exact one SML uses — comparing a Laplace AIC
+against an SML AIC of the same model is not meaningful.
+
+**Memory guidance is coarser here.** The `max_workload` calibration
+(`TAPE_CALIBRATION`) was measured on the SML path's bytes-per-observation-draw
+and has not been recalibrated for a Laplace fit's latent-vector-plus-
+sparse-Hessian cost — the one available measurement predicted about 322 MiB
+for a real fit but the actual peak was ~1.2 GB, 3–4x higher. On this path
+`max_workload` will still reject truly enormous workloads, but should not be
+trusted to predict the actual peak the way it can (once the same follow-up
+calibration measurement lands) for a chunked SML fit.
+
+See `?fit_rpbnb_tmb` for the full argument documentation.
 
 Families differ, so each carries a measured weight: the largest **peak** ratio
 to Famoye at matched workload, rounded up to the next tenth. Peak rather than
