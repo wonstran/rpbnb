@@ -1,4 +1,4 @@
-# rpbnb 0.4.2
+# rpbnb 0.4.3
 
 * **TMB engine: exact draw chunking fixes out-of-memory failures at large
   `draws`.** SML tape size used to scale as `nrow(data) * draws` with no
