@@ -36,11 +36,17 @@ distribution specs (\code{"normal"}, \code{"lognormal"}, \code{"uniform"},
 
 \item{draws}{Number of Halton simulation draws. Under
 \code{method = "sml"} this sets the simulation grid the likelihood is
-averaged over, and tape size scales with \code{nrow(data) * draws}. Under
-\code{method = "laplace"} it does not affect the likelihood or the tape,
-but still sizes the Halton grid used for the frozen Famoye lambda bounds
-and for the post-estimation averaging in \code{predict()} and the
-marginal-effect functions.}
+averaged over. Tape size scales with \code{nrow(data) * draws} unless
+the fit draw-chunks (see \code{control$tape_chunks} at
+\code{\link[=rpbnb_control]{rpbnb_control()}}): when the weighted workload exceeds
+\code{control$max_workload}, the fit is split into several equal-sized
+draw chunks replayed over one smaller TMB tape, dropping peak memory to
+\code{nrow(data) * ceiling(draws / chunks)} at the cost of somewhat
+slower gradient evaluations -- exact for the requested \code{draws}, not
+an approximation. Under \code{method = "laplace"} \code{draws} does not
+affect the likelihood, the tape, or chunking, but still sizes the Halton
+grid used for the frozen Famoye lambda bounds and for the post-estimation
+averaging in \code{predict()} and the marginal-effect functions.}
 
 \item{seed}{Random seed for draws.}
 

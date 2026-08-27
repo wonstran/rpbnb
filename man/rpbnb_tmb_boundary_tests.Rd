@@ -25,9 +25,21 @@ same data. With \code{standardize = TRUE}, pass the standardized data
 a manual call needs \code{rpbnb:::.apply_scaling(data, fit$scaling)}).}
 
 \item{control}{An \code{\link[=rpbnb_tmb_control]{rpbnb_tmb_control()}} for the restricted refits.
-Defaults to \code{rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = Inf)} -- the same \code{n_cores} the
-original fit was called with (1 if \code{fit} predates the stored
-\verb{$parallel} field). \code{seed}/\code{method} are taken from \code{fit}, not \code{control}.}
+Defaults to \verb{rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = <propagated>, tape_chunks = <propagated>)} -- the same \code{n_cores} the original fit was called with
+(1 if \code{fit} predates the stored \verb{$parallel} field). \code{max_workload}
+propagates \code{fit}'s own value when \code{fit} draw-chunked (see \code{draws} at
+\code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}), so a restricted refit re-chunks to stay in budget
+instead of rebuilding one full tape; both stay at today's pre-chunking
+defaults (\code{Inf}, \code{NULL}) when \code{fit} did not chunk (or predates
+\verb{$tape_integration}). When this \code{draws} equals \code{fit$draws} (the
+default), \code{tape_chunks} also propagates \code{fit}'s own resolved chunk
+count -- needed because a PINNED \code{tape_chunks} can coexist with
+\code{max_workload = Inf} (propagating budget alone would then give the
+refit no way to reconstruct that layout, and it would silently build
+one full tape). A \code{draws} that differs from \code{fit$draws} gets a fresh
+layout resolved from the propagated \code{max_workload} alone, never a
+stale chunk count carried over from a different draw request.
+\code{seed}/\code{method} are taken from \code{fit}, not \code{control}.}
 
 \item{which}{Which parameter groups to test, any subset of \code{"sd"} (the
 random-coefficient scales), \code{"dispersion"} (the NB2 dispersions \code{m1},
