@@ -14,7 +14,8 @@ rpbnb_tmb_control(
   max_threads = NULL,
   max_workload = NULL,
   parallel_tape = FALSE,
-  halton_burn = 300L
+  halton_burn = 300L,
+  tape_chunks = NULL
 )
 }
 \arguments{
@@ -76,6 +77,19 @@ objective and gradient evaluation remains parallel.}
 
 \item{halton_burn}{Number of leading Halton points discarded before forming
 the simulation draws.}
+
+\item{tape_chunks}{TMB engine, SML fits only. Number of draw chunks to
+split \code{draws} into (see \code{draws} at \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}).
+\code{NULL} (default) auto-selects the smallest sufficient count when
+the weighted workload exceeds \code{max_workload}, or \code{1L} (no
+chunking) when it does not. Set explicitly to pin a layout regardless of
+the auto-threshold; must not exceed \code{draws}. Chunking is exact for
+the requested draws (not an approximation) at the cost of somewhat
+slower gradient evaluations, and a chunked fit has no taped Hessian --
+\code{confint(method = "profile")}/\code{rpbnb_tmb_dependence_profile()}
+fall back to a Wald interval with a warning; Wald/optimHess inference
+(the default) is unaffected. Ignored for \code{method = "laplace"}
+(which has no draw dimension to chunk) and by every non-TMB estimator.}
 }
 \value{
 The \code{\link[=rpbnb_control]{rpbnb_control()}} object.

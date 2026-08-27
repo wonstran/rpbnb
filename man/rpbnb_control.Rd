@@ -21,7 +21,8 @@ rpbnb_control(
   restarts = 10L,
   max_threads = NULL,
   max_workload = NULL,
-  parallel_tape = FALSE
+  parallel_tape = FALSE,
+  tape_chunks = NULL
 )
 }
 \arguments{
@@ -115,6 +116,19 @@ As of \code{rpbnb_tmb_max_workload()}, the value \code{rpbnb_tmb_control()} actu
 \item{parallel_tape}{Construct per-thread TMB tapes concurrently. The
 default \code{FALSE} constructs them sequentially to reduce peak memory;
 objective and gradient evaluation remains parallel.}
+
+\item{tape_chunks}{TMB engine, SML fits only. Number of draw chunks to
+split \code{draws} into (see \code{draws} at \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}).
+\code{NULL} (default) auto-selects the smallest sufficient count when
+the weighted workload exceeds \code{max_workload}, or \code{1L} (no
+chunking) when it does not. Set explicitly to pin a layout regardless of
+the auto-threshold; must not exceed \code{draws}. Chunking is exact for
+the requested draws (not an approximation) at the cost of somewhat
+slower gradient evaluations, and a chunked fit has no taped Hessian --
+\code{confint(method = "profile")}/\code{rpbnb_tmb_dependence_profile()}
+fall back to a Wald interval with a warning; Wald/optimHess inference
+(the default) is unaffected. Ignored for \code{method = "laplace"}
+(which has no draw dimension to chunk) and by every non-TMB estimator.}
 }
 \value{
 An object of class \code{c("rpbnb_control", "rpbnb_tmb_control")} (a named

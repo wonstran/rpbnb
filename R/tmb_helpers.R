@@ -162,7 +162,7 @@
 
 #' Resolve a safe draw-chunk layout for a TMB SML fit
 #'
-#' Successor to [.check_tmb_workload()]: instead of only refusing to run
+#' Successor to `.check_tmb_workload()`: instead of only refusing to run
 #' above `max_workload`, this auto-selects (or validates a user-pinned)
 #' number of draw chunks so the fit's tape stays within budget (see
 #' R/tmb_chunked.R). `C == 1` reproduces today's single-tape path exactly
@@ -187,8 +187,8 @@
 #' budget (see review round 1's counterexample: `draws = 10`,
 #' `max_workload` admitting a fractional `C = 10/3.9`).
 #'
-#' @param n,draws,family_code,n_threads,parallel_tape As [.check_tmb_workload()].
-#' @param max_workload As [.check_tmb_workload()]; `Inf` disables the guard
+#' @param n,draws,family_code,n_threads,parallel_tape As `.check_tmb_workload()`.
+#' @param max_workload As `.check_tmb_workload()`; `Inf` disables the guard
 #'   for both the auto path (silently `C = 1`) and a pinned `tape_chunks`
 #'   (honored with no budget check).
 #' @param tape_chunks `NULL` (auto) or a user-pinned positive whole number

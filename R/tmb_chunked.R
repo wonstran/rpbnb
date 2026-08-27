@@ -69,7 +69,7 @@
 
 #' Build a chunked full-objective wrapper over a chunk-sized TMB object
 #'
-#' `obj` must have been constructed (via [.make_rpbnb_tmb_object()]) with
+#' `obj` must have been constructed (via `.make_rpbnb_tmb_object()`) with
 #' `chunked = 1L` and draw matrices `Z1`/`Z2` sized to `layout$Rc` rows --
 #' i.e. the DATA list `obj` was built from already contains chunk 1's rows
 #' (`Z1_full[layout$chunks[[1]]$pad_rows, ]`, etc.) and `draw_w` set to
@@ -92,7 +92,7 @@
 #'     Never returns chunk-local values.
 #'   - `he(par)`: errors -- no taped Hessian exists for this objective; the
 #'     package's own finite-difference path (`stats::optimHess()`, already
-#'     used by [.rpbnb_inference()]) is the supported alternative.
+#'     used by `.rpbnb_inference()`) is the supported alternative.
 #'   - `env`: a WRAPPER-OWNED environment (not `obj$env`), holding
 #'     `last.par.best`/`value.best` (mirroring TMB's own bookkeeping, read by
 #'     the NA/NaN nlminb-recovery path in [fit_rpbnb_tmb()]) and `random`
@@ -113,8 +113,8 @@
 #' to recover each chunk's weight.
 #'
 #' @param obj The chunk-sized TMB object (`chunked = 1L`), as built by
-#'   [.make_rpbnb_tmb_object()].
-#' @param layout A layout from [.resolve_chunk_layout()].
+#'   `.make_rpbnb_tmb_object()`.
+#' @param layout A layout from `.resolve_chunk_layout()`.
 #' @param Z1_full,Z2_full The FULL `R`-row Halton draw matrices (`R x q1`,
 #'   `R x q2`) this layout's chunks are carved out of.
 #' @return A list with class `"rpbnb_chunked_objective"`; see the contract
