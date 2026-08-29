@@ -105,12 +105,18 @@
 #' trip of the retained raw object always retapes into the same, documented
 #' state, never whichever chunk happened to run last.
 #'
-#' Memory: wrapper state is O(n), never O(n * C). `fn(par)` streams across
-#' chunks, folding each into a running (max, rescaled-sum) log-sum-exp
-#' accumulator -- no per-chunk column is retained. `gr(par)` re-runs
-#' `report(par)` per chunk (a second serial pass; see the plan's Phase 3
-#' wall-time benchmark) against the `fn(par)` pass's cached O(n) denominator
-#' to recover each chunk's weight.
+#' Memory: wrapper state is O(n * C) for at most one parameter point at a
+#' time, never accumulating across calls. `fn(par)` (via `.pass1()`) streams
+#' the log-sum-exp denominator in O(n) state, as before, but now also retains
+#' each chunk's `logS_ic` (n doubles x C chunks -- kilobytes, not the O(n * R)
+#' this design exists to avoid) so that a `gr(par)` call at the SAME `par`
+#' (the common optimizer pattern: evaluate `fn`, then `gr`, at one candidate
+#' point) can recompute each chunk's weight from the cached vector instead of
+#' calling `report(par)` a second time per chunk. `.pass1()`'s cache is keyed
+#' on `identical(par, cache$par)`, so `gr(par)` at a DIFFERENT `par` still
+#' reruns `.pass1()` (and so still calls `report()` once per chunk) before
+#' computing weights -- this only removes the SECOND, redundant per-chunk
+#' `report()` pass `gr()` used to run on top of `.pass1()`'s.
 #'
 #' @param obj The chunk-sized TMB object (`chunked = 1L`), as built by
 #'   `.make_rpbnb_tmb_object()`.
@@ -134,6 +140,7 @@
   cache$par <- NULL
   cache$logS_i <- NULL
   cache$fn <- NULL
+  cache$logS_ic_list <- NULL
 
   .load_chunk <- function(ch) {
     obj$env$data$Z1 <- Z1_full[ch$pad_rows, , drop = FALSE]
@@ -153,17 +160,22 @@
   # retained `obj` is never left mutated mid-chunk -- see the three
   # `on.exit(.reset_raw_data(), add = TRUE)` calls below.
 
-  # Pass 1 (streamed, O(n) state): fold each chunk's contribution into a
-  # running log-sum-exp accumulator instead of retaining an n x C matrix.
-  # See the header derivation; log S_i = m + log(s) - log(R) once every
-  # chunk has been folded in.
+  # Pass 1: fold each chunk's contribution into a running log-sum-exp
+  # accumulator (O(n) state, as before) to get log S_i -- see the header
+  # derivation; log S_i = m + log(s) - log(R) once every chunk has been
+  # folded in. Each chunk's own logS_ic is ALSO kept (O(n * C), see the
+  # function doc's memory note) so gr() can reuse it instead of re-running
+  # report() per chunk when it is called at this same par.
   .pass1 <- function(par) {
     if (!is.null(cache$par) && identical(par, cache$par)) return(invisible(NULL))
     m <- rep(-Inf, n)
     s <- rep(0, n)
-    for (ch in layout$chunks) {
+    logS_ic_list <- vector("list", layout$C)
+    for (i in seq_along(layout$chunks)) {
+      ch <- layout$chunks[[i]]
       .load_chunk(ch)
       logS_ic <- obj$report(par)$obs_loglik + log(ch$Rc_valid)
+      logS_ic_list[[i]] <- logS_ic
       new_m <- pmax(m, logS_ic)
       s <- s * exp(m - new_m) + exp(logS_ic - new_m)
       m <- new_m
@@ -171,6 +183,7 @@
     cache$par <- par
     cache$logS_i <- m + log(s) - logR
     cache$fn <- -sum(cache$logS_i)
+    cache$logS_ic_list <- logS_ic_list
     invisible(NULL)
   }
 
@@ -191,9 +204,14 @@
     logS_i <- cache$logS_i
     log_denom <- logS_i + logR  # = m + log(s) from the pass-1 accumulator
     gr_total <- NULL
-    for (ch in layout$chunks) {
+    for (i in seq_along(layout$chunks)) {
+      ch <- layout$chunks[[i]]
       .load_chunk(ch)
-      logS_ic <- obj$report(par)$obs_loglik + log(ch$Rc_valid)
+      # logS_ic at this par was already computed by .pass1() above (either
+      # just now, or on a preceding fn(par) call at the same par -- the
+      # `identical(par, cache$par)` cache hit) -- reusing it here is what
+      # drops gr()'s per-chunk cost from report() + gr() to gr() alone.
+      logS_ic <- cache$logS_ic_list[[i]]
       obj$env$data$w <- exp(logS_ic - log_denom)
       g <- as.numeric(obj$gr(par))
       gr_total <- if (is.null(gr_total)) g else gr_total + g

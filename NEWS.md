@@ -22,6 +22,13 @@
   regression guard. The single-thread default cap and
   `force_parallel_gaussian` opt-in are unchanged for now; a follow-up may
   relax them.
+* TMB engine, chunked SML fits: the draw-chunked gradient no longer re-runs
+  `report()` once per chunk on top of the pass the objective already made.
+  `.pass1()` keeps each chunk's per-observation log-likelihood vector
+  (kilobytes) and `gr()` reuses it to form the chunk weights, removing one of
+  the two serial per-chunk `report()` sweeps from every gradient evaluation —
+  roughly a 20–30% wall-clock saving on chunked fits, exact to the digit
+  (verified against `numDeriv` finite differences).
 * **TMB engine: exact draw chunking fixes out-of-memory failures at large
   `draws`.** SML tape size used to scale as `nrow(data) * draws` with no
   mitigation beyond a pre-flight refusal
