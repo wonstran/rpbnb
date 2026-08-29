@@ -102,6 +102,15 @@
 # then be a difference of numbers agreeing to ~1e-9 -- noise, not a likelihood.
 .CLAYTON_INDEP_Z <- -30
 
+# Log-scale value standing in for "this random coefficient's scale is 0" when
+# the FULL model (which uses the real draw column) is asked to reproduce a
+# scale-restricted fit (which zeroes that column). Every distribution enters as
+# base + scale * q(u) with |q(u)| of order 1 for Halton u, so scale = 1e-8 moves
+# each coefficient by ~1e-8 -- below the log-likelihood's own rounding, hence
+# numerically the same fit -- while staying far from the underflow and
+# -Inf-gradient trouble that log(0) would bring.
+.SD_NULL_LOG_SCALE <- log(1e-8)
+
 # Working-scale value of z_lambda that maps to lambda = 0 (independence) under
 # the admissible interval the RESTRICTED refit will freeze -- which is the
 # interval implied by `fit$coef`, since that is what warm-starts the refit.
@@ -273,6 +282,40 @@ rpbnb_boundary_tests <- function(fit, data,
                p.value = NA_real_, Signif = NA_character_,
                stringsAsFactors = FALSE)
   }
+  # The classic engine's full fit is a single-start BFGS maximization of a
+  # SIMULATED (Halton-draw) likelihood -- unlike the TMB engine's exact-gradient
+  # Laplace fit with nlminb `restarts`, which is why the TMB engine's LR
+  # statistics come out clean where these do not. Near a boundary parameter the
+  # simulated surface is flat enough that the full fit's single BFGS run can
+  # stop a hair BELOW the restricted refit, which is warm-started at the full
+  # fit's own coefficients and so effectively gets a second pass over the same
+  # ridge. The result is a small negative LR statistic that lr_test() clamps to
+  # 0 with a warning, even though the models are properly nested.
+  #
+  # The fix is to give the full model the one start where it provably attains
+  # the restricted likelihood -- the restricted optimum, re-expressed in the
+  # FULL model's parameterization -- and let BFGS climb from there. Whichever
+  # full-model optimum is higher then defines the statistic, so LR >= 0 by
+  # construction rather than by clamping.
+  #
+  # `null_point` is that re-expression: a named scalar giving the value the
+  # tested parameter must take for the full model to reproduce the restricted
+  # fit on the full draws. Only tests that HAVE such a point may polish (see
+  # .SD_NULL_LOG_SCALE and the call sites); the dispersion test does not,
+  # because Poisson and NB2 are different likelihood branches rather than two
+  # points of one parameterization.
+  polish_full <- function(rest, null_point) {
+    start <- rest$coef
+    start[names(null_point)] <- null_point
+    tryCatch(
+      fit_rpbnb(fit$formula_1, fit$formula_2, data = data,
+                random_1 = full1, random_2 = full2,
+                draws = fit$draws, draw_type = fit$draw_type, seed = fit$seed,
+                start = start, control = control, dependence = full_dep,
+                poisson_1 = isTRUE(fit$poisson_1), poisson_2 = isTRUE(fit$poisson_2),
+                .opt_draws = full_draws),
+      error = function(e) NULL)
+  }
   # A restricted refit that did not converge cannot supply a valid maximized
   # log-likelihood; report NA inference (with a warning) rather than a
   # misleading p-value from an unfinished optimization.
@@ -281,14 +324,23 @@ rpbnb_boundary_tests <- function(fit, data,
   # on the boundary of the parameter space, but the dependence null does not
   # for every family (see .dep_null_is_boundary()), and applying the 50:50
   # mixture where the null is interior halves the p-value for no reason.
-  test_row <- function(param, rest, boundary = TRUE) {
+  test_row <- function(param, rest, boundary = TRUE, null_point = NULL) {
     if (!isTRUE(rest$convergence$converged)) {
       warning("Restricted fit for '", param, "' did not converge (maxLik code ",
               rest$convergence$code, ": ", rest$convergence$message,
               "); reporting NA for this parameter.", call. = FALSE)
       return(na_row(param))
     }
-    lr <- lr_test(rest, fit, boundary = boundary)
+    full_fit <- fit
+    if (!is.null(null_point) &&
+        as.numeric(stats::logLik(rest)) > as.numeric(stats::logLik(full_fit))) {
+      polished <- polish_full(rest, null_point)
+      if (!is.null(polished) && isTRUE(polished$convergence$converged) &&
+          as.numeric(stats::logLik(polished)) > as.numeric(stats::logLik(full_fit))) {
+        full_fit <- polished
+      }
+    }
+    lr <- lr_test(rest, full_fit, boundary = boundary)
     data.frame(Parameter = param, LR = lr$statistic, df = lr$df,
                p.value = lr$p.value, Signif = signif_stars(lr$p.value),
                stringsAsFactors = FALSE)
@@ -298,18 +350,25 @@ rpbnb_boundary_tests <- function(fit, data,
 
   if ("sd" %in% which) {
     # Equation 1: zero each coefficient's draw column in turn (exact SD-zero null).
+    # The full model reproduces a scale-restricted fit by driving that scale to
+    # 0, so .SD_NULL_LOG_SCALE -- not the full fit's own estimate -- is the
+    # start that lets the polish recover a non-negative statistic.
     for (k in seq_along(names1)) {
+      nm <- .scale_par(dist1[k], 1, names1[k])
       rows[[length(rows) + 1L]] <-
         test_row(.sd_label(dist1[k], 1, names1[k]),
                  refit(fixed = pin_scale(dist1[k], 1, names1[k]),
-                       opt_draws = zeroed(1L, k)))
+                       opt_draws = zeroed(1L, k)),
+                 null_point = stats::setNames(.SD_NULL_LOG_SCALE, nm))
     }
     # Equation 2.
     for (k in seq_along(names2)) {
+      nm <- .scale_par(dist2[k], 2, names2[k])
       rows[[length(rows) + 1L]] <-
         test_row(.sd_label(dist2[k], 2, names2[k]),
                  refit(fixed = pin_scale(dist2[k], 2, names2[k]),
-                       opt_draws = zeroed(2L, k)))
+                       opt_draws = zeroed(2L, k)),
+                 null_point = stats::setNames(.SD_NULL_LOG_SCALE, nm))
     }
   }
 
@@ -317,6 +376,12 @@ rpbnb_boundary_tests <- function(fit, data,
     # A margin already pinned to its Poisson limit has no free dispersion to
     # restrict: refitting it would produce the same model, and lr_test() would
     # (correctly) refuse a 0-df comparison. Skip it, as the TMB engine does.
+    #
+    # No `null_point`: the restricted fit takes the EXACT Poisson branch, which
+    # is not a point of the full NB2 parameterization (m -> 0 approaches it, but
+    # the NB2 log-likelihood there is a difference of lgamma terms near 1e7 and
+    # loses more precision than the discrepancy being chased). These rows have
+    # not shown the negative-statistic problem, so they are left unpolished.
     if (!isTRUE(fit$poisson_1)) {
       rows[[length(rows) + 1L]] <- test_row("m1", refit(poisson_1 = TRUE))
     }
@@ -354,9 +419,12 @@ rpbnb_boundary_tests <- function(fit, data,
                 "bracket 0); reporting NA for this parameter.", call. = FALSE)
         rows[[length(rows) + 1L]] <- na_row(param)
       } else {
+        # `pin` is already the independence point of the full model's own
+        # parameterization on the same draws, so it doubles as the polish start.
         rows[[length(rows) + 1L]] <-
           test_row(param, refit(fixed = pin),
-                   boundary = .dep_null_is_boundary(fam))
+                   boundary = .dep_null_is_boundary(fam),
+                   null_point = pin)
       }
     }
   }

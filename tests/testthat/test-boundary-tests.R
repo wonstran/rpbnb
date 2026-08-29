@@ -180,6 +180,25 @@ test_that("boundary tests report NA (never a p-value) for a non-converged refit"
   expect_equal(length(conv_w), nrow(bt))
 })
 
+test_that("a near-zero scale does not produce a clamped negative LR statistic", {
+  skip_slow()
+  # sd = 0.02 puts the full fit on the flat part of the simulated likelihood,
+  # where its single BFGS run used to stop just below the warm-started
+  # restricted refit -- the "Restricted model has the higher log-likelihood"
+  # clamp. The full-model polish in rpbnb_boundary_tests() removes it.
+  sim <- simulate_rpbnb(n = 600,
+    beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
+    beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
+    random_1 = list(x1 = list(sd = 0.02)),
+    dispersion = c(m1 = 0.4, m2 = 0.5), seed = 11)
+  ctrl <- rpbnb_control(print_level = 0, compute_se = FALSE)
+  fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
+                   draws = 150, seed = 11, control = ctrl)
+  expect_no_warning(
+    bt <- rpbnb_boundary_tests(fit, sim$data, control = ctrl, which = "sd"))
+  expect_true(all(bt$LR >= 0))
+})
+
 test_that("restricted refits warm-start from the full fit (non-default start reproduced)", {
   skip_slow()
   sim <- simulate_rpbnb(n = 500,
