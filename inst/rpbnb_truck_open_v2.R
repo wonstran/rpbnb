@@ -52,7 +52,7 @@ tmb_method <- "sml"
 # object.  Note copula("normal") is capped at one thread unless
 # force_parallel_gaussian = TRUE (a known SIGSEGV in the registered atomic),
 # so a Gaussian run here will be markedly slower.
-dependence <- copula("frank")  #copula("kimeldorf") 
+dependence <- copula("normal") #copula("kimeldorf") 
 # Which groups to LR-test.  "all" = c("sd", "dispersion", "dependence").
 # FALSE or "none" skips them entirely.
 boundary_tests <- FALSE #"all"
