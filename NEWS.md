@@ -1,5 +1,27 @@
 # rpbnb 0.4.3
 
+* **TMB engine: the multithreaded Gaussian-copula SIGSEGV is fixed.** The
+  crash was never a data race in the kernel: `REGISTER_ATOMIC`'s cache
+  (`atomic::forrev_derivatives`, TMB's checkpoint_macro.hpp under the CppAD
+  framework) sizes its per-thread inner-tape array to `config.nthreads` ONCE,
+  at first initialization, and never resizes, while evaluation indexes it by
+  `omp_get_thread_num()` unchecked. Initialized at one fit's thread count,
+  any later evaluation with more threads read past the end of that array and
+  took the R process down — which is why the crash reproduced only on
+  thread-count *escalation* within a session (a serial fit followed by a
+  parallel one, or a 2-core fit followed by a 4-core fit) and never in a
+  fresh process at a fixed count. `src/rpbnb_tmb.cpp`'s `FAM_GAUSSIAN` init
+  block now raises `config.nthreads` to the machine's processor count for the
+  one call that initializes the atomic (inside the existing
+  `omp critical`, first-init only), so the array is sized once for every
+  thread count a fit can realize. Verified at 2/4/8/16 threads on a
+  2,321-observation, 1,000-draw fit: identical objective and gradient at
+  every count, ~5x gradient speedup at 16 threads, where the same sequence
+  previously segfaulted. The `test-parallel.R` Gaussian serial-vs-parallel
+  comparison, skipped since the crash was first documented, now runs as the
+  regression guard. The single-thread default cap and
+  `force_parallel_gaussian` opt-in are unchanged for now; a follow-up may
+  relax them.
 * **TMB engine: exact draw chunking fixes out-of-memory failures at large
   `draws`.** SML tape size used to scale as `nrow(data) * draws` with no
   mitigation beyond a pre-flight refusal

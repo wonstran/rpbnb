@@ -1188,15 +1188,47 @@ Type objective_function<Type>::operator() () {
   // happen before any AD call to gauss_cell_vec(), and region tapes are built
   // concurrently, so the guard is a critical section rather than an
   // assumption about which thread tapes first.
+  //
+  // config.nthreads is raised to the processor count for the duration of
+  // that first call, because REGISTER_ATOMIC's cache
+  // (atomic::forrev_derivatives in TMB's checkpoint_macro.hpp) sizes its
+  // per-thread tape array to config.nthreads ONCE, at first initialization,
+  // and never resizes -- while evaluation indexes it by
+  // omp_get_thread_num() unchecked.  Initialized at one fit's thread count,
+  // any LATER evaluation with more threads read past the end of that array
+  // and took the R process down: this was the "known SIGSEGV" that capped
+  // Gaussian fits at one thread.  It reproduced ONLY on thread-count
+  // escalation within a session (init at 1 thread then evaluate at 2, or a
+  // 2-core fit followed by a 4-core fit), never in a fresh process at a
+  // fixed count -- the fingerprint of stale sizing, not of a data race.
+  // Sizing the array once for every processor the machine has makes every
+  // realizable thread count in-bounds for the life of the process
+  // (.configure_tmb_threads() caps requests at the TMB-supported maximum),
+  // at the cost of num_procs copies of a Domain-5 inner tape.
+  //
+  // The bump is confined to the not-yet-initialized branch: after the first
+  // build, the whole block is a no-op, and config.nthreads is never touched
+  // while parallel taping might be reading it for parallel_accumulator's
+  // region count below.  First init always happens on TMB's single-threaded
+  // count_parallel_regions() pass through this template, before any
+  // parallel region exists.
   if (family == FAM_GAUSSIAN) {
 #ifdef _OPENMP
 #pragma omp critical(gauss_cell_vec_init)
 #endif
     {
-      vector<double> qinit(5);
-      qinit(0) = -0.5; qinit(1) = -1.0; qinit(2) = -0.5; qinit(3) = -1.0;
-      qinit(4) = 0.1;
-      gauss_cell_vec(qinit);
+      if (!gauss_cell_vecNAMESPACE::double_version.initialized) {
+        int saved_nthreads = config.nthreads;
+#ifdef _OPENMP
+        int nprocs = omp_get_num_procs();
+        if (nprocs > config.nthreads) config.nthreads = nprocs;
+#endif
+        vector<double> qinit(5);
+        qinit(0) = -0.5; qinit(1) = -1.0; qinit(2) = -0.5; qinit(3) = -1.0;
+        qinit(4) = 0.1;
+        gauss_cell_vec(qinit);
+        config.nthreads = saved_nthreads;
+      }
     }
   }
 

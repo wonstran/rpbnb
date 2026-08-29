@@ -504,29 +504,25 @@ test_that("serial and parallel copula objectives and gradients agree", {
             3.7917127004051)
   )
 
-  # KNOWN CRASH -- multithreaded Gaussian copula (family_code = 2) SIGSEGVs.
+  # FIXED CRASH -- multithreaded Gaussian copula (family_code = 2) used to
+  # SIGSEGV on exactly the sequence this test runs: build and evaluate the
+  # serial object first, then evaluate the parallel one. The failure was
+  # never a data race in the kernel: REGISTER_ATOMIC's cache
+  # (atomic::forrev_derivatives, TMB's checkpoint_macro.hpp) sizes its
+  # per-thread inner-tape array to config.nthreads at FIRST initialization
+  # and never resizes, while evaluation indexes it by omp_get_thread_num()
+  # unchecked. The serial fit initialized it with one slot; the parallel
+  # evaluation's second thread then read past the end of the array. That is
+  # why the crash reproduced only on thread-count ESCALATION within a
+  # session (1 then 2 here; a 2-core fit then a 4-core fit likewise) and
+  # never in a fresh process at any fixed count.
   #
-  # Building the Gaussian object with n_cores = 2 and calling obj$fn() once
-  # takes the whole R process down with a segmentation fault. It is the very
-  # first evaluation that dies, not an accumulation. Frank (family_code = 1) is
-  # fine at both thread counts, and Gaussian is fine at n_cores = 1, so the
-  # trigger is specifically the Gaussian path under OpenMP -- i.e.
-  # REGISTER_ATOMIC(gauss_cell_vec) in src/rpbnb_tmb.cpp, whose
-  # `#pragma omp critical(gauss_cell_vec_init)` force-init is evidently not
-  # sufficient to make the atomic thread-safe here.
-  #
-  # This PREDATES the rpbnb.tmb -> rpbnb merge. Verified by building unmodified
-  # rpbnb.tmb 0.3.5 (git c64a2ec) into a separate library and running its own
-  # copy of this file against it: identical segfault, same test, same point.
-  # The merge did not introduce it and does not fix it.
-  #
-  # Because a SIGSEGV takes down the entire test process -- not just this file --
-  # the parallel half is skipped for Gaussian rather than left to abort every
-  # full test run and R CMD check. The serial assertions below still run for
-  # BOTH families, so the reference values stay guarded; only the
-  # serial-vs-parallel comparison is withheld, and only for Gaussian.
-  gaussian_parallel_crashes <- TRUE
-
+  # Fixed in src/rpbnb_tmb.cpp's FAM_GAUSSIAN init block by raising
+  # config.nthreads to the processor count for the one call that initializes
+  # the atomic, so the array is sized once for every thread count a fit can
+  # realize. This test's serial-then-parallel Gaussian pass is the
+  # regression guard: under the stale sizing it segfaulted the process on
+  # the parallel obj$fn() below.
   for (family_code in c(1L, 2L)) {
     fixture <- copula_parallel_fixture(family_code)
     serial <- .make_rpbnb_tmb_object(
@@ -548,8 +544,6 @@ test_that("serial and parallel copula objectives and gradients agree", {
       )
     }
 
-    if (family_code == 2L && gaussian_parallel_crashes) next
-
     parallel <- .make_rpbnb_tmb_object(
       data = fixture$data, parameters = fixture$parameters,
       map = fixture$map, n_cores = 2L
@@ -564,9 +558,6 @@ test_that("serial and parallel copula objectives and gradients agree", {
     expect_true(all(is.finite(parallel_gr)))
     expect_true(all(is.finite(parallel_he)))
   }
-
-  # Make the withheld coverage visible in every run rather than silently absent.
-  skip("multithreaded Gaussian copula segfaults (pre-existing; see comment)")
 })
 
 test_that("Gaussian copula fits are capped at one thread", {
