@@ -113,7 +113,7 @@ ctrl <- rpbnb_control(
 )
 
 sep(); cat("CONTROL OBJECT\n"); sep()
-print(ctrl)
+print(ctrl, engine = "tmb", method = tmb_method)
 
 # ---- Fit ----------------------------------------------------------------
 stamp <- format(Sys.time(), "%Y-%m-%d-%H%M%S")

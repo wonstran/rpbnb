@@ -60,6 +60,20 @@
               "parallel_tape", "tape_chunks")
 )
 
+# Fields `engine` actually reads, narrowed by `method` where the estimator
+# argument -- not the engine -- decides. Only the TMB engine has such a case:
+# method = "laplace" integrates the latent out analytically, so there is no
+# draw dimension to chunk and fit_rpbnb_tmb() never reads `tape_chunks` on that
+# path (it takes the .check_tmb_workload() branch, which does not see it).
+# `method = NULL` means "not known", and nothing is narrowed.
+.control_applicable <- function(engine, method = NULL) {
+  fields <- .CONTROL_APPLICABLE[[engine]]
+  if (identical(engine, "tmb") && identical(method, "laplace")) {
+    fields <- setdiff(fields, "tape_chunks")
+  }
+  fields
+}
+
 # The fields whose two historical constructors disagreed (see the header note).
 # NULL on the control object means "unset"; these values fill it in.
 .CONTROL_ENGINE_DEFAULTS <- list(
@@ -408,18 +422,58 @@ rpbnb_tmb_control <- function(iterlim = NULL,
   invisible(NULL)
 }
 
+# print() shows the fields that APPLY, not all eighteen. The control object is
+# the union of every estimator's parameter set (see this file's header), so
+# printing it whole listed a maxLik `method = "BFGS"` and an `se_method` under
+# a TMB fit -- defaults for knobs that engine never reads, which invited exactly
+# the "is my TMB fit running BFGS?" question. `engine`/`method` name the
+# estimator to display for; when they are omitted the "engine" attribute
+# .resolve_control() left on the object is used, and an unresolved object still
+# prints in full (nothing is known yet to narrow it by).
+#
+# A setting the caller SUPPLIED is always shown, applicable or not, flagged
+# "(ignored here)". Hiding one would be the real hazard this file's design
+# guards against -- an ignored setting must never look honored, and it must
+# never look absent either.
 #' @export
-print.rpbnb_control <- function(x, ...) {
+print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
+  if (is.null(engine)) engine <- attr(x, "engine")
+  if (!is.null(engine)) {
+    engine <- match.arg(engine, c("classic", "tmb", "bnb"))
+  }
+  if (!is.null(method)) {
+    method <- match.arg(method, c("sml", "laplace"))
+  }
+
   cat("rpbnb control settings\n")
-  eng <- attr(x, "engine")
-  if (!is.null(eng)) cat("  resolved for:", eng, "\n")
+  supplied <- attr(x, "supplied")
+  if (is.null(supplied)) supplied <- character(0)
+
+  applicable <- NULL
+  fields <- .CONTROL_ALL_FIELDS
+  if (!is.null(engine)) {
+    applicable <- .control_applicable(engine, method)
+    shown_for <- if (identical(engine, "tmb") && !is.null(method)) {
+      paste0(engine, ", method = \"", method, "\"")
+    } else {
+      engine
+    }
+    cat("  settings read by:", shown_for, "\n")
+    fields <- intersect(.CONTROL_ALL_FIELDS, union(applicable, supplied))
+  }
+
   fmt <- function(v) {
     if (is.null(v)) "<estimator default>" else paste(format(v), collapse = " ")
   }
-  for (f in .CONTROL_ALL_FIELDS) {
-    cat(sprintf("  %-14s %s\n", f, fmt(x[[f]])))
+  for (f in fields) {
+    flag <- if (!is.null(applicable) && !(f %in% applicable)) {
+      "   (ignored here)"
+    } else {
+      ""
+    }
+    cat(sprintf("  %-14s %s%s\n", f, fmt(x[[f]]), flag))
   }
-  supplied <- attr(x, "supplied")
+
   if (length(supplied)) {
     cat("  supplied by caller:", paste(supplied, collapse = ", "), "\n")
   }

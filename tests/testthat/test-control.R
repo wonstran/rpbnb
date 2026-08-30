@@ -76,6 +76,67 @@ test_that("the ignored-settings note names the estimator and the fields", {
     0L)
 })
 
+test_that("print() shows only the fields the named estimator reads", {
+  ctl <- rpbnb_control(n_cores = 4L, gradtol = 1e-5, tape_chunks = 4L)
+
+  tmb <- capture.output(print(ctl, engine = "tmb", method = "sml"))
+  expect_true(any(grepl("settings read by: tmb, method = \"sml\"", tmb,
+                        fixed = TRUE)))
+  # The maxLik-only knobs are absent entirely -- printing a `method BFGS` under
+  # a TMB fit is the confusion this narrowing exists to remove.
+  expect_false(any(grepl("^  method ", tmb)))
+  expect_false(any(grepl("^  se_method ", tmb)))
+  expect_false(any(grepl("^  hess_eps ", tmb)))
+  expect_true(any(grepl("^  gradtol ", tmb)))
+  expect_true(any(grepl("^  tape_chunks ", tmb)))
+
+  # The classic engine reads `method` and not the TMB tape knobs.
+  classic <- capture.output(print(ctl, engine = "classic"))
+  expect_true(any(grepl("^  method ", classic)))
+  expect_true(any(grepl("^  se_method ", classic)))
+
+  # An unresolved object has no estimator to narrow by, so it prints in full.
+  full <- capture.output(print(ctl))
+  expect_false(any(grepl("settings read by", full)))
+  for (f in rpbnb:::.CONTROL_ALL_FIELDS) {
+    expect_true(any(grepl(paste0("^  ", f, " "), full)))
+  }
+})
+
+test_that("print() never hides a supplied setting the estimator ignores", {
+  # se_method is maxLik-only; supplying it and printing for the TMB engine must
+  # show it AND mark it, never drop it -- a silently absent setting would look
+  # honored, which is the hazard the whole ignored-report design guards against.
+  ctl <- rpbnb_control(se_method = "opg", n_cores = 4L)
+  out <- capture.output(print(ctl, engine = "tmb", method = "sml"))
+  se_row <- grep("^  se_method ", out, value = TRUE)
+  expect_length(se_row, 1L)
+  expect_match(se_row, "(ignored here)", fixed = TRUE)
+
+  # tape_chunks is TMB-only but METHOD-dependent: read under sml, not under
+  # laplace (which has no draw dimension to chunk).
+  ctl2 <- rpbnb_control(tape_chunks = 4L)
+  sml <- grep("^  tape_chunks ", capture.output(
+    print(ctl2, engine = "tmb", method = "sml")), value = TRUE)
+  lap <- grep("^  tape_chunks ", capture.output(
+    print(ctl2, engine = "tmb", method = "laplace")), value = TRUE)
+  expect_false(grepl("ignored here", sml, fixed = TRUE))
+  expect_true(grepl("(ignored here)", lap, fixed = TRUE))
+
+  expect_error(print(ctl, engine = "tmb", method = "bogus"), "should be one of")
+  expect_error(print(ctl, engine = "nosuchengine"), "should be one of")
+})
+
+test_that("a resolved control prints for the estimator it was resolved for", {
+  ctl <- rpbnb:::.resolve_control(rpbnb_control(n_cores = 4L), "tmb")
+  out <- capture.output(print(ctl))
+  expect_true(any(grepl("settings read by: tmb", out, fixed = TRUE)))
+  expect_false(any(grepl("^  method ", out)))
+  # An explicit engine argument overrides the attribute.
+  expect_true(any(grepl("^  method ",
+                        capture.output(print(ctl, engine = "classic")))))
+})
+
 test_that("a classic fit records and prints the settings it did not read", {
   d <- data.frame(y1 = c(0L, 1L, 2L, 1L, 0L, 3L, 1L, 2L),
                   y2 = c(1L, 0L, 2L, 1L, 3L, 1L, 0L, 2L),
