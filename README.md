@@ -31,7 +31,7 @@ interchangeable engines.
 - [TMB engine: inference and memory](#tmb-engine-inference-and-memory)
   - [Exact draw chunking](#exact-draw-chunking-new)
   - [Laplace approximation](#laplace-approximation)
-- [Known issue: multithreaded Gaussian copula](#known-issue-multithreaded-gaussian-copula)
+- [Multithreaded Gaussian copula (fixed in 0.4.4)](#multithreaded-gaussian-copula-fixed-in-044)
 - [Example datasets](#example-datasets)
 - [Documentation](#documentation)
 - [Development](#development)
@@ -61,19 +61,19 @@ Windows x64 `.zip` binary, a macOS arm64 `.tgz` binary, and a `.tar.gz`
 source package (installs on any platform, compiling locally):
 
 `install.packages()` accepts the release URL directly, so there is no need to
-download the file first (substitute the version you want for `0.4.4`):
+download the file first (substitute the version you want for `0.4.5`):
 
 ```r
-base <- "https://github.com/wonstran/rpbnb/releases/download/v0.4.4/"
+base <- "https://github.com/wonstran/rpbnb/releases/download/v0.4.5/"
 
 # Windows
-install.packages(paste0(base, "rpbnb_0.4.4.zip"), repos = NULL, type = "win.binary")
+install.packages(paste0(base, "rpbnb_0.4.5.zip"), repos = NULL, type = "win.binary")
 
 # macOS, Apple Silicon (arm64)
-install.packages(paste0(base, "rpbnb_0.4.4-macos-arm64.tgz"), repos = NULL)
+install.packages(paste0(base, "rpbnb_0.4.5-macos-arm64.tgz"), repos = NULL)
 
 # Linux, Intel Mac, or any platform from source
-install.packages(paste0(base, "rpbnb_0.4.4.tar.gz"), repos = NULL, type = "source")
+install.packages(paste0(base, "rpbnb_0.4.5.tar.gz"), repos = NULL, type = "source")
 ```
 
 Not on CRAN.
@@ -460,19 +460,31 @@ deliberately against the memory you actually have —
 disables the guard entirely (both the pre-flight refusal and auto-chunking;
 pin `tape_chunks` explicitly if you still want chunking with the guard off).
 
-## Known issue: multithreaded Gaussian copula
+## Multithreaded Gaussian copula (fixed in 0.4.4)
 
-Evaluating a Gaussian-copula TMB object built with more than one thread
-segfaults the R process. Frank and Clayton are unaffected at any thread count,
-and Gaussian is fine serially. This predates the 0.4.0 merge — it reproduces
-identically in `rpbnb.tmb` 0.3.5 — and the underlying defect, in the registered
-Gaussian atomic under OpenMP, is not yet fixed.
+Evaluating a Gaussian-copula TMB object used to segfault the R process. It is
+fixed as of 0.4.4, and the cause turned out not to be what the symptom
+suggested.
 
-**`fit_rpbnb_tmb()` enforces `n_cores = 1L` for the Gaussian family**, with a
-warning, so the crash is not reachable from a public call; `parallel_tape` is
-forced off for the same reason. Gaussian fits are therefore slower than the
-other families until this is repaired. `fit$parallel` records both the
-`requested` and `realized` thread counts.
+It was never a race in the kernel. TMB's `REGISTER_ATOMIC` cache sizes its
+per-thread inner-tape array to `config.nthreads` at *first* initialization and
+never resizes it, while evaluation indexes that array by thread number
+unchecked. Initialized at one fit's thread count, any later evaluation using
+more threads read past the end of the array. That is why the crash appeared
+only when the thread count **escalated within a session** — a serial fit
+followed by a parallel one, or a 2-core fit followed by a 4-core fit — and
+never in a fresh process at any fixed count, which is the fingerprint of stale
+sizing rather than a data race. `src/rpbnb_tmb.cpp` now sizes the array once
+for every thread count a fit can realize. Verified at 2, 4, 8, and 16 threads
+on a 2,321-observation, 1,000-draw fit: identical objective and gradient at
+every count, and roughly a 5x gradient speedup at 16 threads, on the exact
+sequence that previously crashed.
+
+`fit_rpbnb_tmb()` still caps the Gaussian family at `n_cores = 1L` by default,
+with a warning; pass `force_parallel_gaussian = TRUE` to run it multithreaded.
+Relaxing that default is a separate change, so that the cap can be removed
+deliberately rather than as a side effect of the fix. `fit$parallel` records
+both the `requested` and `realized` thread counts.
 
 ## Example datasets
 

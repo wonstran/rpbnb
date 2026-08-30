@@ -1,5 +1,15 @@
-# rpbnb 0.4.4
+# rpbnb 0.4.5
 
+* Release installers are now built for every platform and attached to the
+  GitHub Release automatically. This package compiles C++ (TMB/Rcpp with
+  OpenMP), so its binaries are platform-specific and cannot be
+  cross-compiled; a workflow builds the source tarball, a Windows `.zip`,
+  and a macOS `.tgz` on their own runners for each `v*` tag. The macOS job
+  installs `libomp` and points the compiler at it, since Apple clang ships
+  no OpenMP and the package would otherwise be built silently
+  single-threaded. README and the release notes give the release URLs
+  directly — `install.packages()` downloads an `https` argument itself when
+  `repos = NULL`, so there is no need to save the file first.
 * New `rpbnb_build_info()` reports how the installed shared object was
   compiled — optimization, OpenMP, assertions, compiler — and the package
   says so at load time when it was built *without* optimization. Nearly all
@@ -13,6 +23,9 @@
   its default, and what `devtools::load_all()` uses when recompiling changed
   sources. `optimized` is read from the compiler's own `__OPTIMIZE__` macro
   rather than inferred from flags.
+
+# rpbnb 0.4.4
+
 * **TMB engine: the multithreaded Gaussian-copula SIGSEGV is fixed.** The
   crash was never a data race in the kernel: `REGISTER_ATOMIC`'s cache
   (`atomic::forrev_derivatives`, TMB's checkpoint_macro.hpp under the CppAD
