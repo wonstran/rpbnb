@@ -1,4 +1,4 @@
-# rpbnb 0.4.3
+# rpbnb 0.4.4
 
 * **TMB engine: the multithreaded Gaussian-copula SIGSEGV is fixed.** The
   crash was never a data race in the kernel: `REGISTER_ATOMIC`'s cache
@@ -51,6 +51,13 @@
   the two serial per-chunk `report()` sweeps from every gradient evaluation —
   roughly a 20–30% wall-clock saving on chunked fits, exact to the digit
   (verified against `numDeriv` finite differences).
+* The classic-engine boundary-test polish that 0.4.3's notes describe (the
+  `LR >= 0` guarantee replacing the
+  `Restricted model has the higher log-likelihood ... Clamping` warning)
+  landed in this version; 0.4.3 shipped the note ahead of the code.
+
+# rpbnb 0.4.3
+
 * **TMB engine: exact draw chunking fixes out-of-memory failures at large
   `draws`.** SML tape size used to scale as `nrow(data) * draws` with no
   mitigation beyond a pre-flight refusal
