@@ -435,6 +435,15 @@ rpbnb_tmb_control <- function(iterlim = NULL,
 # "(ignored here)". Hiding one would be the real hazard this file's design
 # guards against -- an ignored setting must never look honored, and it must
 # never look absent either.
+#
+# The header states the estimator outright -- engine, and for the TMB engine
+# the sml/laplace method and the optimizer that engine actually calls -- rather
+# than leaving the reader to infer it from which fields survived the filter.
+# Naming the optimizer is the point: `method` is two different things in this
+# package (the maxLik optimizer the classic engine reads from the control
+# object, and the sml/laplace estimator argument the TMB fitter takes), and a
+# header that says "nlminb" leaves no room to read a stray BFGS as the TMB
+# engine's optimizer.
 #' @export
 print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
   if (is.null(engine)) engine <- attr(x, "engine")
@@ -443,6 +452,21 @@ print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
   }
   if (!is.null(method)) {
     method <- match.arg(method, c("sml", "laplace"))
+    # sml/laplace is an argument of fit_rpbnb_tmb() alone; no other estimator
+    # has the choice, so a method= for one of them is a mistaken mental model
+    # worth naming rather than rendering.
+    if (!is.null(engine) && !identical(engine, "tmb")) {
+      warning("`method` (\"sml\"/\"laplace\") is a TMB-engine argument; ",
+              "ignoring it for engine = \"", engine, "\".", call. = FALSE)
+      method <- NULL
+    }
+  }
+
+  fmt <- function(v) {
+    if (is.null(v)) "<estimator default>" else paste(format(v), collapse = " ")
+  }
+  row <- function(label, value, note = "") {
+    cat(sprintf("  %-14s %s%s\n", label, value, note))
   }
 
   cat("rpbnb control settings\n")
@@ -451,27 +475,30 @@ print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
 
   applicable <- NULL
   fields <- .CONTROL_ALL_FIELDS
-  if (!is.null(engine)) {
+  if (is.null(engine)) {
+    cat("  (no estimator named -- showing every field; pass engine=/method=,",
+        "or\n   resolve the object, to narrow this to the settings one",
+        "estimator reads)\n")
+  } else {
     applicable <- .control_applicable(engine, method)
-    shown_for <- if (identical(engine, "tmb") && !is.null(method)) {
-      paste0(engine, ", method = \"", method, "\"")
-    } else {
-      engine
-    }
-    cat("  settings read by:", shown_for, "\n")
     fields <- intersect(.CONTROL_ALL_FIELDS, union(applicable, supplied))
+    row("engine", engine)
+    if (identical(engine, "tmb")) {
+      if (!is.null(method)) row("method", method, "   (estimator)")
+      row("optimizer", "nlminb", "   (+ restarts; not control$method)")
+    }
+    cat("  -- settings this estimator reads ", strrep("-", 34), "\n", sep = "")
   }
 
-  fmt <- function(v) {
-    if (is.null(v)) "<estimator default>" else paste(format(v), collapse = " ")
-  }
   for (f in fields) {
-    flag <- if (!is.null(applicable) && !(f %in% applicable)) {
+    note <- if (!is.null(applicable) && !(f %in% applicable)) {
       "   (ignored here)"
+    } else if (identical(f, "method")) {
+      "   (maxLik optimizer)"
     } else {
       ""
     }
-    cat(sprintf("  %-14s %s%s\n", f, fmt(x[[f]]), flag))
+    row(f, fmt(x[[f]]), note)
   }
 
   if (length(supplied)) {

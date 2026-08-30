@@ -29,10 +29,14 @@
   that engine never reads, which made it look as though a TMB fit optimized
   with BFGS (it uses `nlminb`). `print(control, engine = , method = )` names
   the estimator to display for; a control already resolved by a fitter uses
-  its own engine, and an unresolved one still prints in full. A setting the
-  caller *supplied* is always shown even when it does not apply, flagged
-  `(ignored here)` — including `tape_chunks` under `method = "laplace"`,
-  which has no draw dimension to chunk.
+  its own engine, and an unresolved one still prints in full. The header now
+  states that estimator outright — `engine`, the sml/laplace `method`, and
+  the `optimizer` the TMB engine actually calls (`nlminb`, not
+  `control$method`) — so the two unrelated things this package calls "method"
+  can no longer be read for one another. A setting the caller *supplied* is
+  always shown even when it does not apply, flagged `(ignored here)` —
+  including `tape_chunks` under `method = "laplace"`, which has no draw
+  dimension to chunk.
 * TMB engine, chunked SML fits: the draw-chunked gradient no longer re-runs
   `report()` once per chunk on top of the pass the objective already made.
   `.pass1()` keeps each chunk's per-observation log-likelihood vector

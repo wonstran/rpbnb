@@ -80,24 +80,33 @@ test_that("print() shows only the fields the named estimator reads", {
   ctl <- rpbnb_control(n_cores = 4L, gradtol = 1e-5, tape_chunks = 4L)
 
   tmb <- capture.output(print(ctl, engine = "tmb", method = "sml"))
-  expect_true(any(grepl("settings read by: tmb, method = \"sml\"", tmb,
-                        fixed = TRUE)))
+  # The header states the estimator outright, optimizer included: `method` is
+  # two different things in this package, and naming nlminb here is what keeps
+  # a maxLik "BFGS" from being read as the TMB engine's optimizer.
+  expect_true(any(grepl("^  engine +tmb", tmb)))
+  expect_true(any(grepl("^  method +sml   \\(estimator\\)", tmb)))
+  expect_true(any(grepl("^  optimizer +nlminb", tmb)))
   # The maxLik-only knobs are absent entirely -- printing a `method BFGS` under
-  # a TMB fit is the confusion this narrowing exists to remove.
-  expect_false(any(grepl("^  method ", tmb)))
+  # a TMB fit is the confusion this narrowing exists to remove. (The header's
+  # own `method sml` row is the estimator, not control$method.)
+  expect_false(any(grepl("^  method +BFGS", tmb)))
   expect_false(any(grepl("^  se_method ", tmb)))
   expect_false(any(grepl("^  hess_eps ", tmb)))
   expect_true(any(grepl("^  gradtol ", tmb)))
   expect_true(any(grepl("^  tape_chunks ", tmb)))
 
-  # The classic engine reads `method` and not the TMB tape knobs.
+  # The classic engine reads `method` (its maxLik optimizer) and not the TMB
+  # tape knobs, and has no sml/laplace estimator row.
   classic <- capture.output(print(ctl, engine = "classic"))
-  expect_true(any(grepl("^  method ", classic)))
+  expect_true(any(grepl("^  engine +classic", classic)))
+  expect_true(any(grepl("^  method +BFGS   \\(maxLik optimizer\\)", classic)))
   expect_true(any(grepl("^  se_method ", classic)))
+  expect_false(any(grepl("^  optimizer ", classic)))
 
   # An unresolved object has no estimator to narrow by, so it prints in full.
   full <- capture.output(print(ctl))
-  expect_false(any(grepl("settings read by", full)))
+  expect_false(any(grepl("^  engine ", full)))
+  expect_true(any(grepl("no estimator named", full)))
   for (f in rpbnb:::.CONTROL_ALL_FIELDS) {
     expect_true(any(grepl(paste0("^  ", f, " "), full)))
   }
@@ -125,15 +134,23 @@ test_that("print() never hides a supplied setting the estimator ignores", {
 
   expect_error(print(ctl, engine = "tmb", method = "bogus"), "should be one of")
   expect_error(print(ctl, engine = "nosuchengine"), "should be one of")
+
+  # sml/laplace belongs to the TMB fitter alone; asking for it under another
+  # engine is a mistaken mental model, so it is named rather than rendered.
+  expect_warning(out <- capture.output(print(ctl, engine = "classic",
+                                             method = "sml")),
+                 "TMB-engine argument")
+  expect_false(any(grepl("\\(estimator\\)", out)))
 })
 
 test_that("a resolved control prints for the estimator it was resolved for", {
   ctl <- rpbnb:::.resolve_control(rpbnb_control(n_cores = 4L), "tmb")
   out <- capture.output(print(ctl))
-  expect_true(any(grepl("settings read by: tmb", out, fixed = TRUE)))
-  expect_false(any(grepl("^  method ", out)))
+  expect_true(any(grepl("^  engine +tmb", out)))
+  expect_true(any(grepl("^  optimizer +nlminb", out)))
+  expect_false(any(grepl("^  method +BFGS", out)))
   # An explicit engine argument overrides the attribute.
-  expect_true(any(grepl("^  method ",
+  expect_true(any(grepl("^  method +BFGS",
                         capture.output(print(ctl, engine = "classic")))))
 })
 
