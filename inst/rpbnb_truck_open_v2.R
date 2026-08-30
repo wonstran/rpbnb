@@ -35,7 +35,7 @@ sep <- function() cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
 setwd("C:\\Users\\zwang9\\repos\\rpbnb")
 
 # ---- Knobs ------------------------------------------------------------------
-n_cores <- 8L
+n_cores <- 24L
 draws   <- 1000L
 seed    <- 20240712L
 # Draw-chunk count for the TMB engine's SML tape (see ?rpbnb_control's
@@ -64,7 +64,7 @@ boundary_draws <- NULL
 # whole script cheaply before committing to a full run.
 max_rows <- NULL
 
-data <- read.csv(file.path("inst", "extdata", "export_open_all.csv"))
+data <- read.csv("https://its.cutr.usf.edu/ftp/data/export_open_all.csv")
 if (!is.null(max_rows)) {
   data <- utils::head(data, max_rows)
   cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")
