@@ -1,0 +1,121 @@
+# Build the installable artifacts for a release and attach them to it.
+#
+# WHY THIS EXISTS: an R package with compiled code (this one carries TMB/Rcpp
+# C++ and OpenMP) has platform-specific binaries -- a macOS .tgz can only be
+# built on macOS, a Windows .zip only on Windows. Neither can be
+# cross-compiled from the other, so the binaries have to come from CI runners.
+#
+# WHAT EACH ARTIFACT IS FOR:
+#   *.tar.gz  source     -- installs on ANY platform (Linux, macOS, Windows)
+#                           by compiling locally; this is the Linux route,
+#                           since CRAN-style Linux binaries are not a thing.
+#   *.zip     Windows    -- install.packages(<file>, repos = NULL)
+#   *.tgz     macOS      -- install.packages(<file>, repos = NULL); the
+#                           runner's arch decides arm64 vs x86_64, so the file
+#                           name records it.
+#
+# Triggered by pushing a v* tag, or manually via workflow_dispatch (pass the
+# tag to attach to). Assets are uploaded to the GitHub Release for that tag,
+# never committed to the repository -- build products do not belong in git.
+name: release-binaries
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach assets to (e.g. v0.4.4)'
+        required: true
+
+permissions:
+  contents: write        # needed to upload assets onto the release
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: source (all platforms)
+            kind: source
+          - os: macos-latest
+            label: macOS binary
+            kind: binary
+          - os: windows-latest
+            label: Windows binary
+            kind: binary
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # setup-r does NOT bring pandoc, and the source tarball rebuilds
+      # vignettes/rpbnb-intro.Rmd through rmarkdown -- without pandoc that step
+      # fails outright ("Pandoc is required to build R Markdown vignettes").
+      # The binary jobs pass --no-build-vignettes and do not need it, but it is
+      # cheap and keeps the three jobs on one setup path.
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: build
+
+      # The TMB template needs OpenMP, which Apple clang does not ship. Without
+      # libomp the package still builds (the _OPENMP guards compile it out) but
+      # every fit would be single-threaded, so install it and point the
+      # compiler at it rather than shipping a silently serial binary.
+      - name: macOS OpenMP toolchain
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp
+          mkdir -p ~/.R
+          PREFIX="$(brew --prefix libomp)"
+          {
+            echo "CPPFLAGS += -Xclang -fopenmp -I${PREFIX}/include"
+            echo "LDFLAGS  += -L${PREFIX}/lib -lomp"
+          } >> ~/.R/Makevars
+
+      - name: Build source tarball
+        if: matrix.kind == 'source'
+        run: R CMD build .
+
+      # --build turns the installed package into the platform's binary archive
+      # (.zip on Windows, .tgz on macOS) next to it.
+      - name: Build binary
+        if: matrix.kind == 'binary'
+        run: |
+          R CMD build --no-build-vignettes .
+          R CMD INSTALL --build $(ls *.tar.gz)
+        shell: bash
+
+      # Record the macOS architecture in the file name: an arm64 binary will
+      # not load on an Intel Mac, and the default name says nothing about it.
+      - name: Tag macOS asset with its architecture
+        if: runner.os == 'macOS'
+        run: |
+          for f in *.tgz; do
+            mv "$f" "${f%.tgz}-macos-$(uname -m).tgz"
+          done
+        shell: bash
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if [ "${{ matrix.kind }}" = "source" ]; then
+            gh release upload "$TAG" *.tar.gz --clobber
+          else
+            gh release upload "$TAG" $(ls *.zip *.tgz 2>/dev/null) --clobber
+          fi
+        shell: bash
