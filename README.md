@@ -60,10 +60,20 @@ The package compiles natively on both Intel and Apple Silicon (arm64) Macs.
 Windows x64 `.zip` binary, a macOS arm64 `.tgz` binary, and a `.tar.gz`
 source package (installs on any platform, compiling locally):
 
+`install.packages()` accepts the release URL directly, so there is no need to
+download the file first (substitute the version you want for `0.4.4`):
+
 ```r
-install.packages("rpbnb_<version>.zip", repos = NULL, type = "win.binary")     # Windows
-install.packages("rpbnb_<version>-macos-arm64.tgz", repos = NULL)              # Apple Silicon
-install.packages("rpbnb_<version>.tar.gz", repos = NULL, type = "source")      # Linux / Intel Mac / any
+base <- "https://github.com/wonstran/rpbnb/releases/download/v0.4.4/"
+
+# Windows
+install.packages(paste0(base, "rpbnb_0.4.4.zip"), repos = NULL, type = "win.binary")
+
+# macOS, Apple Silicon (arm64)
+install.packages(paste0(base, "rpbnb_0.4.4-macos-arm64.tgz"), repos = NULL)
+
+# Linux, Intel Mac, or any platform from source
+install.packages(paste0(base, "rpbnb_0.4.4.tar.gz"), repos = NULL, type = "source")
 ```
 
 Not on CRAN.

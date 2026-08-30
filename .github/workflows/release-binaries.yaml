@@ -25,8 +25,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build and attach assets to (e.g. v0.4.4)'
-        required: true
+        description: 'Existing tag to build and attach assets to (e.g. v0.4.4). Leave empty to build the current branch and upload nothing -- a dry run of all three platforms.'
+        required: false
+        default: ''
 
 permissions:
   contents: write        # needed to upload assets onto the release
@@ -144,7 +145,11 @@ jobs:
           done
         shell: bash
 
+      # Skipped on a dry run (dispatch with no tag): there is no release to
+      # attach to, and the point of that mode is to prove all three platforms
+      # still build, not to publish anything.
       - name: Upload to the release
+        if: github.event_name == 'push' || github.event.inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
