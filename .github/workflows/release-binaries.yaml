@@ -92,18 +92,37 @@ jobs:
       # The source tarball is what Linux users install, and it compiles on
       # their machine with R's own CXXFLAGS. Install it here exactly as they
       # would and assert the result is an optimized build -- if a default
-      # source install ever stops being -O2 (a package Makevars regression, a
-      # toolchain change), every Linux fit silently costs about twice what it
-      # should, and nothing else in the pipeline would notice.
+      # source install ever stops being -O2 (a package Makevars regression
+      # overriding -O, a toolchain change), every Linux fit silently costs
+      # about twice what it should, and nothing else in the pipeline notices.
+      #
+      # Two checks, because this workflow can be dispatched against ANY tag,
+      # including ones older than rpbnb_build_info() itself:
+      #   1. R's own compiler flags, which every source install inherits.
+      #      Version-independent, so it always runs.
+      #   2. The installed package's own report, when that version has it --
+      #      the stronger check, since it reads the compiler's __OPTIMIZE__
+      #      rather than inferring from flags.
       - name: Verify a source install is optimized
         if: matrix.kind == 'source'
         run: |
+          FLAGS="$(R CMD config CXX17FLAGS 2>/dev/null || R CMD config CXXFLAGS)"
+          echo "R CXXFLAGS: $FLAGS"
+          case "$FLAGS" in
+            *-O0*|*-Og*) echo "::error::R is configured to build packages unoptimized ($FLAGS)"; exit 1 ;;
+            *-O*)        echo "R builds packages optimized." ;;
+            *)           echo "::error::no -O optimization flag in R's CXXFLAGS ($FLAGS)"; exit 1 ;;
+          esac
           R CMD INSTALL *.tar.gz
-          Rscript -e 'info <- rpbnb::rpbnb_build_info(); print(info);
-                      if (!isTRUE(info$optimized))
-                        stop("a default source install is NOT optimized");
-                      if (!isTRUE(info$openmp))
-                        stop("a default source install has no OpenMP")'
+          Rscript -e 'if (!"rpbnb_build_info" %in% getNamespaceExports("rpbnb")) {
+                        message("this version predates rpbnb_build_info(); flag check above stands")
+                      } else {
+                        info <- rpbnb::rpbnb_build_info(); print(info)
+                        if (!isTRUE(info$optimized))
+                          stop("a default source install is NOT optimized")
+                        if (!isTRUE(info$openmp))
+                          stop("a default source install has no OpenMP")
+                      }'
         shell: bash
 
       # --build turns the installed package into the platform's binary archive
