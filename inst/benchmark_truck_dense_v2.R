@@ -41,7 +41,7 @@ ctrl <- rpbnb_control(
   max_workload   = Inf,
   parallel_tape  = FALSE
 )
-cat("Control:\n"); print(ctrl, engine = "tmb")
+cat("Control:\n"); print(ctrl, engine = "tmb", draws = draws)
 
 configs <- expand.grid(
   tmb_method = c("sml", "laplace"),

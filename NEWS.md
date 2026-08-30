@@ -33,7 +33,14 @@
   states that estimator outright — `engine`, the sml/laplace `method`, and
   the `optimizer` the TMB engine actually calls (`nlminb`, not
   `control$method`) — so the two unrelated things this package calls "method"
-  can no longer be read for one another. A setting the caller *supplied* is
+  can no longer be read for one another. `print(control, draws = )` adds the
+  simulation size — not a control field, but under simulated ML it *defines*
+  the likelihood being maximized — and lets the `tape_chunks` row report the
+  draws-per-chunk the pair implies (`tape_chunks 10   (100 draws per chunk)`),
+  which is what peak tape memory actually scales with. Under
+  `method = "laplace"` the same number is labelled for what it is there: the
+  Halton grid `predict()`/marginal effects average over, absent from the
+  likelihood. A setting the caller *supplied* is
   always shown even when it does not apply, flagged `(ignored here)` —
   including `tape_chunks` under `method = "laplace"`, which has no draw
   dimension to chunk.

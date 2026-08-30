@@ -143,6 +143,39 @@ test_that("print() never hides a supplied setting the estimator ignores", {
   expect_false(any(grepl("\\(estimator\\)", out)))
 })
 
+test_that("print(draws =) reports the simulation size and the chunk layout", {
+  ctl <- rpbnb_control(tape_chunks = 10L, n_cores = 4L)
+
+  # Under SML `draws` defines the likelihood, and (draws, tape_chunks) together
+  # set the tape's draw dimension -- the quantity peak memory scales with.
+  sml <- capture.output(print(ctl, engine = "tmb", method = "sml", draws = 1000))
+  expect_true(any(grepl("^  draws +1000   \\(simulated likelihood\\)", sml)))
+  expect_true(any(grepl("^  tape_chunks +10   \\(100 draws per chunk\\)", sml)))
+
+  # Under Laplace the latent is integrated out analytically: `draws` leaves the
+  # likelihood, and tape_chunks is not read at all.
+  lap <- capture.output(print(ctl, engine = "tmb", method = "laplace",
+                              draws = 1000))
+  expect_true(any(grepl("Halton grid only", lap, fixed = TRUE)))
+  expect_true(any(grepl("^  tape_chunks +10   \\(ignored here\\)", lap)))
+
+  # The classic engine simulates too, but has no tape to chunk.
+  classic <- capture.output(print(ctl, engine = "classic", draws = 500))
+  expect_true(any(grepl("^  draws +500   \\(simulated likelihood\\)", classic)))
+
+  # Omitting draws leaves the printout exactly as it was.
+  bare <- capture.output(print(ctl, engine = "tmb", method = "sml"))
+  expect_false(any(grepl("^  draws ", bare)))
+  expect_true(any(grepl("^  tape_chunks +10$", bare)))
+
+  expect_error(print(ctl, engine = "tmb", draws = -5), "positive whole number")
+  expect_error(print(ctl, engine = "tmb", draws = 2.5), "positive whole number")
+  # fit_bnb() has fixed coefficients: no integral, so no draws to take.
+  expect_warning(bnb <- capture.output(print(ctl, engine = "bnb", draws = 100)),
+                 "does not apply to engine")
+  expect_false(any(grepl("^  draws ", bnb)))
+})
+
 test_that("a resolved control prints for the estimator it was resolved for", {
   ctl <- rpbnb:::.resolve_control(rpbnb_control(n_cores = 4L), "tmb")
   out <- capture.output(print(ctl))

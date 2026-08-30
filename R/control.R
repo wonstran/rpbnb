@@ -444,8 +444,18 @@ rpbnb_tmb_control <- function(iterlim = NULL,
 # object, and the sml/laplace estimator argument the TMB fitter takes), and a
 # header that says "nlminb" leaves no room to read a stray BFGS as the TMB
 # engine's optimizer.
+#
+# `draws` is NOT a control field -- it is an argument of the fitters, so the
+# object cannot know it -- but under simulated ML it *defines* the likelihood
+# being maximized, which makes it the setting a reader most wants beside
+# `tape_chunks`. Passing it in prints it, and lets the tape_chunks row report
+# the draws-per-chunk the pair actually implies (the quantity peak tape memory
+# scales with). Under Laplace it is reported for what it still is there: the
+# Halton grid predict()/marginal effects average over, absent from the
+# likelihood entirely.
 #' @export
-print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
+print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL,
+                                draws = NULL) {
   if (is.null(engine)) engine <- attr(x, "engine")
   if (!is.null(engine)) {
     engine <- match.arg(engine, c("classic", "tmb", "bnb"))
@@ -459,6 +469,19 @@ print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
       warning("`method` (\"sml\"/\"laplace\") is a TMB-engine argument; ",
               "ignoring it for engine = \"", engine, "\".", call. = FALSE)
       method <- NULL
+    }
+  }
+  if (!is.null(draws)) {
+    if (!is.numeric(draws) || length(draws) != 1L || is.na(draws) ||
+        draws < 1 || draws != as.integer(draws)) {
+      stop("`draws` must be one positive whole number.", call. = FALSE)
+    }
+    draws <- as.integer(draws)
+    # fit_bnb() has fixed coefficients: no integral, so no draws to take.
+    if (identical(engine, "bnb")) {
+      warning("`draws` does not apply to engine = \"bnb\" (fixed ",
+              "coefficients, no simulation); ignoring it.", call. = FALSE)
+      draws <- NULL
     }
   }
 
@@ -487,6 +510,18 @@ print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
       if (!is.null(method)) row("method", method, "   (estimator)")
       row("optimizer", "nlminb", "   (+ restarts; not control$method)")
     }
+    if (!is.null(draws)) {
+      # Under Laplace the latent is integrated out analytically, so `draws`
+      # leaves the likelihood entirely and only sizes the Halton grid the
+      # post-estimation averages use -- worth saying, since the same number
+      # means something quite different on the two paths.
+      row("draws", format(draws),
+          if (identical(method, "laplace")) {
+            "   (Halton grid only; not in the likelihood)"
+          } else {
+            "   (simulated likelihood)"
+          })
+    }
     cat("  -- settings this estimator reads ", strrep("-", 34), "\n", sep = "")
   }
 
@@ -495,6 +530,12 @@ print.rpbnb_control <- function(x, ..., engine = NULL, method = NULL) {
       "   (ignored here)"
     } else if (identical(f, "method")) {
       "   (maxLik optimizer)"
+    } else if (identical(f, "tape_chunks") && !is.null(draws) &&
+               is.numeric(x$tape_chunks) && length(x$tape_chunks) == 1L) {
+      # The pair (draws, tape_chunks) is what sets the tape's draw dimension,
+      # and peak memory scales with THAT, not with either number alone.
+      sprintf("   (%d draws per chunk)",
+              as.integer(ceiling(draws / x$tape_chunks)))
     } else {
       ""
     }
