@@ -57,15 +57,50 @@ The package compiles natively on both Intel and Apple Silicon (arm64) Macs.
 
 **Prebuilt binary / source tarball:** each
 [GitHub Release](https://github.com/wonstran/rpbnb/releases) attaches a
-Windows x64 `.zip` binary and a `.tar.gz` source package (installs on any
-platform, compiling locally):
+Windows x64 `.zip` binary, a macOS arm64 `.tgz` binary, and a `.tar.gz`
+source package (installs on any platform, compiling locally):
 
 ```r
-install.packages("rpbnb_<version>.zip", repos = NULL, type = "win.binary")   # Windows
-install.packages("rpbnb_<version>.tar.gz", repos = NULL, type = "source")    # macOS / Linux / any
+install.packages("rpbnb_<version>.zip", repos = NULL, type = "win.binary")     # Windows
+install.packages("rpbnb_<version>-macos-arm64.tgz", repos = NULL)              # Apple Silicon
+install.packages("rpbnb_<version>.tar.gz", repos = NULL, type = "source")      # Linux / Intel Mac / any
 ```
 
 Not on CRAN.
+
+### Checking you got an optimized build
+
+Nearly all of this package's running time is compiled likelihood evaluation,
+so an unoptimized build is not a detail — it costs roughly a factor of two on
+every fit, and the package otherwise behaves identically, which is what makes
+it easy to miss.
+
+A source install compiles with R's own `CXXFLAGS`, which is `-O2` on every
+standard platform (Linux included), so **the optimized build is what you get
+by default** — this package does not override those flags, and by CRAN policy
+must not. Two things produce a slow build: a `-O0` or `-Og` entry in your
+`~/.R/Makevars`, which applies to every package you compile; and development
+helpers that inject their own debug flags, notably
+`pkgbuild::compile_dll(debug = TRUE)` — its default — which
+`devtools::load_all()` uses when recompiling changed sources.
+
+To check what you have:
+
+```r
+rpbnb_build_info()
+#> rpbnb build
+#>   optimized      TRUE
+#>   openmp         TRUE
+#>   max threads    24
+#>   assertions     FALSE
+#>   compiler       gcc 14.3
+```
+
+`optimized` is read from the compiler's own `__OPTIMIZE__` macro, not inferred
+from flags. If it comes back `FALSE`, the package says so at load time as
+well; reinstall from source with no `-O0` in `~/.R/Makevars`. `openmp = FALSE`
+is worth the same attention: the fit will be single-threaded whatever
+`control$n_cores` says.
 
 ## Quick start
 

@@ -1554,6 +1554,7 @@ SEXP _rpbnb_rpbnb_copula_ll_grad_cpp(
 SEXP _rpbnb_get_num_threads(void);
 SEXP _rpbnb_set_rcpp_parallel_threads(SEXP);
 SEXP _rpbnb_rpbnb_openmp_enabled(void);
+SEXP _rpbnb_rpbnb_build_flags_cpp(void);
 SEXP _rpbnb_rpbnb_ll_grad_cpp(
     SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
     SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
@@ -1566,6 +1567,7 @@ static const R_CallMethodDef rpbnbCallEntries[] = {
   {"_rpbnb_get_num_threads",           (DL_FUNC) &_rpbnb_get_num_threads,            0},
   {"_rpbnb_set_rcpp_parallel_threads", (DL_FUNC) &_rpbnb_set_rcpp_parallel_threads,  1},
   {"_rpbnb_rpbnb_openmp_enabled",      (DL_FUNC) &_rpbnb_rpbnb_openmp_enabled,       0},
+  {"_rpbnb_rpbnb_build_flags_cpp",     (DL_FUNC) &_rpbnb_rpbnb_build_flags_cpp,      0},
   {"_rpbnb_rpbnb_ll_grad_cpp",         (DL_FUNC) &_rpbnb_rpbnb_ll_grad_cpp,         27},
   {NULL, NULL, 0}
 };

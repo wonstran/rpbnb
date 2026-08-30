@@ -89,6 +89,23 @@ jobs:
         if: matrix.kind == 'source'
         run: R CMD build .
 
+      # The source tarball is what Linux users install, and it compiles on
+      # their machine with R's own CXXFLAGS. Install it here exactly as they
+      # would and assert the result is an optimized build -- if a default
+      # source install ever stops being -O2 (a package Makevars regression, a
+      # toolchain change), every Linux fit silently costs about twice what it
+      # should, and nothing else in the pipeline would notice.
+      - name: Verify a source install is optimized
+        if: matrix.kind == 'source'
+        run: |
+          R CMD INSTALL *.tar.gz
+          Rscript -e 'info <- rpbnb::rpbnb_build_info(); print(info);
+                      if (!isTRUE(info$optimized))
+                        stop("a default source install is NOT optimized");
+                      if (!isTRUE(info$openmp))
+                        stop("a default source install has no OpenMP")'
+        shell: bash
+
       # --build turns the installed package into the platform's binary archive
       # (.zip on Windows, .tgz on macOS) next to it.
       - name: Build binary

@@ -14,7 +14,8 @@ test_that("R_init_rpbnb registers both engines' native routines", {
   rcpp_entries <- c(
     "_rpbnb_pbivnorm_cpp", "_rpbnb_rpbnb_copula_ll_grad_cpp",
     "_rpbnb_get_num_threads", "_rpbnb_set_rcpp_parallel_threads",
-    "_rpbnb_rpbnb_openmp_enabled", "_rpbnb_rpbnb_ll_grad_cpp"
+    "_rpbnb_rpbnb_openmp_enabled", "_rpbnb_rpbnb_build_flags_cpp",
+    "_rpbnb_rpbnb_ll_grad_cpp"
   )
   # TMB_CALLDEFS, from TMB/include/tmb_core.hpp.
   tmb_entries <- c(

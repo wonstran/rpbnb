@@ -1,5 +1,18 @@
 # rpbnb 0.4.4
 
+* New `rpbnb_build_info()` reports how the installed shared object was
+  compiled — optimization, OpenMP, assertions, compiler — and the package
+  says so at load time when it was built *without* optimization. Nearly all
+  of this package's running time is compiled likelihood evaluation, so a
+  `-O0` build costs roughly a factor of two on every fit while behaving
+  identically otherwise, which is exactly what makes it easy to miss. A
+  source install compiles with R's own `CXXFLAGS` (`-O2` on every standard
+  platform, Linux included) and this package does not override them, so the
+  optimized build is the default; the slow build comes from a `-O0`/`-Og`
+  entry in `~/.R/Makevars`, or from `pkgbuild::compile_dll(debug = TRUE)` —
+  its default, and what `devtools::load_all()` uses when recompiling changed
+  sources. `optimized` is read from the compiler's own `__OPTIMIZE__` macro
+  rather than inferred from flags.
 * **TMB engine: the multithreaded Gaussian-copula SIGSEGV is fixed.** The
   crash was never a data race in the kernel: `REGISTER_ATOMIC`'s cache
   (`atomic::forrev_derivatives`, TMB's checkpoint_macro.hpp under the CppAD

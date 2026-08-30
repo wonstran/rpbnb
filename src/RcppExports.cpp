@@ -11,6 +11,16 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// rpbnb_build_flags_cpp
+Rcpp::List rpbnb_build_flags_cpp();
+RcppExport SEXP _rpbnb_rpbnb_build_flags_cpp() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(rpbnb_build_flags_cpp());
+    return rcpp_result_gen;
+END_RCPP
+}
 // pbivnorm_cpp
 NumericVector pbivnorm_cpp(NumericVector h, NumericVector k, double rho);
 RcppExport SEXP _rpbnb_pbivnorm_cpp(SEXP hSEXP, SEXP kSEXP, SEXP rhoSEXP) {
