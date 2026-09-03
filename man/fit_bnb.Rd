@@ -12,7 +12,8 @@ fit_bnb(
   start = NULL,
   control = rpbnb_control(),
   poisson_1 = FALSE,
-  poisson_2 = FALSE
+  poisson_2 = FALSE,
+  boundary_tests = FALSE
 )
 }
 \arguments{
@@ -54,6 +55,14 @@ Famoye dependence constant is \code{exp(-d*mu)} (the \code{m -> 0} limit), not a
 at a tiny pinned dispersion. The famoye and independence paths are both
 exact (the independence path fits a Poisson GLM margin). Not supported with
 a \code{\link[=copula]{copula()}} dependence.}
+
+\item{boundary_tests}{Run \code{\link[=bnb_boundary_tests]{bnb_boundary_tests()}} on the converged fit and
+attach the result as \code{fit$boundary_tests}, so \code{print()}/\code{summary()} fill
+in the \code{m1}/\code{m2} LR/df/p columns instead of leaving them blank (see
+\code{\link[=bnb_boundary_tests]{bnb_boundary_tests()}} for what the test is and why a Wald \code{z}/\code{p} is not
+valid there). Default \code{FALSE}: this costs up to two extra refits (one per
+free margin), so it is opt-in rather than automatic. Not supported with a
+\code{\link[=copula]{copula()}} dependence, for the same reason \code{poisson_1}/\code{poisson_2} are not.}
 }
 \value{
 An object of class \code{bnb_fit}.
@@ -71,6 +80,11 @@ summary(fit)
 fit_p1 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
                   dependence = "famoye", poisson_1 = TRUE)
 lr_test(fit_p1, fit, boundary = TRUE)
+
+# Same test for both margins, run automatically and attached to the fit
+fit2 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                dependence = "famoye", boundary_tests = TRUE)
+fit2$boundary_tests
 
 # Gaussian copula dependence instead of Famoye/Sarmanov
 fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,

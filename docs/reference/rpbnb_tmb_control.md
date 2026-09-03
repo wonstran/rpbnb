@@ -19,7 +19,8 @@ rpbnb_tmb_control(
   max_threads = NULL,
   max_workload = NULL,
   parallel_tape = FALSE,
-  halton_burn = 300L
+  halton_burn = 300L,
+  tape_chunks = NULL
 )
 ```
 
@@ -90,7 +91,7 @@ rpbnb_tmb_control(
   multiplies the workload by the realized thread count.
 
   One unit is one weighted observation-draw. All figures are measured by
-  `inst/benchmark_memory.R`, whose raw results are stored in
+  `inst/dev/tmb_benchmark_memory.R`, whose raw results are stored in
   `inst/extdata/memory_calibration.csv`.
 
   Retained tape size depends on `n * draws` alone: tape (MiB) = 13.374 +
@@ -133,6 +134,21 @@ rpbnb_tmb_control(
 
   Number of leading Halton points discarded before forming the
   simulation draws.
+
+- tape_chunks:
+
+  TMB engine, SML fits only. Number of draw chunks to split `draws` into
+  (see `draws` at [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)). `NULL`
+  (default) auto-selects the smallest sufficient count when the weighted
+  workload exceeds `max_workload`, or `1L` (no chunking) when it does
+  not. Set explicitly to pin a layout regardless of the auto-threshold;
+  must not exceed `draws`. Chunking is exact for the requested draws
+  (not an approximation) at the cost of somewhat slower gradient
+  evaluations, and a chunked fit has no taped Hessian –
+  `confint(method = "profile")`/[`rpbnb_tmb_dependence_profile()`](rpbnb_tmb_dependence_profile.md)
+  fall back to a Wald interval with a warning; Wald/optimHess inference
+  (the default) is unaffected. Ignored for `method = "laplace"` (which
+  has no draw dimension to chunk) and by every non-TMB estimator.
 
 ## Value
 

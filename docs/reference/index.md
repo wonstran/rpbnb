@@ -103,3 +103,5 @@ Data simulators
 
 - [`rpbnb-package`](rpbnb-package.md) : rpbnb: Random-Parameter
   Bivariate Negative Binomial Regression
+- [`rpbnb_build_info()`](rpbnb_build_info.md) : Report how this
+  installation of rpbnb was compiled

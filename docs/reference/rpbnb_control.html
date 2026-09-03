@@ -19,7 +19,7 @@ without rewriting its control call."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,14 +68,15 @@ without rewriting its control call.</p>
 <span>  n_cores <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  compute_se <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  hessian <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"numeric"</span>, <span class="st">"analytic"</span><span class="op">)</span>,</span>
-<span>  se_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"numeric"</span>, <span class="st">"opg"</span>, <span class="st">"analytic"</span><span class="op">)</span>,</span>
+<span>  se_method <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  hess_eps <span class="op">=</span> <span class="fl">1e-05</span>,</span>
 <span>  hess_r <span class="op">=</span> <span class="fl">4L</span>,</span>
 <span>  gradtol <span class="op">=</span> <span class="fl">1e-05</span>,</span>
 <span>  restarts <span class="op">=</span> <span class="fl">10L</span>,</span>
 <span>  max_threads <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_workload <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  parallel_tape <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  parallel_tape <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  tape_chunks <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -135,16 +136,32 @@ at the optimum and yield the same observed-information SEs.</p></dd>
 
 <dt id="arg-se-method">se_method<a class="anchor" aria-label="anchor" href="#arg-se-method"></a></dt>
 <dd><p>Standard-error method for <code><a href="fit_rpbnb.html">fit_rpbnb()</a></code> (the random-parameter
-model): "numeric" (default) uses the <code><a href="https://rdrr.io/pkg/numDeriv/man/hessian.html" class="external-link">numDeriv::hessian()</a></code> observed-
-information Hessian; "analytic" uses the closed-form observed-information
-Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+model): "numeric" uses the <code><a href="https://rdrr.io/pkg/numDeriv/man/hessian.html" class="external-link">numDeriv::hessian()</a></code> observed-information
+Hessian; "analytic" uses the closed-form observed-information Hessian
+(Famoye (2010) per-draw second derivatives assembled via the Louis
 mixture formula) – exact and much faster than "numeric" for larger models;
 "opg" uses the BHHH / outer-product-of-gradients information from the
-per-observation scores – fastest, but relies on the information-matrix
-equality so it is unreliable for parameters at a boundary (e.g. a random-
-coefficient SD estimated near 0). For copula dependence (<code><a href="fit_rpbnb.html">fit_rpbnb()</a></code> with
-<code>dependence = copula(...)</code>), only "opg" (recommended) and "numeric" are
-available; "analytic" is not implemented for the copula path and errors.</p></dd>
+per-observation scores – fastest (one gradient pass, versus "numeric"'s
+O(npar^2) finite-difference log-likelihood evaluations), but relies on the
+information-matrix equality so it is unreliable for parameters at a
+boundary (e.g. a random-coefficient SD estimated near 0). For copula
+dependence (<code><a href="fit_rpbnb.html">fit_rpbnb()</a></code> with <code>dependence = copula(...)</code>), only "opg" and
+"numeric" are available; "analytic" is not implemented for the copula path
+and errors.</p>
+<p>Default <code>NULL</code>, meaning "this dependence family's own default", resolved
+once the fit is dispatched (same NULL-until-resolved pattern as
+<code>iterlim</code>/<code>print_level</code>): "numeric" for <code>dependence = "famoye"</code>, "opg" for
+<code>dependence = copula(...)</code>. The two differ because their speed/reliability
+tradeoffs differ – Famoye's fast, exact "analytic" Hessian makes
+"numeric" (not "opg") the conservative default there, where the copula
+path has no analytic Hessian at all and its own numeric Hessian is
+markedly slower than OPG (measured ~3x on an 11-parameter fit) for SEs
+that mostly agree with it anyway, except (per the boundary caveat above)
+on random-coefficient scale parameters – fall back to "numeric" for just
+those, or use <code><a href="rpbnb_boundary_tests.html">rpbnb_boundary_tests()</a></code>, if precise inference on an SD
+estimated near 0 matters. Read back a resolved fit's own
+<code>fit$control$se_method</code> (or the value read off <code>object$control</code> reported
+by <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>/<code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>) rather than assuming which default applied.</p></dd>
 
 
 <dt id="arg-hess-eps-hess-r">hess_eps, hess_r<a class="anchor" aria-label="anchor" href="#arg-hess-eps-hess-r"></a></dt>
@@ -185,7 +202,7 @@ set explicitly below <code>n_cores</code>.</p></dd>
 <dt id="arg-max-workload">max_workload<a class="anchor" aria-label="anchor" href="#arg-max-workload"></a></dt>
 <dd><p>Maximum weighted observation-draw evaluations permitted before TMB tape construction; <code>Inf</code> disables the guard. The default and every figure here are derived from <code>TAPE_CALIBRATION</code>, so this text cannot drift from the shipped behaviour.</p>
 <p>With the default <code>parallel_tape = FALSE</code> the budget is per fit; with <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count.</p>
-<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.</p>
+<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/dev/tmb_benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.</p>
 <p>Retained tape size depends on <code>n * draws</code> alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).</p>
 <p>The budget is set on <em>peak</em> working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.</p>
 <p>Families cost different amounts per unit, so each carries a weight – the largest <em>peak</em> ratio to Famoye observed at matched workload, rounded up to the next tenth: independence 0.7, famoye 1, frank 3.6, gaussian 0.9, clayton 1.1. Frank peaks at over three and a half times Famoye, so treating it as unweighted would under-budget it more than threefold.</p>
@@ -197,6 +214,21 @@ set explicitly below <code>n_cores</code>.</p></dd>
 <dd><p>Construct per-thread TMB tapes concurrently. The
 default <code>FALSE</code> constructs them sequentially to reduce peak memory;
 objective and gradient evaluation remains parallel.</p></dd>
+
+
+<dt id="arg-tape-chunks">tape_chunks<a class="anchor" aria-label="anchor" href="#arg-tape-chunks"></a></dt>
+<dd><p>TMB engine, SML fits only. Number of draw chunks to
+split <code>draws</code> into (see <code>draws</code> at <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>).
+<code>NULL</code> (default) auto-selects the smallest sufficient count when
+the weighted workload exceeds <code>max_workload</code>, or <code>1L</code> (no
+chunking) when it does not. Set explicitly to pin a layout regardless of
+the auto-threshold; must not exceed <code>draws</code>. Chunking is exact for
+the requested draws (not an approximation) at the cost of somewhat
+slower gradient evaluations, and a chunked fit has no taped Hessian –
+<code>confint(method = "profile")</code>/<code><a href="rpbnb_tmb_dependence_profile.html">rpbnb_tmb_dependence_profile()</a></code>
+fall back to a Wald interval with a warning; Wald/optimHess inference
+(the default) is unaffected. Ignored for <code>method = "laplace"</code>
+(which has no draw dimension to chunk) and by every non-TMB estimator.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -236,7 +268,9 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">rpbnb_control</span><span class="op">(</span>method <span class="op">=</span> <span class="st">"BFGS"</span>, iterlim <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> rpbnb control settings</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   (no estimator named -- showing every field; pass engine=/method=, or</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    resolve the object, to narrow this to the settings one estimator reads)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS   (maxLik optimizer)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   iterlim        200</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   reltol         1e-08</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   print_level    &lt;estimator default&gt;</span>
@@ -245,7 +279,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   n_cores        1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   compute_se     TRUE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hessian        numeric</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   se_method      numeric</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   se_method      &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hess_eps       1e-05</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hess_r         4</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   gradtol        1e-05</span>
@@ -253,10 +287,13 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: method, iterlim </span>
 <span class="r-in"><span><span class="fu">rpbnb_control</span><span class="op">(</span>hessian <span class="op">=</span> <span class="st">"analytic"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> rpbnb control settings</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   (no estimator named -- showing every field; pass engine=/method=, or</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    resolve the object, to narrow this to the settings one estimator reads)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS   (maxLik optimizer)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   iterlim        &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   reltol         1e-08</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   print_level    &lt;estimator default&gt;</span>
@@ -265,7 +302,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   n_cores        1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   compute_se     TRUE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hessian        analytic</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   se_method      numeric</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   se_method      &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hess_eps       1e-05</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   hess_r         4</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   gradtol        1e-05</span>
@@ -273,12 +310,15 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: hessian </span>
 <span class="r-in"><span><span class="co"># The same object drives either engine; the TMB-only knobs are simply</span></span></span>
 <span class="r-in"><span><span class="co"># ignored by the classic one (and reported as ignored in its summary).</span></span></span>
 <span class="r-in"><span><span class="fu">rpbnb_control</span><span class="op">(</span>n_cores <span class="op">=</span> <span class="fl">4</span>, gradtol <span class="op">=</span> <span class="fl">1e-6</span>, se_method <span class="op">=</span> <span class="st">"opg"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> rpbnb control settings</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   (no estimator named -- showing every field; pass engine=/method=, or</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    resolve the object, to narrow this to the settings one estimator reads)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   method         BFGS   (maxLik optimizer)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   iterlim        &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   reltol         1e-08</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   print_level    &lt;estimator default&gt;</span>
@@ -295,6 +335,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    4</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: n_cores, se_method, gradtol </span>
 </code></pre></div>
     </div>

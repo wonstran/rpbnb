@@ -1,3 +1,53 @@
+# rpbnb 0.4.6
+
+* **TMB engine: fits now show progress by default.**
+  `rpbnb_control(print_level = )` resolves to 1 for the TMB engine, where it
+  was 0 (silent) -- so a long TMB fit printed nothing at all while it ran,
+  while the `maxLik` fitters had always traced theirs. At 1 the fit prints
+  TMB's own output (an `outer mgc:` line per outer evaluation, plus the
+  one-time tape/atomic construction) but not `nlminb`'s per-iteration
+  parameter vectors, which is enough to show a slow fit is progressing.
+  `print_level = 2` adds the `nlminb` trace (the `maxLik` default is still 2);
+  `print_level = 0` restores the old silence, and still silences the
+  boundary-test progress messages too. Note `nlminb`'s `trace` is a print
+  *interval*, so a value above 2 prints the objective *less* often, not more.
+* **TMB engine: Gaussian-copula fits run multithreaded by default.** The
+  atomic-sizing SIGSEGV this cap guarded against was fixed in 0.4.4; 0.4.5
+  left the cap itself in place while the fix settled. `fit_rpbnb_tmb()` and
+  `rpbnb_tmb_boundary_tests()` now honor `control$n_cores`/`parallel_tape`
+  for Gaussian the same as every other dependence family. The new
+  `disable_parallel_gaussian = TRUE` argument opts back into the old
+  single-thread behaviour, as a kill-switch for an unusual TMB/OpenMP build
+  where the registered atomic still misbehaves. `force_parallel_gaussian` is
+  deprecated (its polarity is now backwards): `TRUE` is a no-op beyond its
+  warning, and an explicit `FALSE` maps to `disable_parallel_gaussian = TRUE`.
+  `rpbnb(engine = "tmb", ...)` and `rpbnb(engine = "classic", ...)` (which
+  drops the knob with a warning) both forward the new argument.
+* **`rpbnb_control(se_method =)` now defaults per dependence family**
+  instead of one fixed `"numeric"` default for every path. Famoye
+  (`fit_rpbnb()`) still defaults to `"numeric"` (its closed-form analytic
+  Hessian makes that the conservative choice); copula (`fit_rpbnb()` with
+  `dependence = copula(...)`) now defaults to `"opg"`, which has no analytic
+  Hessian of its own and measured roughly 3x slower than OPG under
+  `"numeric"` for SEs that agree with it away from a boundary. `se_method`'s
+  default is therefore `NULL` ("this family's own default") rather than a
+  fixed value, resolved when the fit is dispatched; a fitted object now
+  records which method it actually used in `fit$se_method`, since reading
+  that off the object is the only way to know which default applied. The
+  copula path's own numeric Hessian is now multithreaded (via the same
+  OpenMP kernel already used for the objective and OPG SEs) when the C++
+  backend is available, instead of always falling back to a single-threaded
+  pure-R evaluation.
+* **Classic engine: a pinned Famoye lambda is now detected and reported**,
+  matching what the TMB engine's boundary handling already did. When a
+  fitted `z_lambda` saturates against its frozen admissible-interval bound
+  (or the logistic map's derivative has collapsed), `fit_bnb()`/`fit_rpbnb()`
+  now record which side in `fit$lambda_boundary_side`, null the dependence
+  row's delta-method standard error (it measured how flat the link is, not
+  how identified lambda is by the data), and `print()`/`summary()` explain
+  why instead of printing a Wald z/p built from a near-zero derivative as if
+  it were ordinary evidence.
+
 # rpbnb 0.4.5
 
 * Release installers are now built for every platform and attached to the

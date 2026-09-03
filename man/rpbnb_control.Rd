@@ -14,7 +14,7 @@ rpbnb_control(
   n_cores = 1L,
   compute_se = TRUE,
   hessian = c("numeric", "analytic"),
-  se_method = c("numeric", "opg", "analytic"),
+  se_method = NULL,
   hess_eps = 1e-05,
   hess_r = 4L,
   gradtol = 1e-05,
@@ -35,8 +35,23 @@ the \code{maxLik} fitters and 500 for the TMB engine's \code{nlminb}.}
 \item{reltol}{Relative convergence tolerance.}
 
 \item{print_level}{Optimizer verbosity, and the switch that silences the
-boundary-test progress messages. \code{NULL} (default) uses 2 for the \code{maxLik}
-fitters and 0 (silent) for the TMB engine.}
+boundary-test progress messages. \code{NULL} (default) uses 2 under \code{maxLik}
+and 1 under the TMB engine. Under TMB it drives two separate switches --
+\code{MakeADFun(silent = print_level == 0)} and \code{nlminb}'s
+\code{trace = max(0, print_level - 1)} -- so the levels are:
+\describe{
+\item{\code{0}}{Silent (the pre-0.4.6 TMB default).}
+\item{\code{1}}{TMB's own output only: an \verb{outer mgc:} line per outer
+evaluation, plus the one-time tape/atomic construction on the first
+fit of a session. No \code{nlminb} trace.}
+\item{\code{2}}{Adds \code{nlminb}'s per-iteration objective and parameter
+vector -- the lowest level that traces every iteration.}
+\item{\verb{>2}}{\code{nlminb}'s \code{trace} is a print \emph{interval}, not a verbosity
+level, so higher values print the objective \emph{less} often.}
+}
+Note that \code{rpbnb_tmb_boundary_tests()} builds its own control when one is
+not supplied, so its restricted refits print at their own default
+regardless of this setting.}
 
 \item{draws_hessian}{Retained for backward compatibility but unused by every
 estimator: the random-parameter numeric Hessian is taken with the same
@@ -59,16 +74,33 @@ closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
 at the optimum and yield the same observed-information SEs.}
 
 \item{se_method}{Standard-error method for \code{\link[=fit_rpbnb]{fit_rpbnb()}} (the random-parameter
-model): "numeric" (default) uses the \code{\link[numDeriv:hessian]{numDeriv::hessian()}} observed-
-information Hessian; "analytic" uses the closed-form observed-information
-Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+model): "numeric" uses the \code{\link[numDeriv:hessian]{numDeriv::hessian()}} observed-information
+Hessian; "analytic" uses the closed-form observed-information Hessian
+(Famoye (2010) per-draw second derivatives assembled via the Louis
 mixture formula) -- exact and much faster than "numeric" for larger models;
 "opg" uses the BHHH / outer-product-of-gradients information from the
-per-observation scores -- fastest, but relies on the information-matrix
-equality so it is unreliable for parameters at a boundary (e.g. a random-
-coefficient SD estimated near 0). For copula dependence (\code{\link[=fit_rpbnb]{fit_rpbnb()}} with
-\code{dependence = copula(...)}), only "opg" (recommended) and "numeric" are
-available; "analytic" is not implemented for the copula path and errors.}
+per-observation scores -- fastest (one gradient pass, versus "numeric"'s
+O(npar^2) finite-difference log-likelihood evaluations), but relies on the
+information-matrix equality so it is unreliable for parameters at a
+boundary (e.g. a random-coefficient SD estimated near 0). For copula
+dependence (\code{\link[=fit_rpbnb]{fit_rpbnb()}} with \code{dependence = copula(...)}), only "opg" and
+"numeric" are available; "analytic" is not implemented for the copula path
+and errors.
+
+Default \code{NULL}, meaning "this dependence family's own default", resolved
+once the fit is dispatched (same NULL-until-resolved pattern as
+\code{iterlim}/\code{print_level}): "numeric" for \code{dependence = "famoye"}, "opg" for
+\code{dependence = copula(...)}. The two differ because their speed/reliability
+tradeoffs differ -- Famoye's fast, exact "analytic" Hessian makes
+"numeric" (not "opg") the conservative default there, where the copula
+path has no analytic Hessian at all and its own numeric Hessian is
+markedly slower than OPG (measured ~3x on an 11-parameter fit) for SEs
+that mostly agree with it anyway, except (per the boundary caveat above)
+on random-coefficient scale parameters -- fall back to "numeric" for just
+those, or use \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}, if precise inference on an SD
+estimated near 0 matters. Read back a resolved fit's own
+\code{fit$control$se_method} (or the value read off \code{object$control} reported
+by \code{print()}/\code{summary()}) rather than assuming which default applied.}
 
 \item{hess_eps, hess_r}{Step and Richardson order for \code{\link[numDeriv:hessian]{numDeriv::hessian()}}
 (used only when the numeric Hessian is selected).}
@@ -101,7 +133,7 @@ set explicitly below \code{n_cores}.}
 
 With the default \code{parallel_tape = FALSE} the budget is per fit; with \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
 
-One unit is one weighted observation-draw. All figures are measured by \code{inst/benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
+One unit is one weighted observation-draw. All figures are measured by \code{inst/dev/tmb_benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
 
 Retained tape size depends on \code{n * draws} alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).
 
@@ -167,9 +199,13 @@ reads the number and applies its own meaning to it.
 
 
 \code{iterlim} and \code{print_level} default to \code{NULL}, which means "this estimator's
-own long-standing default": \code{iterlim} is 300 under \code{maxLik} and 500 under
-\code{nlminb}; \code{print_level} is 2 (progress) under \code{maxLik} and 0 (silent) under
-\code{nlminb}. Supplying either explicitly overrides that for every estimator.
+own default": \code{iterlim} is 300 under \code{maxLik} and 500 under \code{nlminb}.
+\code{print_level} is 2 under \code{maxLik} and, as of 0.4.6, 1 under the TMB engine
+(it was 0 -- fully silent -- before that, which left a long TMB fit
+printing nothing at all while it ran). The TMB default of 1 shows TMB's own
+progress without \code{nlminb}'s per-iteration parameter vectors; see
+\code{print_level} below for what each level prints. Supplying either explicitly
+overrides that for every estimator; \code{print_level = 0} restores silence.
 \code{max_threads} defaults to \code{n_cores} and \code{max_workload} is computed from
 available memory by \code{\link[=rpbnb_tmb_max_workload]{rpbnb_tmb_max_workload()}} the first time a TMB fit
 needs it (so a non-TMB fit never pays for the memory probe).

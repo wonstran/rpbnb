@@ -20,9 +20,11 @@
 #'   \code{nrow(data) * ceiling(draws / chunks)} at the cost of somewhat
 #'   slower gradient evaluations -- exact for the requested \code{draws}, not
 #'   an approximation. Under \code{method = "laplace"} \code{draws} does not
-#'   affect the likelihood, the tape, or chunking, but still sizes the Halton
-#'   grid used for the frozen Famoye lambda bounds and for the post-estimation
-#'   averaging in \code{predict()} and the marginal-effect functions.
+#'   affect the likelihood, the tape, or chunking; its only remaining job is
+#'   sizing the Halton grid used for the post-estimation averaging in
+#'   \code{predict()} and the marginal-effect functions. (The frozen Famoye
+#'   admissible-lambda interval is derived from the random coefficients'
+#'   support, independent of \code{draws} under either estimator.)
 #' @param seed Random seed for draws.
 #' @param start Optional starting parameter vector (named or positional).
 #' @param dependence Dependence structure: "famoye", "independence", or a
@@ -65,28 +67,29 @@
 #'   \code{"laplace"} they are computed from an approximated marginal
 #'   likelihood rather than the exact one, so an AIC from a Laplace fit is not
 #'   meaningful to compare against an AIC from an SML fit of the same model.
-#' @param force_parallel_gaussian Opt-in override of the Gaussian-copula
-#'   (\code{dependence = copula("normal")}) single-thread safety cap. Default
-#'   \code{FALSE}: whenever \code{control$n_cores > 1} or
-#'   \code{control$parallel_tape} is requested together with a Gaussian
-#'   copula, the request is silently capped to one thread with a
-#'   \code{warning()} instead of being honored. This is not a performance
-#'   knob -- it exists because evaluating a Gaussian-copula TMB object built
-#'   with more than one OpenMP thread has reliably crashed the R process
-#'   (SIGSEGV) on the first objective evaluation, a defect in the registered
-#'   Gaussian atomic (\code{REGISTER_ATOMIC(gauss_cell_vec)} in
-#'   \code{src/rpbnb_tmb.cpp}) that is not fixed by the existing
-#'   \code{#pragma omp critical} force-init. Frank and Clayton copulas are
-#'   unaffected at any thread count and never see this cap.
-#'
-#'   Setting \code{force_parallel_gaussian = TRUE} honors the requested
-#'   thread count instead of capping it, with a \code{warning()} naming the
-#'   crash risk explicitly. This is an escape hatch for someone who has read
-#'   this paragraph and still wants to try it (e.g. to test whether a
-#'   particular TMB/OpenMP build is actually affected) -- it does not fix the
-#'   underlying defect, and a crash under this override can still corrupt
-#'   memory and lose unsaved work in the R session. Ignored for every other
-#'   dependence structure.
+#' @param disable_parallel_gaussian Opt-out that restricts a Gaussian-copula
+#'   (\code{dependence = copula("normal")}) fit to one thread. Default
+#'   \code{FALSE}: the requested \code{control$n_cores} /
+#'   \code{control$parallel_tape} are honored for every dependence family,
+#'   Gaussian included. Multithreaded Gaussian evaluation used to crash the R
+#'   process (SIGSEGV) whenever a fit realized more threads than an earlier
+#'   fit in the same session -- TMB's \code{REGISTER_ATOMIC} cache sizes its
+#'   per-thread array once, at first initialization -- and Gaussian fits were
+#'   therefore capped to one thread by default. That defect was fixed in
+#'   0.4.4 (\code{src/rpbnb_tmb.cpp} sizes the atomic for the machine's full
+#'   processor count at initialization; verified at 2/4/8/16 threads), and
+#'   since 0.4.6 parallel evaluation is the default. Setting
+#'   \code{disable_parallel_gaussian = TRUE} restores the old single-thread
+#'   behaviour -- a kill-switch for an unusual TMB/OpenMP build where the
+#'   registered atomic still misbehaves. Ignored (threads never restricted)
+#'   for every other dependence structure.
+#' @param force_parallel_gaussian Deprecated (pre-0.4.6 polarity); use
+#'   \code{disable_parallel_gaussian} instead. Multithreaded Gaussian
+#'   evaluation is now the default, so \code{TRUE} (the old opt-in) is a
+#'   no-op beyond its deprecation warning, and an explicit \code{FALSE} --
+#'   which used to select the single-thread cap -- is honored as
+#'   \code{disable_parallel_gaussian = TRUE}. Any non-\code{NULL} value
+#'   warns.
 #' @param .fixed Internal. A named numeric vector of parameters (in the
 #'   optimization parameterization, e.g. \code{c("log_sd1:x" = -20)}) to pin
 #'   at the supplied values and hold fixed during estimation, so they leave
@@ -173,7 +176,8 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
                           keep = c("postfit", "compact", "full"),
                           poisson_1 = FALSE, poisson_2 = FALSE,
                           method = c("sml", "laplace"),
-                          force_parallel_gaussian = FALSE,
+                          disable_parallel_gaussian = FALSE,
+                          force_parallel_gaussian = NULL,
                           .fixed = NULL) {
   had_random_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had_random_seed) {
@@ -191,6 +195,18 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   inference <- match.arg(inference)
   keep <- match.arg(keep)
   method <- match.arg(method)
+  # Deprecation shim for the pre-0.4.6 polarity. force_parallel_gaussian = TRUE
+  # asked for what is now the default (parallel Gaussian evaluation);
+  # an EXPLICIT force_parallel_gaussian = FALSE asked for the old cap, so it
+  # maps to the opt-out rather than being silently dropped.
+  if (!is.null(force_parallel_gaussian)) {
+    warning("`force_parallel_gaussian` is deprecated: multithreaded ",
+            "Gaussian-copula evaluation is now the default (the SIGSEGV it ",
+            "guarded against was fixed in 0.4.4). Use ",
+            "`disable_parallel_gaussian = TRUE` to restrict a Gaussian fit ",
+            "to one thread.", call. = FALSE)
+    if (!isTRUE(force_parallel_gaussian)) disable_parallel_gaussian <- TRUE
+  }
   # One control object now serves every estimator (see R/control.R). This fills
   # in the nlminb-side defaults for the two fields whose default depends on the
   # estimator (iterlim, print_level), computes max_workload if it was left to
@@ -312,12 +328,12 @@ fit_rpbnb_tmb <- function(formula_1, formula_2, data,
   } else {
     1L
   }
-  # Gaussian copula thread safety: capped by default, opt-in override via
-  # force_parallel_gaussian. See .resolve_gaussian_threads()'s own comment for
-  # the crash this guards against.
+  # Gaussian copula threading: parallel by default since 0.4.6 (the atomic
+  # sizing SIGSEGV was fixed in 0.4.4); disable_parallel_gaussian = TRUE is
+  # the opt-out. See .resolve_gaussian_threads()'s own comment for history.
   requested_cores <- control$n_cores
   resolved_threads <- .resolve_gaussian_threads(family_code, control,
-                                                force_parallel_gaussian)
+                                                disable_parallel_gaussian)
   effective_cores <- resolved_threads$cores
   effective_max_threads <- resolved_threads$max_threads
   effective_parallel_tape <- resolved_threads$parallel_tape

@@ -45,8 +45,23 @@ region and step scaling that stalled the first solve. Set to \code{0L} for
 the single-call behaviour of earlier versions.}
 
 \item{print_level}{Optimizer verbosity, and the switch that silences the
-boundary-test progress messages. \code{NULL} (default) uses 2 for the \code{maxLik}
-fitters and 0 (silent) for the TMB engine.}
+boundary-test progress messages. \code{NULL} (default) uses 2 under \code{maxLik}
+and 1 under the TMB engine. Under TMB it drives two separate switches --
+\code{MakeADFun(silent = print_level == 0)} and \code{nlminb}'s
+\code{trace = max(0, print_level - 1)} -- so the levels are:
+\describe{
+\item{\code{0}}{Silent (the pre-0.4.6 TMB default).}
+\item{\code{1}}{TMB's own output only: an \verb{outer mgc:} line per outer
+evaluation, plus the one-time tape/atomic construction on the first
+fit of a session. No \code{nlminb} trace.}
+\item{\code{2}}{Adds \code{nlminb}'s per-iteration objective and parameter
+vector -- the lowest level that traces every iteration.}
+\item{\verb{>2}}{\code{nlminb}'s \code{trace} is a print \emph{interval}, not a verbosity
+level, so higher values print the objective \emph{less} often.}
+}
+Note that \code{rpbnb_tmb_boundary_tests()} builds its own control when one is
+not supplied, so its restricted refits print at their own default
+regardless of this setting.}
 
 \item{n_cores}{Worker processes for \code{\link[=fit_rpbnb]{fit_rpbnb()}}'s optional cluster path, or
 OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases).}
@@ -59,7 +74,7 @@ set explicitly below \code{n_cores}.}
 
 With the default \code{parallel_tape = FALSE} the budget is per fit; with \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
 
-One unit is one weighted observation-draw. All figures are measured by \code{inst/benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
+One unit is one weighted observation-draw. All figures are measured by \code{inst/dev/tmb_benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
 
 Retained tape size depends on \code{n * draws} alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).
 
@@ -103,7 +118,7 @@ in the package accepts. New code should call \code{\link[=rpbnb_control]{rpbnb_c
 \details{
 Only the arguments you actually supply are forwarded, so an untouched
 \code{iterlim}/\code{print_level} still resolves to the TMB engine's own defaults (500
-and 0) when the object is used for a TMB fit -- and to the \code{maxLik} defaults
+and 1) when the object is used for a TMB fit -- and to the \code{maxLik} defaults
 if the same object is handed to \code{\link[=fit_rpbnb]{fit_rpbnb()}}.
 }
 \examples{

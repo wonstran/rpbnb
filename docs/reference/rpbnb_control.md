@@ -24,14 +24,15 @@ rpbnb_control(
   n_cores = 1L,
   compute_se = TRUE,
   hessian = c("numeric", "analytic"),
-  se_method = c("numeric", "opg", "analytic"),
+  se_method = NULL,
   hess_eps = 1e-05,
   hess_r = 4L,
   gradtol = 1e-05,
   restarts = 10L,
   max_threads = NULL,
   max_workload = NULL,
-  parallel_tape = FALSE
+  parallel_tape = FALSE,
+  tape_chunks = NULL
 )
 ```
 
@@ -93,19 +94,38 @@ rpbnb_control(
 - se_method:
 
   Standard-error method for [`fit_rpbnb()`](fit_rpbnb.md) (the
-  random-parameter model): "numeric" (default) uses the
+  random-parameter model): "numeric" uses the
   [`numDeriv::hessian()`](https://rdrr.io/pkg/numDeriv/man/hessian.html)
-  observed- information Hessian; "analytic" uses the closed-form
+  observed-information Hessian; "analytic" uses the closed-form
   observed-information Hessian (Famoye (2010) per-draw second
   derivatives assembled via the Louis mixture formula) – exact and much
   faster than "numeric" for larger models; "opg" uses the BHHH /
   outer-product-of-gradients information from the per-observation scores
-  – fastest, but relies on the information-matrix equality so it is
-  unreliable for parameters at a boundary (e.g. a random- coefficient SD
-  estimated near 0). For copula dependence
-  ([`fit_rpbnb()`](fit_rpbnb.md) with `dependence = copula(...)`), only
-  "opg" (recommended) and "numeric" are available; "analytic" is not
-  implemented for the copula path and errors.
+  – fastest (one gradient pass, versus "numeric"'s O(npar^2)
+  finite-difference log-likelihood evaluations), but relies on the
+  information-matrix equality so it is unreliable for parameters at a
+  boundary (e.g. a random-coefficient SD estimated near 0). For copula
+  dependence ([`fit_rpbnb()`](fit_rpbnb.md) with
+  `dependence = copula(...)`), only "opg" and "numeric" are available;
+  "analytic" is not implemented for the copula path and errors.
+
+  Default `NULL`, meaning "this dependence family's own default",
+  resolved once the fit is dispatched (same NULL-until-resolved pattern
+  as `iterlim`/`print_level`): "numeric" for `dependence = "famoye"`,
+  "opg" for `dependence = copula(...)`. The two differ because their
+  speed/reliability tradeoffs differ – Famoye's fast, exact "analytic"
+  Hessian makes "numeric" (not "opg") the conservative default there,
+  where the copula path has no analytic Hessian at all and its own
+  numeric Hessian is markedly slower than OPG (measured ~3x on an
+  11-parameter fit) for SEs that mostly agree with it anyway, except
+  (per the boundary caveat above) on random-coefficient scale parameters
+  – fall back to "numeric" for just those, or use
+  [`rpbnb_boundary_tests()`](rpbnb_boundary_tests.md), if precise
+  inference on an SD estimated near 0 matters. Read back a resolved
+  fit's own `fit$control$se_method` (or the value read off
+  `object$control` reported by
+  [`print()`](https://rdrr.io/r/base/print.html)/[`summary()`](https://rdrr.io/r/base/summary.html))
+  rather than assuming which default applied.
 
 - hess_eps, hess_r:
 
@@ -157,7 +177,7 @@ rpbnb_control(
   multiplies the workload by the realized thread count.
 
   One unit is one weighted observation-draw. All figures are measured by
-  `inst/benchmark_memory.R`, whose raw results are stored in
+  `inst/dev/tmb_benchmark_memory.R`, whose raw results are stored in
   `inst/extdata/memory_calibration.csv`.
 
   Retained tape size depends on `n * draws` alone: tape (MiB) = 13.374 +
@@ -195,6 +215,21 @@ rpbnb_control(
   Construct per-thread TMB tapes concurrently. The default `FALSE`
   constructs them sequentially to reduce peak memory; objective and
   gradient evaluation remains parallel.
+
+- tape_chunks:
+
+  TMB engine, SML fits only. Number of draw chunks to split `draws` into
+  (see `draws` at [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)). `NULL`
+  (default) auto-selects the smallest sufficient count when the weighted
+  workload exceeds `max_workload`, or `1L` (no chunking) when it does
+  not. Set explicitly to pin a layout regardless of the auto-threshold;
+  must not exceed `draws`. Chunking is exact for the requested draws
+  (not an approximation) at the cost of somewhat slower gradient
+  evaluations, and a chunked fit has no taped Hessian –
+  `confint(method = "profile")`/[`rpbnb_tmb_dependence_profile()`](rpbnb_tmb_dependence_profile.md)
+  fall back to a Wald interval with a warning; Wald/optimHess inference
+  (the default) is unaffected. Ignored for `method = "laplace"` (which
+  has no draw dimension to chunk) and by every non-TMB estimator.
 
 ## Value
 
@@ -243,7 +278,9 @@ TMB fit needs it (so a non-TMB fit never pays for the memory probe).
 ``` r
 rpbnb_control(method = "BFGS", iterlim = 200)
 #> rpbnb control settings
-#>   method         BFGS
+#>   (no estimator named -- showing every field; pass engine=/method=, or
+#>    resolve the object, to narrow this to the settings one estimator reads)
+#>   method         BFGS   (maxLik optimizer)
 #>   iterlim        200
 #>   reltol         1e-08
 #>   print_level    <estimator default>
@@ -252,7 +289,7 @@ rpbnb_control(method = "BFGS", iterlim = 200)
 #>   n_cores        1
 #>   compute_se     TRUE
 #>   hessian        numeric
-#>   se_method      numeric
+#>   se_method      <estimator default>
 #>   hess_eps       1e-05
 #>   hess_r         4
 #>   gradtol        1e-05
@@ -260,10 +297,13 @@ rpbnb_control(method = "BFGS", iterlim = 200)
 #>   max_threads    1
 #>   max_workload   <estimator default>
 #>   parallel_tape  FALSE
+#>   tape_chunks    <estimator default>
 #>   supplied by caller: method, iterlim 
 rpbnb_control(hessian = "analytic")
 #> rpbnb control settings
-#>   method         BFGS
+#>   (no estimator named -- showing every field; pass engine=/method=, or
+#>    resolve the object, to narrow this to the settings one estimator reads)
+#>   method         BFGS   (maxLik optimizer)
 #>   iterlim        <estimator default>
 #>   reltol         1e-08
 #>   print_level    <estimator default>
@@ -272,7 +312,7 @@ rpbnb_control(hessian = "analytic")
 #>   n_cores        1
 #>   compute_se     TRUE
 #>   hessian        analytic
-#>   se_method      numeric
+#>   se_method      <estimator default>
 #>   hess_eps       1e-05
 #>   hess_r         4
 #>   gradtol        1e-05
@@ -280,12 +320,15 @@ rpbnb_control(hessian = "analytic")
 #>   max_threads    1
 #>   max_workload   <estimator default>
 #>   parallel_tape  FALSE
+#>   tape_chunks    <estimator default>
 #>   supplied by caller: hessian 
 # The same object drives either engine; the TMB-only knobs are simply
 # ignored by the classic one (and reported as ignored in its summary).
 rpbnb_control(n_cores = 4, gradtol = 1e-6, se_method = "opg")
 #> rpbnb control settings
-#>   method         BFGS
+#>   (no estimator named -- showing every field; pass engine=/method=, or
+#>    resolve the object, to narrow this to the settings one estimator reads)
+#>   method         BFGS   (maxLik optimizer)
 #>   iterlim        <estimator default>
 #>   reltol         1e-08
 #>   print_level    <estimator default>
@@ -302,5 +345,6 @@ rpbnb_control(n_cores = 4, gradtol = 1e-6, se_method = "opg")
 #>   max_threads    4
 #>   max_workload   <estimator default>
 #>   parallel_tape  FALSE
+#>   tape_chunks    <estimator default>
 #>   supplied by caller: n_cores, se_method, gradtol 
 ```

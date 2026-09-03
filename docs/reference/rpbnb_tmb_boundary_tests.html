@@ -19,7 +19,7 @@ summary(fit) reports no Wald z/p; each test uses the
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,8 @@ are the parameters whose null lies on the boundary of the parameter space
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  which <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sd"</span>, <span class="st">"dispersion"</span><span class="op">)</span>,</span>
 <span>  draws <span class="op">=</span> <span class="va">fit</span><span class="op">$</span><span class="va">draws</span>,</span>
-<span>  force_parallel_gaussian <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  disable_parallel_gaussian <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  force_parallel_gaussian <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sml_fallback <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -88,9 +89,21 @@ a manual call needs <code>rpbnb:::.apply_scaling(data, fit$scaling)</code>).</p>
 
 <dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
 <dd><p>An <code><a href="rpbnb_tmb_control.html">rpbnb_tmb_control()</a></code> for the restricted refits.
-Defaults to <code>rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = Inf)</code> – the same <code>n_cores</code> the
-original fit was called with (1 if <code>fit</code> predates the stored
-<code>$parallel</code> field). <code>seed</code>/<code>method</code> are taken from <code>fit</code>, not <code>control</code>.</p></dd>
+Defaults to <code>rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = &lt;propagated&gt;, tape_chunks = &lt;propagated&gt;)</code> – the same <code>n_cores</code> the original fit was called with
+(1 if <code>fit</code> predates the stored <code>$parallel</code> field). <code>max_workload</code>
+propagates <code>fit</code>'s own value when <code>fit</code> draw-chunked (see <code>draws</code> at
+<code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>), so a restricted refit re-chunks to stay in budget
+instead of rebuilding one full tape; both stay at today's pre-chunking
+defaults (<code>Inf</code>, <code>NULL</code>) when <code>fit</code> did not chunk (or predates
+<code>$tape_integration</code>). When this <code>draws</code> equals <code>fit$draws</code> (the
+default), <code>tape_chunks</code> also propagates <code>fit</code>'s own resolved chunk
+count – needed because a PINNED <code>tape_chunks</code> can coexist with
+<code>max_workload = Inf</code> (propagating budget alone would then give the
+refit no way to reconstruct that layout, and it would silently build
+one full tape). A <code>draws</code> that differs from <code>fit$draws</code> gets a fresh
+layout resolved from the propagated <code>max_workload</code> alone, never a
+stale chunk count carried over from a different draw request.
+<code>seed</code>/<code>method</code> are taken from <code>fit</code>, not <code>control</code>.</p></dd>
 
 
 <dt id="arg-which">which<a class="anchor" aria-label="anchor" href="#arg-which"></a></dt>
@@ -122,16 +135,22 @@ noise beyond the restriction under test – prefer the default unless you
 have a specific reason to diverge.</p></dd>
 
 
-<dt id="arg-force-parallel-gaussian">force_parallel_gaussian<a class="anchor" aria-label="anchor" href="#arg-force-parallel-gaussian"></a></dt>
-<dd><p>Opt-in override of the Gaussian-copula
-single-thread safety cap (see <code><a href="fit_rpbnb_tmb.html">?fit_rpbnb_tmb</a></code>), forwarded to every
-restricted refit. Default <code>FALSE</code>. This is intentionally a separate
+<dt id="arg-disable-parallel-gaussian">disable_parallel_gaussian<a class="anchor" aria-label="anchor" href="#arg-disable-parallel-gaussian"></a></dt>
+<dd><p>Opt-out that restricts each restricted
+refit's Gaussian-copula evaluation to one thread (see
+<code><a href="fit_rpbnb_tmb.html">?fit_rpbnb_tmb</a></code>), forwarded to every refit. Default <code>FALSE</code>
+(multithreaded, the 0.4.6+ default). This is intentionally a separate
 argument rather than something read off <code>fit</code>: <code>fit</code> does not record
-whether the original fit used the override, so passing
-<code>force_parallel_gaussian = TRUE</code> here is required even when the
-original <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>/<code><a href="rpbnb.html">rpbnb()</a></code> call also passed it – otherwise
-every refit silently falls back to one thread regardless of
-<code>control$n_cores</code>.</p></dd>
+whether the original fit opted out, so a caller who wants
+single-threaded refits must pass <code>disable_parallel_gaussian = TRUE</code>
+here even when the original <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>/<code><a href="rpbnb.html">rpbnb()</a></code> call also did.</p></dd>
+
+
+<dt id="arg-force-parallel-gaussian">force_parallel_gaussian<a class="anchor" aria-label="anchor" href="#arg-force-parallel-gaussian"></a></dt>
+<dd><p>Deprecated (pre-0.4.6 polarity); use
+<code>disable_parallel_gaussian</code> instead. <code>TRUE</code> (the old opt-in) is a no-op
+beyond its deprecation warning; an explicit <code>FALSE</code> is honored as
+<code>disable_parallel_gaussian = TRUE</code>.</p></dd>
 
 
 <dt id="arg-sml-fallback">sml_fallback<a class="anchor" aria-label="anchor" href="#arg-sml-fallback"></a></dt>
@@ -246,32 +265,32 @@ classic-engine counterpart)</p></div>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  2.597854 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  4.536156 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.124805 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  2.39283 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.4442394 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  2.392829 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.4442401 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3235357 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3192301 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3192298 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3054224 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2758239 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.8867828 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5359577 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.8050756 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5829464 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2183853 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2644181 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1881673 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2574333 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.07384581 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1808604 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.05734191 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1274127 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06357337 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09432142 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.0507132 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744722 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744722 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744722 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.8867851 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5359574 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.8050834 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5829513 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2183834 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2644249 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1881672 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2574385 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.07384174 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1808658 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.05733863 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1274019 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06356915 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09431739 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.0507091 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744406 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744406 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01744406 </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Boundary LR test: m1...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  37.26544 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  37.26543 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  8.650418 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.362515 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.6129178 </span>
@@ -281,61 +300,61 @@ classic-engine counterpart)</p></div>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2176361 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2521139 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5846424 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3707246 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2547623 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2485095 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3707245 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2547622 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2485096 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1943857 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.246703 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2962943 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3118346 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2524341 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3016883 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3016886 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1706645 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1666839 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1906157 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2058872 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1823848 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09934848 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.02268604 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.0240201 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01740295 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06784896 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714727 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714727 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714727 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.006849954 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002137974 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002137974 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002137974 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.166684 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1906156 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2058873 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1823847 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09934819 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.02268605 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.02401999 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01740284 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06785024 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714943 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714943 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04714943 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.006850242 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002138093 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002138093 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.002138093 </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Boundary LR test: m2...</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  2.777529 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.585213 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5852131 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.4106103 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5379071 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.4008264 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.448099 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.9764165 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.9764166 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.181307 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.075618 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.966169 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.9661691 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.500775 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.8690968 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.713576 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5986374 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.7075973 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.7135759 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5986373 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.7075971 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.4255183 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3547595 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1147076 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3547594 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1147075 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2731667 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06477574 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.06477569 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1139779 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1554963 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1851498 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1367059 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01306486 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796246 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796246 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796246 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1851499 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1367057 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01306469 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796172 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796172 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.01796172 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Boundary-parameter LR tests (boundary-corrected, 50:50 chi-square mixture)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> H0: parameter = 0 (random SD absent, or margin Poisson)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>

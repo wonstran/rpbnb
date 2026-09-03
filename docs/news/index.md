@@ -1,5 +1,191 @@
 # Changelog
 
+## rpbnb 0.4.6
+
+- **TMB engine: Gaussian-copula fits run multithreaded by default.** The
+  atomic-sizing SIGSEGV this cap guarded against was fixed in 0.4.4;
+  0.4.5 left the cap itself in place while the fix settled.
+  [`fit_rpbnb_tmb()`](../reference/fit_rpbnb_tmb.md) and
+  [`rpbnb_tmb_boundary_tests()`](../reference/rpbnb_tmb_boundary_tests.md)
+  now honor `control$n_cores`/`parallel_tape` for Gaussian the same as
+  every other dependence family. The new
+  `disable_parallel_gaussian = TRUE` argument opts back into the old
+  single-thread behaviour, as a kill-switch for an unusual TMB/OpenMP
+  build where the registered atomic still misbehaves.
+  `force_parallel_gaussian` is deprecated (its polarity is now
+  backwards): `TRUE` is a no-op beyond its warning, and an explicit
+  `FALSE` maps to `disable_parallel_gaussian = TRUE`.
+  `rpbnb(engine = "tmb", ...)` and `rpbnb(engine = "classic", ...)`
+  (which drops the knob with a warning) both forward the new argument.
+- **`rpbnb_control(se_method =)` now defaults per dependence family**
+  instead of one fixed `"numeric"` default for every path. Famoye
+  ([`fit_rpbnb()`](../reference/fit_rpbnb.md)) still defaults to
+  `"numeric"` (its closed-form analytic Hessian makes that the
+  conservative choice); copula
+  ([`fit_rpbnb()`](../reference/fit_rpbnb.md) with
+  `dependence = copula(...)`) now defaults to `"opg"`, which has no
+  analytic Hessian of its own and measured roughly 3x slower than OPG
+  under `"numeric"` for SEs that agree with it away from a boundary.
+  `se_method`’s default is therefore `NULL` (“this family’s own
+  default”) rather than a fixed value, resolved when the fit is
+  dispatched; a fitted object now records which method it actually used
+  in `fit$se_method`, since reading that off the object is the only way
+  to know which default applied. The copula path’s own numeric Hessian
+  is now multithreaded (via the same OpenMP kernel already used for the
+  objective and OPG SEs) when the C++ backend is available, instead of
+  always falling back to a single-threaded pure-R evaluation.
+- **Classic engine: a pinned Famoye lambda is now detected and
+  reported**, matching what the TMB engine’s boundary handling already
+  did. When a fitted `z_lambda` saturates against its frozen
+  admissible-interval bound (or the logistic map’s derivative has
+  collapsed),
+  [`fit_bnb()`](../reference/fit_bnb.md)/[`fit_rpbnb()`](../reference/fit_rpbnb.md)
+  now record which side in `fit$lambda_boundary_side`, null the
+  dependence row’s delta-method standard error (it measured how flat the
+  link is, not how identified lambda is by the data), and
+  [`print()`](https://rdrr.io/r/base/print.html)/[`summary()`](https://rdrr.io/r/base/summary.html)
+  explain why instead of printing a Wald z/p built from a near-zero
+  derivative as if it were ordinary evidence.
+
+## rpbnb 0.4.5
+
+- Release installers are now built for every platform and attached to
+  the GitHub Release automatically. This package compiles C++ (TMB/Rcpp
+  with OpenMP), so its binaries are platform-specific and cannot be
+  cross-compiled; a workflow builds the source tarball, a Windows
+  `.zip`, and a macOS `.tgz` on their own runners for each `v*` tag. The
+  macOS job installs `libomp` and points the compiler at it, since Apple
+  clang ships no OpenMP and the package would otherwise be built
+  silently single-threaded. README and the release notes give the
+  release URLs directly —
+  [`install.packages()`](https://rdrr.io/r/utils/install.packages.html)
+  downloads an `https` argument itself when `repos = NULL`, so there is
+  no need to save the file first.
+- New [`rpbnb_build_info()`](../reference/rpbnb_build_info.md) reports
+  how the installed shared object was compiled — optimization, OpenMP,
+  assertions, compiler — and the package says so at load time when it
+  was built *without* optimization. Nearly all of this package’s running
+  time is compiled likelihood evaluation, so a `-O0` build costs roughly
+  a factor of two on every fit while behaving identically otherwise,
+  which is exactly what makes it easy to miss. A source install compiles
+  with R’s own `CXXFLAGS` (`-O2` on every standard platform, Linux
+  included) and this package does not override them, so the optimized
+  build is the default; the slow build comes from a `-O0`/`-Og` entry in
+  `~/.R/Makevars`, or from `pkgbuild::compile_dll(debug = TRUE)` — its
+  default, and what
+  [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
+  uses when recompiling changed sources. `optimized` is read from the
+  compiler’s own `__OPTIMIZE__` macro rather than inferred from flags.
+
+## rpbnb 0.4.4
+
+- **TMB engine: the multithreaded Gaussian-copula SIGSEGV is fixed.**
+  The crash was never a data race in the kernel: `REGISTER_ATOMIC`’s
+  cache (`atomic::forrev_derivatives`, TMB’s checkpoint_macro.hpp under
+  the CppAD framework) sizes its per-thread inner-tape array to
+  `config.nthreads` ONCE, at first initialization, and never resizes,
+  while evaluation indexes it by `omp_get_thread_num()` unchecked.
+  Initialized at one fit’s thread count, any later evaluation with more
+  threads read past the end of that array and took the R process down —
+  which is why the crash reproduced only on thread-count *escalation*
+  within a session (a serial fit followed by a parallel one, or a 2-core
+  fit followed by a 4-core fit) and never in a fresh process at a fixed
+  count. `src/rpbnb_tmb.cpp`’s `FAM_GAUSSIAN` init block now raises
+  `config.nthreads` to the machine’s processor count for the one call
+  that initializes the atomic (inside the existing `omp critical`,
+  first-init only), so the array is sized once for every thread count a
+  fit can realize. Verified at 2/4/8/16 threads on a 2,321-observation,
+  1,000-draw fit: identical objective and gradient at every count, ~5x
+  gradient speedup at 16 threads, where the same sequence previously
+  segfaulted. The `test-parallel.R` Gaussian serial-vs-parallel
+  comparison, skipped since the crash was first documented, now runs as
+  the regression guard. The single-thread default cap and
+  `force_parallel_gaussian` opt-in are unchanged for now; a follow-up
+  may relax them.
+- [`print()`](https://rdrr.io/r/base/print.html) on an
+  [`rpbnb_control()`](../reference/rpbnb_control.md) object now shows
+  only the settings the estimator actually reads. The control object
+  carries the union of every fitter’s parameters, so printing it whole
+  listed a maxLik `method = "BFGS"` and an `se_method` alongside a TMB
+  fit’s own knobs — defaults for fields that engine never reads, which
+  made it look as though a TMB fit optimized with BFGS (it uses
+  `nlminb`). `print(control, engine = , method = )` names the estimator
+  to display for; a control already resolved by a fitter uses its own
+  engine, and an unresolved one still prints in full. The header now
+  states that estimator outright — `engine`, the sml/laplace `method`,
+  and the `optimizer` the TMB engine actually calls (`nlminb`, not
+  `control$method`) — so the two unrelated things this package calls
+  “method” can no longer be read for one another.
+  `print(control, draws = )` adds the simulation size — not a control
+  field, but under simulated ML it *defines* the likelihood being
+  maximized — and lets the `tape_chunks` row report the draws-per-chunk
+  the pair implies (`tape_chunks 10 (100 draws per chunk)`), which is
+  what peak tape memory actually scales with. Under `method = "laplace"`
+  the same number is labelled for what it is there: the Halton grid
+  [`predict()`](https://rdrr.io/r/stats/predict.html)/marginal effects
+  average over, absent from the likelihood. A setting the caller
+  *supplied* is always shown even when it does not apply, flagged
+  `(ignored here)` — including `tape_chunks` under `method = "laplace"`,
+  which has no draw dimension to chunk.
+- TMB engine, chunked SML fits: the draw-chunked gradient no longer
+  re-runs `report()` once per chunk on top of the pass the objective
+  already made. `.pass1()` keeps each chunk’s per-observation
+  log-likelihood vector (kilobytes) and `gr()` reuses it to form the
+  chunk weights, removing one of the two serial per-chunk `report()`
+  sweeps from every gradient evaluation — roughly a 20–30% wall-clock
+  saving on chunked fits, exact to the digit (verified against
+  `numDeriv` finite differences).
+- The classic-engine boundary-test polish that 0.4.3’s notes describe
+  (the `LR >= 0` guarantee replacing the
+  `Restricted model has the higher log-likelihood ... Clamping` warning)
+  landed in this version; 0.4.3 shipped the note ahead of the code.
+
+## rpbnb 0.4.3
+
+- **TMB engine: exact draw chunking fixes out-of-memory failures at
+  large `draws`.** SML tape size used to scale as `nrow(data) * draws`
+  with no mitigation beyond a pre-flight refusal
+  (`Weighted TMB workload is ... above max_workload`).
+  [`fit_rpbnb_tmb()`](../reference/fit_rpbnb_tmb.md) now auto-splits
+  large-workload fits into several draw chunks replayed over one smaller
+  TMB tape via `DATA_UPDATE()`, cutting peak memory to
+  `nrow(data) * ceiling(draws / chunks)` — exact for the requested
+  `draws`, not an approximation (see
+  `docs/TMB_SML_large_draws_OOM_guide.md`). `control$tape_chunks` (new;
+  see [`?rpbnb_control`](../reference/rpbnb_control.md)) pins a layout
+  explicitly instead of relying on the auto-threshold, which — pending a
+  follow-up calibration pass measuring the chunked tape’s own memory
+  profile — is currently derived from the pre-chunking calibration and
+  should be treated as provisional.
+  [`rpbnb_tmb_boundary_tests()`](../reference/rpbnb_tmb_boundary_tests.md)
+  propagates a chunked fit’s memory policy to its restricted refits, so
+  LR tests on a large fit stay chunked instead of rebuilding one full
+  tape. A chunked fit has no taped Hessian:
+  `confint(method = "profile")`/[`rpbnb_tmb_dependence_profile()`](../reference/rpbnb_tmb_dependence_profile.md)
+  fall back to a Wald interval with a warning; Wald/`optimHess`
+  inference (the default) is unaffected. Also hoists several per-draw
+  redundant computations in the independence/Famoye NB2/Poisson
+  log-likelihood, shrinking the tape further for fits that do not chunk.
+- [`rpbnb_boundary_tests()`](../reference/rpbnb_boundary_tests.md) (the
+  classic/simulated-ML engine) no longer reports spuriously negative LR
+  statistics — the
+  `Restricted model has the higher log-likelihood ... Clamping the statistic to 0`
+  warning — for random-coefficient scale and dependence rows. The
+  classic engine maximizes a simulated likelihood with a single BFGS
+  run, so near a boundary parameter the full fit could stop just below a
+  restricted refit that was warm-started from it; the TMB engine’s
+  exact-gradient Laplace fit with `restarts` did not show this. When a
+  restricted fit now comes out ahead, the full model is re-optimized
+  from the restricted optimum re-expressed in the full parameterization
+  (the point where it provably attains the restricted likelihood) and
+  the better of the two full-model optima defines the statistic, so
+  `LR >= 0` holds by construction rather than by clamping.
+- Regenerated `ref/rpbnb_0.4.2.pdf` (the CRAN-style PDF reference
+  manual) from current Rd files, and clarified in README that
+  [`fit_rpbnb()`](../reference/fit_rpbnb.md)’s Halton draws are
+  Cranley-Patterson-shifted (randomized quasi-Monte Carlo), not
+  digit-scrambled.
+
 ## rpbnb 0.4.1
 
 ### Breaking-ish: one control object for every estimator

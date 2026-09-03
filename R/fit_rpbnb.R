@@ -13,9 +13,17 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
                           draws, draw_type, seed, ll_trace, convergence,
                           cop_family = NULL, call, hessian_diag = NULL,
                           rp_meta = NULL, predict_meta = NULL,
-                          poisson_1 = FALSE, poisson_2 = FALSE) {
+                          poisson_1 = FALSE, poisson_2 = FALSE,
+                          lambda_boundary_side = NA_character_,
+                          se_method = NA_character_) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
+         # The se_method this fit actually used, after resolving control$se_method
+         # = NULL (unset) against this dependence family's own default -- "numeric"
+         # for Famoye, "opg" for copula (see ?rpbnb_control). Recorded here because
+         # that default is no longer one fixed constant: reading it off the fit is
+         # how to find out which one a given SE actually is, rather than assuming.
+         se_method = se_method,
          nobs = nobs, npar = npar, m1 = m1, m2 = m2, lambda = lambda,
          # `bounds` is the interval the OPTIMIZED objective used (frozen at the
          # starting values); summary()'s delta method needs that width, not the
@@ -25,6 +33,12 @@ new_rpbnb_fit <- function(coef, vcov, se, logLik, nobs, npar,
          bounds = bounds,
          bounds_at_optimum = bounds_at_optimum,
          lambda_admissible = lambda_admissible,
+         # Set only for Famoye: NA_character_ (not pinned), or the side of
+         # `bounds` z_lambda is pinned against -- see famoye_lam_pinned_side().
+         # Distinct from lambda_admissible: a pinned lambda can still be
+         # admissible (frozen bounds == bounds at optimum), it is just not
+         # identified by the data at that optimum.
+         lambda_boundary_side = lambda_boundary_side,
          mu1 = mu1, mu2 = mu2,
          X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
          rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
@@ -600,6 +614,9 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     bounds = c(lam_frozen[["lower"]], lam_frozen[["upper"]]),
     bounds_at_optimum = c(lower = lamLo_h, upper = lamHi_h),
     lambda_admissible = lambda_admissible,
+    lambda_boundary_side = famoye_lam_pinned_side(
+      z_hat, c(lam_frozen[["lower"]], lam_frozen[["upper"]])
+    ),
     mu1 = mu1_hat, mu2 = mu2_hat,
     X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
     rand_idx1 = rand_idx1, rand_idx2 = rand_idx2,
@@ -610,6 +627,7 @@ fit_rpbnb <- function(formula_1, formula_2, data,
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
                    Z1 = Z1_opt, Z2 = Z2_opt, halton_burn = halton_burn),
     predict_meta = .prep_predict_meta(prep),
-    poisson_1 = poisson_1, poisson_2 = poisson_2)
+    poisson_1 = poisson_1, poisson_2 = poisson_2,
+    se_method = se_method)
   .attach_control_note(out, control)
 }

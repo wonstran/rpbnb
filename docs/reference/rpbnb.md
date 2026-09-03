@@ -140,9 +140,10 @@ rpbnb(
   Further arguments passed to the selected fitter. Names are validated
   against that fitter's formals; an argument belonging to the other
   engine, or an unrecognised name, is an error. Exception: the TMB
-  tuning knobs `method` and `force_parallel_gaussian` are dropped with a
-  warning (not an error) under `engine = "classic"`, so a call can
-  switch engines without stripping them.
+  tuning knobs `method`, `disable_parallel_gaussian`, and the deprecated
+  `force_parallel_gaussian` are dropped with a warning (not an error)
+  under `engine = "classic"`, so a call can switch engines without
+  stripping them.
 
 ## Value
 
@@ -176,16 +177,16 @@ not belong is an error rather than a silently ignored `...` entry.
 
 ## Automatic centring and scaling
 
-`standardize = TRUE` automates the pattern in `inst/rpbnb_frank_open.R`
-and `inst/tmb_rpbnb_frank_open.R`: continuous predictors are centred and
-scaled (mean 0, SD 1) before fitting, which keeps a bounded
-random-coefficient carrier from acting as a disguised random intercept
-(see those scripts' headers) and fixes the design matrix's conditioning
-when regressors span very different ranges. Continuous predictors are
-identified automatically — numeric, non-factor columns used by either
-formula with more than two distinct values, so 0/1 (or any two-level
-numeric) indicators are left alone — or supplied explicitly via
-`continuous_vars`. Variables that appear only inside an
+`standardize = TRUE` automates the pattern in
+`inst/dev/rpbnb_frank_open.R` and `inst/dev/tmb_rpbnb_frank_open.R`:
+continuous predictors are centred and scaled (mean 0, SD 1) before
+fitting, which keeps a bounded random-coefficient carrier from acting as
+a disguised random intercept (see those scripts' headers) and fixes the
+design matrix's conditioning when regressors span very different ranges.
+Continuous predictors are identified automatically — numeric, non-factor
+columns used by either formula with more than two distinct values, so
+0/1 (or any two-level numeric) indicators are left alone — or supplied
+explicitly via `continuous_vars`. Variables that appear only inside an
 [`offset()`](https://rdrr.io/r/stats/offset.html) are never
 standardized.
 
@@ -268,13 +269,14 @@ restrictions leave Laplace no valid optimum at all (see
 [`rpbnb_tmb_boundary_tests()`](rpbnb_tmb_boundary_tests.md)'s
 `sml_fallback` argument, which is where to turn this off).
 
-`force_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
-forwarded to every restricted refit, so a Gaussian-copula fit's boundary
-tests honor `control$n_cores` the same way the original fit did instead
-of silently re-capping each refit to one thread – see
+`disable_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
+forwarded to every restricted refit, so a Gaussian-copula fit that opted
+out of multithreading gets single-threaded boundary refits too – see
 [`rpbnb_tmb_boundary_tests()`](rpbnb_tmb_boundary_tests.md)'s own
-`force_parallel_gaussian` argument for why this needs forwarding at all
-(the fit object does not record whether the override was used).
+`disable_parallel_gaussian` argument for why this needs forwarding at
+all (the fit object does not record whether the opt-out was used). The
+deprecated pre-0.4.6 `force_parallel_gaussian` is likewise accepted and
+mapped (see [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)).
 
 Each restricted refit costs roughly as much as the original fit (more
 for a [`copula()`](copula.md) dependence than for `"famoye"`; see
@@ -301,7 +303,7 @@ directly on the fit and assign its result to `fit$boundary_tests` (with
 | Argument | `engine = "classic"` | `engine = "tmb"` |
 | `draw_type`, `.fixed`, `.opt_draws` | yes | error |
 | `inference`, `keep` | error | yes |
-| `method`, `force_parallel_gaussian` | ignored with a warning | yes |
+| `method`, `disable_parallel_gaussian`, `force_parallel_gaussian` | ignored with a warning | yes |
 | [`offset()`](https://rdrr.io/r/stats/offset.html) in a formula | yes | error |
 | `dependence = "independence"` | error | yes |
 | `boundary_draws` (non-`NULL`) | error | yes |

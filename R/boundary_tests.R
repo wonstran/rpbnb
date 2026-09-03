@@ -475,3 +475,121 @@ print.rpbnb_boundary_tests <- function(x, digits = 4, ...) {
   }
   invisible(x)
 }
+
+#' Boundary-corrected LR tests for the NB2 dispersions of a fit_bnb() fit
+#'
+#' Runs a likelihood-ratio test for each free NB2 dispersion (`m1`, `m2`) of a
+#' fitted fixed-coefficient bivariate NB model, against a restricted refit at
+#' that margin's exact Poisson limit (`m = 0`). `m = 0` sits on the boundary of
+#' the parameter space, so the natural-scale summary reports no Wald `z`/`p`
+#' for `m1`/`m2` (see [fit_bnb()]); the valid test is [lr_test()]'s
+#' `boundary = TRUE` 50:50 chi-square mixture. This is the fixed-coefficient
+#' counterpart of [rpbnb_boundary_tests()] -- the same test, restricted to the
+#' one boundary-null group `fit_bnb()` has (no random-coefficient scales).
+#'
+#' Each restricted refit is warm-started from the full fit's own coefficients
+#' (`start = fit$coef`); `fit_bnb()` pins the tested margin's `log_m` to the
+#' Poisson placeholder regardless of what `start` supplies for it, so passing
+#' the full vector is safe and needs no per-test trimming. Unlike
+#' `rpbnb_boundary_tests()`, there is no warm-start "polish" step for a
+#' negative LR statistic: `fit_bnb()`'s likelihood is exact (`glm.nb` for
+#' independence, closed-form-gradient BFGS for Famoye), not simulated, so a
+#' warm-started restricted refit does not out-climb the full fit's own optimum
+#' the way a simulated objective occasionally can.
+#'
+#' @param fit A converged `bnb_fit` (from [fit_bnb()]) with `dependence =
+#'   "independence"` or `"famoye"`. Not supported for a [copula()] dependence:
+#'   `fit_bnb()` itself refuses to combine `poisson_1`/`poisson_2` with a
+#'   copula dependence, so there is no Poisson-limit restriction to test.
+#' @param data The data frame the model was fit on. Required -- the fit object
+#'   does not store it, and every restricted model is refit on it.
+#' @param control An [rpbnb_control()] for the restricted refits. Defaults to
+#'   `compute_se = FALSE` (the LR test needs only `logLik` and the degrees of
+#'   freedom).
+#' @return An object of class `bnb_boundary_tests` (a data frame with columns
+#'   `Parameter`, `LR`, `df`, `p.value`, `Signif`, one row per tested margin)
+#'   and a `print` method. A margin already fit at `poisson_1`/`poisson_2 =
+#'   TRUE` has no free dispersion left to test and is skipped, matching
+#'   [rpbnb_boundary_tests()]'s dispersion-test behaviour.
+#' @seealso [lr_test()], [fit_bnb()], [rpbnb_boundary_tests()]
+#' @export
+#' @examples
+#' d <- read.csv(system.file("extdata", "rwm1984_clean.csv", package = "rpbnb"))
+#' fit <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+#'                dependence = "famoye")
+#' bnb_boundary_tests(fit, d)
+bnb_boundary_tests <- function(fit, data,
+                               control = rpbnb_control(compute_se = FALSE)) {
+  if (!inherits(fit, "bnb_fit")) {
+    stop("`fit` must be a bnb_fit (from fit_bnb()).", call. = FALSE)
+  }
+  if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
+  if (!is.null(fit$cop_family)) {
+    stop("bnb_boundary_tests() does not support copula dependence: fit_bnb() ",
+         "itself refuses to combine poisson_1/poisson_2 with a copula() ",
+         "dependence (see ?fit_bnb), so there is no Poisson-limit restriction ",
+         "to test here.", call. = FALSE)
+  }
+  if (!isTRUE(fit$convergence$converged)) {
+    stop("`fit` (the full model) did not converge (code ", fit$convergence$code,
+         ": ", fit$convergence$message, "). Refit it to convergence before ",
+         "running boundary tests.", call. = FALSE)
+  }
+
+  na_row <- function(param) {
+    data.frame(Parameter = param, LR = NA_real_, df = NA_integer_,
+               p.value = NA_real_, Signif = NA_character_,
+               stringsAsFactors = FALSE)
+  }
+  # `start = fit$coef` in full: fit_bnb_famoye() pins whichever of log_m1/
+  # log_m2 is in `fixed_names` to the Poisson placeholder AFTER resolving
+  # `start`, so the full fit's own (non-placeholder) value for the tested
+  # margin's log_m is simply overwritten rather than rejected. Ignored
+  # entirely by the independence path, which does not take a start.
+  refit <- function(poisson_1, poisson_2) {
+    fit_bnb(fit$formula_1, fit$formula_2, data = data,
+           dependence = fit$dependence, start = fit$coef, control = control,
+           poisson_1 = poisson_1, poisson_2 = poisson_2)
+  }
+  test_row <- function(param, rest) {
+    if (!isTRUE(rest$convergence$converged)) {
+      warning("Restricted fit for '", param, "' did not converge (code ",
+              rest$convergence$code, ": ", rest$convergence$message,
+              "); reporting NA for this parameter.", call. = FALSE)
+      return(na_row(param))
+    }
+    lr <- lr_test(rest, fit, boundary = TRUE)
+    data.frame(Parameter = param, LR = lr$statistic, df = lr$df,
+               p.value = lr$p.value, Signif = signif_stars(lr$p.value),
+               stringsAsFactors = FALSE)
+  }
+
+  rows <- list()
+  if (!isTRUE(fit$poisson_1)) {
+    rows[[length(rows) + 1L]] <-
+      test_row("m1", refit(poisson_1 = TRUE, poisson_2 = isTRUE(fit$poisson_2)))
+  }
+  if (!isTRUE(fit$poisson_2)) {
+    rows[[length(rows) + 1L]] <-
+      test_row("m2", refit(poisson_1 = isTRUE(fit$poisson_1), poisson_2 = TRUE))
+  }
+  if (!length(rows)) {
+    stop("Both margins are already Poisson-restricted (poisson_1 = poisson_2 ",
+         "= TRUE): there is no free dispersion left to test.", call. = FALSE)
+  }
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  structure(out, class = c("bnb_boundary_tests", "data.frame"))
+}
+
+#' @export
+print.bnb_boundary_tests <- function(x, digits = 4, ...) {
+  cat("NB2 dispersion LR tests (boundary-corrected, 50:50 chi-square mixture)\n")
+  cat("H0: m = 0 (margin is Poisson)\n\n")
+  tab <- as.data.frame(x)
+  tab$LR      <- formatC(tab$LR, format = "f", digits = digits)
+  tab$p.value <- formatC(tab$p.value, format = "f", digits = digits)
+  print(tab, row.names = FALSE, right = TRUE)
+  cat("\nSignif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
+  invisible(x)
+}

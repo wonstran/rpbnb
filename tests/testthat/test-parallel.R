@@ -560,83 +560,110 @@ test_that("serial and parallel copula objectives and gradients agree", {
   }
 })
 
-test_that("Gaussian copula fits are capped at one thread", {
+test_that("Gaussian copula fits run multithreaded by default", {
   skip_on_cran()
-  # Regression guard for the SIGSEGV documented above. Asserting the CAP rather
-  # than the crash is the point: this must run in-process safely, so it checks
-  # that the fitter refuses to realize >1 thread for family_code 2 instead of
-  # attempting the call that would terminate the process.
+  # Since 0.4.6: the SIGSEGV .resolve_gaussian_threads() used to guard
+  # against is fixed (see the "FIXED CRASH" test above, the direct
+  # serial-then-parallel regression guard), so a Gaussian copula fit now
+  # realizes the requested thread count like any other family, silently.
   d <- parallel_fit_data()
 
-  expect_warning(
-    fit <- fit_rpbnb_tmb(
-      y1 ~ x, y2 ~ x, data = d,
-      dependence = copula("normal"),
-      draws = 5L, inference = "none",
-      control = rpbnb_tmb_control(iterlim = 2L, n_cores = 4L,
-                                  max_threads = 4L, max_workload = Inf)
-    ),
-    "restricted to one thread"
-  )
-  # The user's request is preserved for transparency; only the realization caps.
+  fit <- expect_no_warning(fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d,
+    dependence = copula("normal"),
+    draws = 5L, inference = "none",
+    control = rpbnb_tmb_control(iterlim = 2L, n_cores = 2L,
+                                max_threads = 2L, max_workload = Inf)
+  ))
+  expect_identical(fit$parallel$realized, 2L)
+  expect_identical(fit$parallel$requested, 2L)
+})
+
+test_that("disable_parallel_gaussian = TRUE caps a Gaussian copula fit to one thread", {
+  skip_on_cran()
+  # The opt-out: restricts realization to one thread regardless of n_cores.
+  # Silent by design -- this cap IS the caller's explicit request, unlike the
+  # old default cap it replaces (which overrode a request the caller had every
+  # reason to expect honored, and so warned).
+  d <- parallel_fit_data()
+
+  fit <- expect_no_warning(fit_rpbnb_tmb(
+    y1 ~ x, y2 ~ x, data = d,
+    dependence = copula("normal"),
+    draws = 5L, inference = "none",
+    disable_parallel_gaussian = TRUE,
+    control = rpbnb_tmb_control(iterlim = 2L, n_cores = 4L,
+                                max_threads = 4L, max_workload = Inf)
+  ))
   expect_identical(fit$parallel$realized, 1L)
   expect_identical(fit$parallel$requested, 4L)
 })
 
-test_that("force_parallel_gaussian is a pure opt-in override, tested WITHOUT evaluating", {
+test_that("force_parallel_gaussian is deprecated and mapped to disable_parallel_gaussian", {
+  skip_on_cran()
+  d <- parallel_fit_data()
+  # n_cores = 1 throughout: wants_parallel is FALSE either way, so the
+  # resolver never actually caps anything here -- these tests exercise only
+  # the deprecation shim (warns + maps the old flag), not real multithreaded
+  # Gaussian evaluation (already covered by the two tests above).
+  ctl1 <- rpbnb_tmb_control(iterlim = 2L, n_cores = 1L, max_workload = Inf)
+
+  # TRUE (the old opt-in) is now a no-op beyond the warning: parallel is
+  # already the default, so there is nothing left for it to turn on.
+  expect_warning(
+    fit_rpbnb_tmb(y1 ~ x, y2 ~ x, data = d, dependence = copula("normal"),
+                 draws = 5L, inference = "none", control = ctl1,
+                 force_parallel_gaussian = TRUE),
+    "deprecated"
+  )
+  # An explicit FALSE (the old cap request) still means "restrict to one
+  # thread" -- mapped to disable_parallel_gaussian = TRUE, not silently
+  # dropped.
+  expect_warning(
+    fit_rpbnb_tmb(y1 ~ x, y2 ~ x, data = d, dependence = copula("normal"),
+                 draws = 5L, inference = "none", control = ctl1,
+                 force_parallel_gaussian = FALSE),
+    "deprecated"
+  )
+})
+
+test_that("disable_parallel_gaussian resolves cores/max_threads/parallel_tape, tested WITHOUT evaluating", {
   # .resolve_gaussian_threads() decides cores/max_threads/parallel_tape before
   # any TMB object is built or evaluated, so its logic is testable without
-  # the crash risk a real multithreaded Gaussian fit carries -- deliberately
-  # NOT exercised here (or anywhere else in this package; see the skipped
-  # "serial and parallel copula objectives and gradients agree" test above).
-  # This test must never grow a `fit_rpbnb_tmb(force_parallel_gaussian = TRUE,
-  # control = rpbnb_tmb_control(n_cores > 1, ...))` call: that would build and
-  # evaluate a real multithreaded Gaussian-copula tape.
+  # building a tape at all -- keep it that way here even though a real
+  # multithreaded Gaussian fit is no longer a crash risk (see the two
+  # end-to-end tests above, which cover that).
   ctl1 <- rpbnb_tmb_control(n_cores = 1L)
   ctl4 <- rpbnb_tmb_control(n_cores = 4L, max_threads = 4L)
 
-  # Non-Gaussian families are never touched, at any thread count.
-  expect_no_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(1L, ctl4, force_parallel_gaussian = FALSE)
-  )
+  # Non-Gaussian families are never touched, at any thread count or setting.
+  r <- rpbnb:::.resolve_gaussian_threads(1L, ctl4, disable_parallel_gaussian = FALSE)
   expect_identical(r$cores, 4L)
-  expect_no_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(0L, ctl4, force_parallel_gaussian = TRUE)
-  )
+  r <- rpbnb:::.resolve_gaussian_threads(0L, ctl4, disable_parallel_gaussian = TRUE)
   expect_identical(r$cores, 4L)
 
-  # Gaussian (family_code 2) at n_cores = 1 needs no cap and warns nothing.
-  expect_no_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl1, force_parallel_gaussian = FALSE)
-  )
+  # Gaussian (family_code 2) at n_cores = 1 needs no cap either way.
+  r <- rpbnb:::.resolve_gaussian_threads(2L, ctl1, disable_parallel_gaussian = FALSE)
   expect_identical(r$cores, 1L)
 
-  # Default: capped, warns "restricted to one thread" (matches the end-to-end
-  # test above) and names the override.
-  expect_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, force_parallel_gaussian = FALSE),
-    "restricted to one thread"
-  )
+  # Default: parallel is honored, not capped.
+  r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, disable_parallel_gaussian = FALSE)
+  expect_identical(r$cores, 4L)
+  expect_identical(r$max_threads, 4L)
+  expect_identical(r$parallel_tape, ctl4$parallel_tape)
+
+  # disable_parallel_gaussian = TRUE: capped to one thread.
+  r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, disable_parallel_gaussian = TRUE)
   expect_identical(r$cores, 1L)
   expect_identical(r$max_threads, 1L)
   expect_identical(r$parallel_tape, FALSE)
 
-  # force_parallel_gaussian = TRUE: request honored, warns about the crash
-  # risk instead of the cap.
-  expect_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl4, force_parallel_gaussian = TRUE),
-    "SIGSEGV"
-  )
-  expect_identical(r$cores, 4L)
-  expect_identical(r$max_threads, 4L)
-
-  # parallel_tape alone (n_cores = 1) also triggers the cap by default.
+  # parallel_tape alone (n_cores = 1) also triggers the opt-out cap.
   ctl_tape <- rpbnb_tmb_control(n_cores = 1L, parallel_tape = TRUE)
-  expect_warning(
-    r <- rpbnb:::.resolve_gaussian_threads(2L, ctl_tape, force_parallel_gaussian = FALSE),
-    "restricted to one thread"
-  )
+  r <- rpbnb:::.resolve_gaussian_threads(2L, ctl_tape, disable_parallel_gaussian = TRUE)
   expect_identical(r$parallel_tape, FALSE)
+  r <- rpbnb:::.resolve_gaussian_threads(2L, ctl_tape, disable_parallel_gaussian = FALSE)
+  expect_identical(r$parallel_tape, TRUE)
 })
 
 test_that("non-Gaussian copulas are not capped", {

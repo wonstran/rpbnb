@@ -396,7 +396,7 @@ test_that("default control stays Inf for an unchunked original fit or one predat
 test_that("default control also propagates a PINNED tape_chunks when max_workload was Inf", {
   # Regression for a real crash: a fit built with control$tape_chunks set
   # explicitly (bypassing the workload budget entirely) alongside
-  # max_workload = Inf -- the exact pattern inst/rpbnb_truck_open_v2.R uses
+  # max_workload = Inf -- the exact pattern inst/dev/rpbnb_truck_open_v2.R uses
   # deliberately, because the workload calibration under-estimates that
   # data's per-draw cost. Propagating max_workload alone (Inf) gives the
   # refit's resolver no budget to derive a layout from, so it silently fell
@@ -442,7 +442,7 @@ test_that("default control also propagates a PINNED tape_chunks when max_workloa
   expect_null(captured$tape_chunks)
 })
 
-test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every refit", {
+test_that("disable_parallel_gaussian defaults to FALSE and is forwarded to every refit", {
   skip_on_cran()
   d <- .tmb_boundary_fixture()
   fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
@@ -450,8 +450,8 @@ test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every r
 
   captured <- NULL
   testthat::local_mocked_bindings(
-    fit_rpbnb_tmb = function(..., force_parallel_gaussian) {
-      captured <<- force_parallel_gaussian
+    fit_rpbnb_tmb = function(..., disable_parallel_gaussian) {
+      captured <<- disable_parallel_gaussian
       stop("stop-early-for-test")
     }
   )
@@ -459,28 +459,65 @@ test_that("force_parallel_gaussian defaults to FALSE and is forwarded to every r
   expect_identical(captured, FALSE)
 })
 
-test_that("force_parallel_gaussian = TRUE is forwarded to every refit", {
+test_that("disable_parallel_gaussian = TRUE is forwarded to every refit", {
   skip_on_cran()
   # This is the flag's actual reason for existing: a Gaussian-copula fit's
-  # own force_parallel_gaussian = TRUE does NOT propagate here on its own
+  # own disable_parallel_gaussian = TRUE does NOT propagate here on its own
   # (fit does not record it), so rpbnb_tmb_boundary_tests() needs it passed
-  # again -- otherwise every restricted refit silently re-caps to one thread.
+  # again -- otherwise every restricted refit silently runs multithreaded
+  # regardless of what the original fit opted out of.
   d <- .tmb_boundary_fixture()
   fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
                        control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
 
   captured <- NULL
   testthat::local_mocked_bindings(
-    fit_rpbnb_tmb = function(..., force_parallel_gaussian) {
-      captured <<- force_parallel_gaussian
+    fit_rpbnb_tmb = function(..., disable_parallel_gaussian) {
+      captured <<- disable_parallel_gaussian
       stop("stop-early-for-test")
     }
   )
   expect_error(
-    rpbnb_tmb_boundary_tests(fit, d, force_parallel_gaussian = TRUE),
+    rpbnb_tmb_boundary_tests(fit, d, disable_parallel_gaussian = TRUE),
     "stop-early-for-test"
   )
   expect_identical(captured, TRUE)
+})
+
+test_that("rpbnb_tmb_boundary_tests()'s deprecated force_parallel_gaussian warns and maps", {
+  skip_on_cran()
+  d <- .tmb_boundary_fixture()
+  fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = d, draws = 20, seed = 7,
+                       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L))
+
+  captured <- NULL
+  testthat::local_mocked_bindings(
+    fit_rpbnb_tmb = function(..., disable_parallel_gaussian) {
+      captured <<- disable_parallel_gaussian
+      stop("stop-early-for-test")
+    }
+  )
+  # An explicit FALSE (the old cap request) maps to the opt-out, not to
+  # nothing.
+  expect_error(
+    expect_warning(
+      rpbnb_tmb_boundary_tests(fit, d, force_parallel_gaussian = FALSE),
+      "deprecated"
+    ),
+    "stop-early-for-test"
+  )
+  expect_identical(captured, TRUE)
+
+  # TRUE (the old opt-in) is a no-op beyond the warning: parallel refits are
+  # already the default.
+  expect_error(
+    expect_warning(
+      rpbnb_tmb_boundary_tests(fit, d, force_parallel_gaussian = TRUE),
+      "deprecated"
+    ),
+    "stop-early-for-test"
+  )
+  expect_identical(captured, FALSE)
 })
 
 test_that("draws defaults to fit$draws and is overridable", {

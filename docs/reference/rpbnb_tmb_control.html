@@ -13,7 +13,7 @@ in the package accepts. New code should call rpbnb_control() directly."></head><
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,8 @@ in the package accepts. New code should call <code><a href="rpbnb_control.html">
 <span>  max_threads <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_workload <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parallel_tape <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  halton_burn <span class="op">=</span> <span class="fl">300L</span></span>
+<span>  halton_burn <span class="op">=</span> <span class="fl">300L</span>,</span>
+<span>  tape_chunks <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -120,7 +121,7 @@ set explicitly below <code>n_cores</code>.</p></dd>
 <dt id="arg-max-workload">max_workload<a class="anchor" aria-label="anchor" href="#arg-max-workload"></a></dt>
 <dd><p>Maximum weighted observation-draw evaluations permitted before TMB tape construction; <code>Inf</code> disables the guard. The default and every figure here are derived from <code>TAPE_CALIBRATION</code>, so this text cannot drift from the shipped behaviour.</p>
 <p>With the default <code>parallel_tape = FALSE</code> the budget is per fit; with <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count.</p>
-<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.</p>
+<p>One unit is one weighted observation-draw. All figures are measured by <code>inst/dev/tmb_benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.</p>
 <p>Retained tape size depends on <code>n * draws</code> alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).</p>
 <p>The budget is set on <em>peak</em> working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.</p>
 <p>Families cost different amounts per unit, so each carries a weight – the largest <em>peak</em> ratio to Famoye observed at matched workload, rounded up to the next tenth: independence 0.7, famoye 1, frank 3.6, gaussian 0.9, clayton 1.1. Frank peaks at over three and a half times Famoye, so treating it as unweighted would under-budget it more than threefold.</p>
@@ -137,6 +138,21 @@ objective and gradient evaluation remains parallel.</p></dd>
 <dt id="arg-halton-burn">halton_burn<a class="anchor" aria-label="anchor" href="#arg-halton-burn"></a></dt>
 <dd><p>Number of leading Halton points discarded before forming
 the simulation draws.</p></dd>
+
+
+<dt id="arg-tape-chunks">tape_chunks<a class="anchor" aria-label="anchor" href="#arg-tape-chunks"></a></dt>
+<dd><p>TMB engine, SML fits only. Number of draw chunks to
+split <code>draws</code> into (see <code>draws</code> at <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>).
+<code>NULL</code> (default) auto-selects the smallest sufficient count when
+the weighted workload exceeds <code>max_workload</code>, or <code>1L</code> (no
+chunking) when it does not. Set explicitly to pin a layout regardless of
+the auto-threshold; must not exceed <code>draws</code>. Chunking is exact for
+the requested draws (not an approximation) at the cost of somewhat
+slower gradient evaluations, and a chunked fit has no taped Hessian –
+<code>confint(method = "profile")</code>/<code><a href="rpbnb_tmb_dependence_profile.html">rpbnb_tmb_dependence_profile()</a></code>
+fall back to a Wald interval with a warning; Wald/optimHess inference
+(the default) is unaffected. Ignored for <code>method = "laplace"</code>
+(which has no draw dimension to chunk) and by every non-TMB estimator.</p></dd>
 
 </dl></div>
     <div class="section level2">

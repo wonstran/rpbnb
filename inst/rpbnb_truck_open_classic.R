@@ -42,6 +42,10 @@ setwd("C:\\Users\\zwang9\\repos\\rpbnb")
 n_cores <- 20L
 draws   <- 1000L
 seed    <- 20240712L
+# method is a TMB-only argument (see ?rpbnb).  Do NOT pass it to rpbnb() when
+# engine = "classic" -- the front end warns "`method` ignored: tmb-only" and
+# drops it.  The classic engine is always simulated ML (maxLik BFGS).
+method <- NULL
 # "famoye" or a copula() object.
 dependence <- copula("frank") #copula("normal") #copula("kimeldorf")
 # Which groups to LR-test.  "all" = c("sd", "dispersion", "dependence").
@@ -105,7 +109,7 @@ ctrl <- rpbnb_control(
 )
 
 sep(); cat("CONTROL OBJECT\n"); sep()
-print(ctrl, engine = "classic", draws = draws)
+print(ctrl)
 
 # ---- Fit ----------------------------------------------------------------
 stamp <- format(Sys.time(), "%Y-%m-%d-%H%M%S")
@@ -113,20 +117,25 @@ dir.create("results", recursive = TRUE, showWarnings = FALSE)
 
 sep(); cat("FIT: engine = \"classic\"\n", sep = ""); sep()
 
+# method is TMB-only; rpbnb() warns and drops it when engine = "classic".
+# Pass it only if the user explicitly sets it, so the warning is opt-in.
+fit_args <- list(
+  formula_1      = f1,
+  formula_2      = f2,
+  data           = data,
+  engine         = "classic",
+  random_1       = c("SR40_MI3"),
+  dependence     = dependence,
+  seed           = seed,
+  draws          = draws,
+  standardize    = TRUE,
+  boundary_tests = boundary_tests,
+  control        = ctrl
+)
+if (!is.null(method)) fit_args$method <- method
+
 t_fit <- system.time(
-  fit <- rpbnb(
-    formula_1      = f1,
-    formula_2      = f2,
-    data           = data,
-    engine         = "classic",
-    random_1       = c("SR40_MI3"),
-    dependence     = dependence,
-    seed           = seed,
-    draws          = draws,
-    standardize    = TRUE,
-    boundary_tests = boundary_tests,
-    control        = ctrl
-  )
+  fit <- do.call(rpbnb, fit_args)
 )[["elapsed"]]
 
 cat(sprintf("\nFinished in %.2f s%s\n", t_fit,

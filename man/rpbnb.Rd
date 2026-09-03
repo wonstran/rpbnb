@@ -93,9 +93,10 @@ versus OpenMP threads.}
 \item{...}{Further arguments passed to the selected fitter. Names are
 validated against that fitter's formals; an argument belonging to the other
 engine, or an unrecognised name, is an error. Exception: the TMB tuning
-knobs \code{method} and \code{force_parallel_gaussian} are dropped with a warning
-(not an error) under \code{engine = "classic"}, so a call can switch engines
-without stripping them.}
+knobs \code{method}, \code{disable_parallel_gaussian}, and the deprecated
+\code{force_parallel_gaussian} are dropped with a warning (not an error)
+under \code{engine = "classic"}, so a call can switch engines without
+stripping them.}
 }
 \value{
 The engine-native fit object, identical to what a direct call to the
@@ -130,8 +131,8 @@ selected fitter's own formals, and anything that does not belong is an error
 rather than a silently ignored \code{...} entry.
 }
 \section{Automatic centring and scaling}{
-\code{standardize = TRUE} automates the pattern in \code{inst/rpbnb_frank_open.R} and
-\code{inst/tmb_rpbnb_frank_open.R}: continuous predictors are centred and scaled
+\code{standardize = TRUE} automates the pattern in \code{inst/dev/rpbnb_frank_open.R} and
+\code{inst/dev/tmb_rpbnb_frank_open.R}: continuous predictors are centred and scaled
 (mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
 carrier from acting as a disguised random intercept (see those scripts'
 headers) and fixes the design matrix's conditioning when regressors span
@@ -210,13 +211,14 @@ restrictions leave Laplace no valid optimum at all (see
 \code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s \code{sml_fallback} argument, which is where to
 turn this off).
 
-\code{force_parallel_gaussian} (\code{engine = "tmb"} only, passed via \code{...}) is
-forwarded to every restricted refit, so a Gaussian-copula fit's boundary
-tests honor \code{control$n_cores} the same way the original fit did instead
-of silently re-capping each refit to one thread -- see
-\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s own \code{force_parallel_gaussian} argument for
-why this needs forwarding at all (the fit object does not record whether
-the override was used).
+\code{disable_parallel_gaussian} (\code{engine = "tmb"} only, passed via \code{...}) is
+forwarded to every restricted refit, so a Gaussian-copula fit that opted
+out of multithreading gets single-threaded boundary refits too -- see
+\code{\link[=rpbnb_tmb_boundary_tests]{rpbnb_tmb_boundary_tests()}}'s own \code{disable_parallel_gaussian} argument
+for why this needs forwarding at all (the fit object does not record
+whether the opt-out was used). The deprecated pre-0.4.6
+\code{force_parallel_gaussian} is likewise accepted and mapped (see
+\code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}).
 
 Each restricted refit costs roughly as much as the original fit (more for
 a \code{\link[=copula]{copula()}} dependence than for \code{"famoye"}; see \code{\link[=rpbnb_boundary_tests]{rpbnb_boundary_tests()}}'s
@@ -239,7 +241,7 @@ directly on the fit and assign its result to \code{fit$boundary_tests} (with
    Argument \tab \code{engine = "classic"} \tab \code{engine = "tmb"} \cr
    \code{draw_type}, \code{.fixed}, \code{.opt_draws} \tab yes \tab error \cr
    \code{inference}, \code{keep} \tab error \tab yes \cr
-   \code{method}, \code{force_parallel_gaussian} \tab ignored with a warning \tab yes \cr
+   \code{method}, \code{disable_parallel_gaussian}, \code{force_parallel_gaussian} \tab ignored with a warning \tab yes \cr
    \code{offset()} in a formula \tab yes \tab error \cr
    \code{dependence = "independence"} \tab error \tab yes \cr
    \code{boundary_draws} (non-\code{NULL}) \tab error \tab yes \cr

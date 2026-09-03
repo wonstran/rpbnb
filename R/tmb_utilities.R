@@ -39,7 +39,7 @@ CLAYTON_THETA_MAX <- exp(20)
 #' Update a restatement together with the constant, or add the new figure to
 #' the corresponding check. Do not add a third restatement without one.
 #'
-#' Regenerate with `Rscript inst/benchmark_memory.R`, which writes the raw
+#' Regenerate with `Rscript inst/dev/tmb_benchmark_memory.R`, which writes the raw
 #' measurements to `inst/extdata/memory_calibration.csv` and prints the
 #' regression these constants come from. Re-run it after any template, TMB,
 #' compiler or allocator change.
@@ -77,7 +77,7 @@ TAPE_CALIBRATION <- list(
   measured_families = c(
     "independence", "famoye", "frank", "gaussian", "clayton"
   ),
-  source = "inst/benchmark_memory.R"
+  source = "inst/dev/tmb_benchmark_memory.R"
 )
 
 #' Documentation text generated from TAPE_CALIBRATION

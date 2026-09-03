@@ -17,8 +17,8 @@
 #'
 #' # Automatic centring and scaling
 #'
-#' `standardize = TRUE` automates the pattern in `inst/rpbnb_frank_open.R` and
-#' `inst/tmb_rpbnb_frank_open.R`: continuous predictors are centred and scaled
+#' `standardize = TRUE` automates the pattern in `inst/dev/rpbnb_frank_open.R` and
+#' `inst/dev/tmb_rpbnb_frank_open.R`: continuous predictors are centred and scaled
 #' (mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
 #' carrier from acting as a disguised random intercept (see those scripts'
 #' headers) and fixes the design matrix's conditioning when regressors span
@@ -97,13 +97,14 @@
 #' [rpbnb_tmb_boundary_tests()]'s `sml_fallback` argument, which is where to
 #' turn this off).
 #'
-#' `force_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
-#' forwarded to every restricted refit, so a Gaussian-copula fit's boundary
-#' tests honor `control$n_cores` the same way the original fit did instead
-#' of silently re-capping each refit to one thread -- see
-#' [rpbnb_tmb_boundary_tests()]'s own `force_parallel_gaussian` argument for
-#' why this needs forwarding at all (the fit object does not record whether
-#' the override was used).
+#' `disable_parallel_gaussian` (`engine = "tmb"` only, passed via `...`) is
+#' forwarded to every restricted refit, so a Gaussian-copula fit that opted
+#' out of multithreading gets single-threaded boundary refits too -- see
+#' [rpbnb_tmb_boundary_tests()]'s own `disable_parallel_gaussian` argument
+#' for why this needs forwarding at all (the fit object does not record
+#' whether the opt-out was used). The deprecated pre-0.4.6
+#' `force_parallel_gaussian` is likewise accepted and mapped (see
+#' [fit_rpbnb_tmb()]).
 #'
 #' Each restricted refit costs roughly as much as the original fit (more for
 #' a [copula()] dependence than for `"famoye"`; see [rpbnb_boundary_tests()]'s
@@ -127,7 +128,7 @@
 #' | --- | --- | --- |
 #' | `draw_type`, `.fixed`, `.opt_draws` | yes | error |
 #' | `inference`, `keep` | error | yes |
-#' | `method`, `force_parallel_gaussian` | ignored with a warning | yes |
+#' | `method`, `disable_parallel_gaussian`, `force_parallel_gaussian` | ignored with a warning | yes |
 #' | `offset()` in a formula | yes | error |
 #' | `dependence = "independence"` | error | yes |
 #' | `boundary_draws` (non-`NULL`) | error | yes |
@@ -194,9 +195,10 @@
 #' @param ... Further arguments passed to the selected fitter. Names are
 #'   validated against that fitter's formals; an argument belonging to the other
 #'   engine, or an unrecognised name, is an error. Exception: the TMB tuning
-#'   knobs `method` and `force_parallel_gaussian` are dropped with a warning
-#'   (not an error) under `engine = "classic"`, so a call can switch engines
-#'   without stripping them.
+#'   knobs `method`, `disable_parallel_gaussian`, and the deprecated
+#'   `force_parallel_gaussian` are dropped with a warning (not an error)
+#'   under `engine = "classic"`, so a call can switch engines without
+#'   stripping them.
 #'
 #' @return The engine-native fit object, identical to what a direct call to the
 #'   underlying fitter would return: an object of class `rpbnb_fit` for
@@ -254,13 +256,14 @@ rpbnb <- function(formula_1, formula_2, data,
            "pass-through is not supported, because the two engines do not ",
            "take the same arguments in the same order.", call. = FALSE)
     }
-    # `method` and `force_parallel_gaussian` are TMB tuning knobs with no
+    # `method` and the Gaussian threading knobs are TMB tuning knobs with no
     # classic-engine meaning at all, so a script flipping engine = "tmb" to
     # "classic" need not strip them: drop with a warning instead of erroring.
     # Everything else keeps the hard error -- those names select behaviour the
     # caller presumably wanted.
     if (engine == "classic") {
-      ignorable <- intersect(nm, c("method", "force_parallel_gaussian"))
+      ignorable <- intersect(nm, c("method", "disable_parallel_gaussian",
+                                   "force_parallel_gaussian"))
       if (length(ignorable)) {
         warning(paste0("`", ignorable, "`", collapse = ", "),
                 " ignored: tmb-only, and engine = \"classic\" was chosen.",
@@ -287,7 +290,8 @@ rpbnb <- function(formula_1, formula_2, data,
       }
       stop(paste(msg, collapse = " "),
            "\n  classic-only: draw_type, .fixed, .opt_draws",
-           "\n  tmb-only: inference, keep, method, force_parallel_gaussian",
+           "\n  tmb-only: inference, keep, method, disable_parallel_gaussian, ",
+           "force_parallel_gaussian",
            "\n  See ?rpbnb for the full argument matrix.", call. = FALSE)
     }
   }
@@ -393,14 +397,20 @@ rpbnb <- function(formula_1, formula_2, data,
                                                  control = bt_control,
                                                  which = bt_which)
     } else {
-      # force_parallel_gaussian is tmb-only and reaches the main fit through
+      # disable_parallel_gaussian is tmb-only and reaches the main fit through
       # `dots` (validated above); the boundary refits need it forwarded
       # explicitly too, since rpbnb_tmb_boundary_tests() has no way to read
-      # it back off `fit` -- see its own force_parallel_gaussian argument doc.
+      # it back off `fit` -- see its own disable_parallel_gaussian argument
+      # doc. Resolved here (rather than re-passing the deprecated
+      # force_parallel_gaussian) so its warning, already issued once by the
+      # main fit_rpbnb_tmb() call above, does not fire again per refit.
+      fpg <- dots$force_parallel_gaussian
+      dpg <- isTRUE(dots$disable_parallel_gaussian) ||
+        (!is.null(fpg) && !isTRUE(fpg))
       fit$boundary_tests <- rpbnb_tmb_boundary_tests(
         fit, data = data, which = bt_which,
         draws = if (is.null(boundary_draws)) fit$draws else boundary_draws,
-        force_parallel_gaussian = isTRUE(dots$force_parallel_gaussian))
+        disable_parallel_gaussian = dpg)
     }
   }
   fit

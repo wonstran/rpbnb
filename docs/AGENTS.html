@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -138,7 +138,9 @@
 <li>
 <code>docs/llms.txt</code> — machine-readable package index (subset of README)</li>
 <li>
-<code>inst/legacy/</code> — original reference scripts (preserved for comparison, not used by the package)</li>
+<code>inst/dev/legacy/</code> — original reference scripts (preserved for comparison, not used by the package)</li>
+<li>
+<code>inst/dev/</code> — investigation, benchmark, and truck/export scripts not meant as user-facing examples (moved out of <code>inst/</code>’s top level so <code>inst/example_bnb.R</code> and friends stay the only things a new user sees there)</li>
 <li>
 <code>NEWS.md</code> — changelog</li>
 <li>

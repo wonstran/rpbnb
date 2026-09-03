@@ -68,7 +68,7 @@ test_that("shipped truck examples remain valid R syntax", {
   # from that package took the prefix so the engine a script targets is legible
   # from its filename. The discovery guard below is what caught the rename --
   # it failed on zero matches rather than passing over an empty set.
-  root <- system.file(package = "rpbnb", mustWork = TRUE)
+  root <- system.file("dev", package = "rpbnb", mustWork = TRUE)
   scripts <- list.files(root, pattern = "^tmb_truck_[A-Za-z0-9_]+\\.R$")
   # Guard the discovery itself: if the pattern or the layout ever stops
   # matching, this fails loudly instead of vacuously passing over zero files.
@@ -79,7 +79,7 @@ test_that("shipped truck examples remain valid R syntax", {
                     "tmb_truck_rpbnb_diff_kimeldorf_laplace.R") %in% scripts))
 
   for (nm in scripts) {
-    script <- system.file(nm, package = "rpbnb", mustWork = TRUE)
+    script <- system.file("dev", nm, package = "rpbnb", mustWork = TRUE)
     # parse() raises on invalid syntax, and its own message names the file, so
     # a syntax error identifies itself; `label` additionally names the file on
     # the (unlikely) path where parse succeeds but returns something odd.

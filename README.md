@@ -1,4 +1,4 @@
-# rpbnb
+# Random Parameter Bivariate Negative Binomial (RPBNB) Model
 
 Maximum-likelihood and maximum-simulated-likelihood estimation of bivariate
 negative binomial (NB2) regression models, with Famoye/Sarmanov or
@@ -31,7 +31,7 @@ interchangeable engines.
 - [TMB engine: inference and memory](#tmb-engine-inference-and-memory)
   - [Exact draw chunking](#exact-draw-chunking-new)
   - [Laplace approximation](#laplace-approximation)
-- [Multithreaded Gaussian copula (fixed in 0.4.4)](#multithreaded-gaussian-copula-fixed-in-044)
+- [Multithreaded Gaussian copula (parallel by default since 0.4.6)](#multithreaded-gaussian-copula-parallel-by-default-since-046)
 - [Example datasets](#example-datasets)
 - [Documentation](#documentation)
 - [Development](#development)
@@ -61,19 +61,32 @@ Windows x64 `.zip` binary, a macOS arm64 `.tgz` binary, and a `.tar.gz`
 source package (installs on any platform, compiling locally):
 
 `install.packages()` accepts the release URL directly, so there is no need to
-download the file first (substitute the version you want for `0.4.5`):
+download the file first (substitute the version you want for `0.4.6`; browse
+all releases at
+[github.com/wonstran/rpbnb/releases](https://github.com/wonstran/rpbnb/releases)):
+
+**Windows**
 
 ```r
-base <- "https://github.com/wonstran/rpbnb/releases/download/v0.4.5/"
+install.packages(
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6.zip",
+  repos = NULL, type = "win.binary")
+```
 
-# Windows
-install.packages(paste0(base, "rpbnb_0.4.5.zip"), repos = NULL, type = "win.binary")
+**macOS (Apple Silicon / arm64)**
 
-# macOS, Apple Silicon (arm64)
-install.packages(paste0(base, "rpbnb_0.4.5-macos-arm64.tgz"), repos = NULL)
+```r
+install.packages(
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6-macos-arm64.tgz",
+  repos = NULL)
+```
 
-# Linux, Intel Mac, or any platform from source
-install.packages(paste0(base, "rpbnb_0.4.5.tar.gz"), repos = NULL, type = "source")
+**Linux, Intel Mac, or any platform from source**
+
+```r
+install.packages(
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6.tar.gz",
+  repos = NULL, type = "source")
 ```
 
 Not on CRAN.
@@ -333,7 +346,7 @@ results. Advanced users can opt into concurrent tape construction with
 
 `max_workload` rejects oversized observation-by-draw workloads before the
 automatic-differentiation tape is built. Every constant behind it is measured
-by `inst/tmb_benchmark_memory.R`, whose raw results are committed to
+by `inst/dev/tmb_benchmark_memory.R`, whose raw results are committed to
 `inst/extdata/memory_calibration.csv`; `TAPE_CALIBRATION` in `R/tmb_utilities.R`
 is the single source that the guard, the default, and the generated `?` help all
 derive from. The figures restated on this page and in
@@ -361,8 +374,8 @@ same log-sum-exp identity the unchunked likelihood itself already uses,
 verified to agree with an unchunked fit to floating-point precision.
 
 ```r
-# Auto-chunks silently (a message() names the split unless print_level = 0)
-# whenever the estimated workload exceeds max_workload.
+# Auto-chunks without asking (a message() names the split unless
+# print_level = 0) whenever the estimated workload exceeds max_workload.
 fit <- fit_rpbnb_tmb(docvis ~ outwork, hospvis ~ outwork, data = d,
                      random_1 = "outwork", draws = 2000)
 
@@ -456,11 +469,11 @@ enough to matter.
 Frank peaks at over three and a half times Famoye per unit, so a Frank fit buys
 proportionally fewer draws for the same memory. Raise `max_workload`
 deliberately against the memory you actually have —
-`inst/tmb_fit_rpbnb_diff_copula.R` shows that opt-in — and `max_workload = Inf`
+`inst/dev/tmb_fit_rpbnb_diff_copula.R` shows that opt-in — and `max_workload = Inf`
 disables the guard entirely (both the pre-flight refusal and auto-chunking;
 pin `tape_chunks` explicitly if you still want chunking with the guard off).
 
-## Multithreaded Gaussian copula (fixed in 0.4.4)
+## Multithreaded Gaussian copula (parallel by default since 0.4.6)
 
 Evaluating a Gaussian-copula TMB object used to segfault the R process. It is
 fixed as of 0.4.4, and the cause turned out not to be what the symptom
@@ -480,11 +493,16 @@ on a 2,321-observation, 1,000-draw fit: identical objective and gradient at
 every count, and roughly a 5x gradient speedup at 16 threads, on the exact
 sequence that previously crashed.
 
-`fit_rpbnb_tmb()` still caps the Gaussian family at `n_cores = 1L` by default,
-with a warning; pass `force_parallel_gaussian = TRUE` to run it multithreaded.
-Relaxing that default is a separate change, so that the cap can be removed
-deliberately rather than as a side effect of the fix. `fit$parallel` records
-both the `requested` and `realized` thread counts.
+As of 0.4.6, `fit_rpbnb_tmb()` runs the Gaussian family multithreaded by
+default, the same as every other dependence family (0.4.4 and 0.4.5 fixed the
+crash but kept the single-thread cap while the fix settled); pass
+`disable_parallel_gaussian = TRUE` to
+restrict it to one thread instead (the old default, kept as an opt-out for an
+unusual TMB/OpenMP build where the registered atomic still misbehaves). The
+old `force_parallel_gaussian` argument is deprecated: `TRUE` is now a no-op
+(parallel is already the default) and an explicit `FALSE` maps to
+`disable_parallel_gaussian = TRUE`, both with a warning. `fit$parallel`
+records both the `requested` and `realized` thread counts.
 
 ## Example datasets
 
@@ -497,7 +515,7 @@ Available via `system.file("extdata", "<file>", package = "rpbnb")`:
 | `rwm1984_bnb.csv` | `rwm1984_clean.csv` with generic `y1`/`y2` alias columns |
 | `simulated_nb_data.csv` | Small simulated bivariate NB dataset from `simulate_bnb()` |
 | `simulated_rpbnb_copula.csv` | Simulated copula-dependent RP-BNB data from `simulate_rpbnb_copula()` |
-| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data used by the benchmark and worked-example scripts under `inst/` |
+| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data used by the benchmark and worked-example scripts under `inst/dev/` |
 | `memory_calibration.csv` | Raw TMB memory benchmark measurements behind `TAPE_CALIBRATION` |
 
 ## Documentation

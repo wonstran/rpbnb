@@ -18,7 +18,8 @@ rpbnb_tmb_boundary_tests(
   control = NULL,
   which = c("sd", "dispersion"),
   draws = fit$draws,
-  force_parallel_gaussian = FALSE,
+  disable_parallel_gaussian = FALSE,
+  force_parallel_gaussian = NULL,
   sml_fallback = TRUE
 )
 ```
@@ -43,10 +44,22 @@ rpbnb_tmb_boundary_tests(
 
   An [`rpbnb_tmb_control()`](rpbnb_tmb_control.md) for the restricted
   refits. Defaults to
-  `rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = Inf)`
+  `rpbnb_tmb_control(print_level = 1, n_cores = fit$parallel$requested, max_workload = <propagated>, tape_chunks = <propagated>)`
   – the same `n_cores` the original fit was called with (1 if `fit`
-  predates the stored `$parallel` field). `seed`/`method` are taken from
-  `fit`, not `control`.
+  predates the stored `$parallel` field). `max_workload` propagates
+  `fit`'s own value when `fit` draw-chunked (see `draws` at
+  [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)), so a restricted refit
+  re-chunks to stay in budget instead of rebuilding one full tape; both
+  stay at today's pre-chunking defaults (`Inf`, `NULL`) when `fit` did
+  not chunk (or predates `$tape_integration`). When this `draws` equals
+  `fit$draws` (the default), `tape_chunks` also propagates `fit`'s own
+  resolved chunk count – needed because a PINNED `tape_chunks` can
+  coexist with `max_workload = Inf` (propagating budget alone would then
+  give the refit no way to reconstruct that layout, and it would
+  silently build one full tape). A `draws` that differs from `fit$draws`
+  gets a fresh layout resolved from the propagated `max_workload` alone,
+  never a stale chunk count carried over from a different draw request.
+  `seed`/`method` are taken from `fit`, not `control`.
 
 - which:
 
@@ -79,17 +92,24 @@ rpbnb_tmb_boundary_tests(
   simulation noise beyond the restriction under test – prefer the
   default unless you have a specific reason to diverge.
 
+- disable_parallel_gaussian:
+
+  Opt-out that restricts each restricted refit's Gaussian-copula
+  evaluation to one thread (see [`?fit_rpbnb_tmb`](fit_rpbnb_tmb.md)),
+  forwarded to every refit. Default `FALSE` (multithreaded, the 0.4.6+
+  default). This is intentionally a separate argument rather than
+  something read off `fit`: `fit` does not record whether the original
+  fit opted out, so a caller who wants single-threaded refits must pass
+  `disable_parallel_gaussian = TRUE` here even when the original
+  [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)/[`rpbnb()`](rpbnb.md) call also
+  did.
+
 - force_parallel_gaussian:
 
-  Opt-in override of the Gaussian-copula single-thread safety cap (see
-  [`?fit_rpbnb_tmb`](fit_rpbnb_tmb.md)), forwarded to every restricted
-  refit. Default `FALSE`. This is intentionally a separate argument
-  rather than something read off `fit`: `fit` does not record whether
-  the original fit used the override, so passing
-  `force_parallel_gaussian = TRUE` here is required even when the
-  original [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)/[`rpbnb()`](rpbnb.md)
-  call also passed it – otherwise every refit silently falls back to one
-  thread regardless of `control$n_cores`.
+  Deprecated (pre-0.4.6 polarity); use `disable_parallel_gaussian`
+  instead. `TRUE` (the old opt-in) is a no-op beyond its deprecation
+  warning; an explicit `FALSE` is honored as
+  `disable_parallel_gaussian = TRUE`.
 
 - sml_fallback:
 
@@ -218,32 +238,32 @@ rpbnb_tmb_boundary_tests(fit, sim$data)
 #> outer mgc:  2.597854 
 #> outer mgc:  4.536156 
 #> outer mgc:  1.124805 
-#> outer mgc:  2.39283 
-#> outer mgc:  0.4442394 
+#> outer mgc:  2.392829 
+#> outer mgc:  0.4442401 
 #> outer mgc:  0.3235357 
-#> outer mgc:  0.3192301 
+#> outer mgc:  0.3192298 
 #> outer mgc:  0.3054224 
 #> outer mgc:  0.2758239 
-#> outer mgc:  0.8867828 
-#> outer mgc:  0.5359577 
-#> outer mgc:  0.8050756 
-#> outer mgc:  0.5829464 
-#> outer mgc:  0.2183853 
-#> outer mgc:  0.2644181 
-#> outer mgc:  0.1881673 
-#> outer mgc:  0.2574333 
-#> outer mgc:  0.07384581 
-#> outer mgc:  0.1808604 
-#> outer mgc:  0.05734191 
-#> outer mgc:  0.1274127 
-#> outer mgc:  0.06357337 
-#> outer mgc:  0.09432142 
-#> outer mgc:  0.0507132 
-#> outer mgc:  0.01744722 
-#> outer mgc:  0.01744722 
-#> outer mgc:  0.01744722 
+#> outer mgc:  0.8867851 
+#> outer mgc:  0.5359574 
+#> outer mgc:  0.8050834 
+#> outer mgc:  0.5829513 
+#> outer mgc:  0.2183834 
+#> outer mgc:  0.2644249 
+#> outer mgc:  0.1881672 
+#> outer mgc:  0.2574385 
+#> outer mgc:  0.07384174 
+#> outer mgc:  0.1808658 
+#> outer mgc:  0.05733863 
+#> outer mgc:  0.1274019 
+#> outer mgc:  0.06356915 
+#> outer mgc:  0.09431739 
+#> outer mgc:  0.0507091 
+#> outer mgc:  0.01744406 
+#> outer mgc:  0.01744406 
+#> outer mgc:  0.01744406 
 #> Boundary LR test: m1...
-#> outer mgc:  37.26544 
+#> outer mgc:  37.26543 
 #> outer mgc:  8.650418 
 #> outer mgc:  1.362515 
 #> outer mgc:  0.6129178 
@@ -253,61 +273,61 @@ rpbnb_tmb_boundary_tests(fit, sim$data)
 #> outer mgc:  0.2176361 
 #> outer mgc:  0.2521139 
 #> outer mgc:  0.5846424 
-#> outer mgc:  0.3707246 
-#> outer mgc:  0.2547623 
-#> outer mgc:  0.2485095 
+#> outer mgc:  0.3707245 
+#> outer mgc:  0.2547622 
+#> outer mgc:  0.2485096 
 #> outer mgc:  0.1943857 
 #> outer mgc:  0.246703 
 #> outer mgc:  0.2962943 
 #> outer mgc:  0.3118346 
 #> outer mgc:  0.2524341 
-#> outer mgc:  0.3016883 
+#> outer mgc:  0.3016886 
 #> outer mgc:  0.1706645 
-#> outer mgc:  0.1666839 
-#> outer mgc:  0.1906157 
-#> outer mgc:  0.2058872 
-#> outer mgc:  0.1823848 
-#> outer mgc:  0.09934848 
-#> outer mgc:  0.02268604 
-#> outer mgc:  0.0240201 
-#> outer mgc:  0.01740295 
-#> outer mgc:  0.06784896 
-#> outer mgc:  0.04714727 
-#> outer mgc:  0.04714727 
-#> outer mgc:  0.04714727 
-#> outer mgc:  0.006849954 
-#> outer mgc:  0.002137974 
-#> outer mgc:  0.002137974 
-#> outer mgc:  0.002137974 
+#> outer mgc:  0.166684 
+#> outer mgc:  0.1906156 
+#> outer mgc:  0.2058873 
+#> outer mgc:  0.1823847 
+#> outer mgc:  0.09934819 
+#> outer mgc:  0.02268605 
+#> outer mgc:  0.02401999 
+#> outer mgc:  0.01740284 
+#> outer mgc:  0.06785024 
+#> outer mgc:  0.04714943 
+#> outer mgc:  0.04714943 
+#> outer mgc:  0.04714943 
+#> outer mgc:  0.006850242 
+#> outer mgc:  0.002138093 
+#> outer mgc:  0.002138093 
+#> outer mgc:  0.002138093 
 #> Boundary LR test: m2...
 #> outer mgc:  2.777529 
-#> outer mgc:  0.585213 
+#> outer mgc:  0.5852131 
 #> outer mgc:  0.4106103 
 #> outer mgc:  0.5379071 
 #> outer mgc:  0.4008264 
 #> outer mgc:  0.448099 
-#> outer mgc:  0.9764165 
+#> outer mgc:  0.9764166 
 #> outer mgc:  1.181307 
 #> outer mgc:  1.075618 
-#> outer mgc:  0.966169 
+#> outer mgc:  0.9661691 
 #> outer mgc:  1.500775 
 #> outer mgc:  0.8690968 
-#> outer mgc:  0.713576 
-#> outer mgc:  0.5986374 
-#> outer mgc:  0.7075973 
+#> outer mgc:  0.7135759 
+#> outer mgc:  0.5986373 
+#> outer mgc:  0.7075971 
 #> outer mgc:  0.4255183 
-#> outer mgc:  0.3547595 
-#> outer mgc:  0.1147076 
+#> outer mgc:  0.3547594 
+#> outer mgc:  0.1147075 
 #> outer mgc:  0.2731667 
-#> outer mgc:  0.06477574 
+#> outer mgc:  0.06477569 
 #> outer mgc:  0.1139779 
 #> outer mgc:  0.1554963 
-#> outer mgc:  0.1851498 
-#> outer mgc:  0.1367059 
-#> outer mgc:  0.01306486 
-#> outer mgc:  0.01796246 
-#> outer mgc:  0.01796246 
-#> outer mgc:  0.01796246 
+#> outer mgc:  0.1851499 
+#> outer mgc:  0.1367057 
+#> outer mgc:  0.01306469 
+#> outer mgc:  0.01796172 
+#> outer mgc:  0.01796172 
+#> outer mgc:  0.01796172 
 #> Boundary-parameter LR tests (boundary-corrected, 50:50 chi-square mixture)
 #> H0: parameter = 0 (random SD absent, or margin Poisson)
 #> 

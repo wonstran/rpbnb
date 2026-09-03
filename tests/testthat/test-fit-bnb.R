@@ -120,7 +120,7 @@ test_that("fit_bnb famoye reproduces legacy bnbr_v2-4 estimates on rwm1984", {
   # the max((1-c1)(1-c2), c1*c2) corner (see famoye_core.R). The lambda interval
   # is reparameterized as lamLo + (lamHi-lamLo)*plogis(zlam), so tightening
   # lamLo shifts every estimate in the 4th-5th decimal versus the legacy
-  # estimator inst/legacy/bnbr_v2-4.R, which still uses the old (too permissive)
+  # estimator inst/dev/legacy/bnbr_v2-4.R, which still uses the old (too permissive)
   # bound. The log-likelihood is essentially unchanged (flat near the optimum).
   expect_equal(unname(cf[["b1:(Intercept)"]]),  1.056657961791, tolerance = 1e-4)
   expect_equal(unname(cf[["b1:outwork"]]),       0.515786142444, tolerance = 1e-4)
@@ -133,7 +133,7 @@ test_that("fit_bnb famoye reproduces legacy bnbr_v2-4 estimates on rwm1984", {
 test_that("famoye multi-start keeps the better of zero and glm.nb starts", {
   skip_on_cran()
   # High-mean DGP where the zero start converges to a worse optimum than the
-  # marginal glm.nb start (see inst/validation/start_sensitivity_famoye.R).
+  # marginal glm.nb start (see inst/dev/validation/start_sensitivity_famoye.R).
   sim <- simulate_bnb(3000, c("(Intercept)" = 1.4, x = 0.2),
                       c("(Intercept)" = 1.2, x = -0.2),
                       dispersion = c(m1 = 0.5, m2 = 0.5), lambda = 0.8, seed = 202)

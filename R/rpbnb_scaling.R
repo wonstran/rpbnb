@@ -2,7 +2,7 @@
 # continuous predictors, standardize them before fitting, and map fitted
 # coefficients back to the covariates' original units for display.
 #
-# inst/rpbnb_frank_open.R and inst/tmb_rpbnb_frank_open.R do this by hand --
+# inst/dev/rpbnb_frank_open.R and inst/dev/tmb_rpbnb_frank_open.R do this by hand --
 # list the continuous carriers, centre/scale them before the fit, then
 # rebuild an "original units" coefficient table from the affine chain rule
 # afterwards. This file generalizes that pattern into rpbnb() itself: the

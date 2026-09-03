@@ -20,7 +20,8 @@ fit_rpbnb_tmb(
   poisson_1 = FALSE,
   poisson_2 = FALSE,
   method = c("sml", "laplace"),
-  force_parallel_gaussian = FALSE,
+  disable_parallel_gaussian = FALSE,
+  force_parallel_gaussian = NULL,
   .fixed = NULL
 )
 }
@@ -98,28 +99,30 @@ and requires at least one random coefficient.
 likelihood rather than the exact one, so an AIC from a Laplace fit is not
 meaningful to compare against an AIC from an SML fit of the same model.}
 
-\item{force_parallel_gaussian}{Opt-in override of the Gaussian-copula
-(\code{dependence = copula("normal")}) single-thread safety cap. Default
-\code{FALSE}: whenever \code{control$n_cores > 1} or
-\code{control$parallel_tape} is requested together with a Gaussian
-copula, the request is silently capped to one thread with a
-\code{warning()} instead of being honored. This is not a performance
-knob -- it exists because evaluating a Gaussian-copula TMB object built
-with more than one OpenMP thread has reliably crashed the R process
-(SIGSEGV) on the first objective evaluation, a defect in the registered
-Gaussian atomic (\code{REGISTER_ATOMIC(gauss_cell_vec)} in
-\code{src/rpbnb_tmb.cpp}) that is not fixed by the existing
-\code{#pragma omp critical} force-init. Frank and Clayton copulas are
-unaffected at any thread count and never see this cap.
+\item{disable_parallel_gaussian}{Opt-out that restricts a Gaussian-copula
+(\code{dependence = copula("normal")}) fit to one thread. Default
+\code{FALSE}: the requested \code{control$n_cores} /
+\code{control$parallel_tape} are honored for every dependence family,
+Gaussian included. Multithreaded Gaussian evaluation used to crash the R
+process (SIGSEGV) whenever a fit realized more threads than an earlier
+fit in the same session -- TMB's \code{REGISTER_ATOMIC} cache sizes its
+per-thread array once, at first initialization -- and Gaussian fits were
+therefore capped to one thread by default. That defect was fixed in
+0.4.4 (\code{src/rpbnb_tmb.cpp} sizes the atomic for the machine's full
+processor count at initialization; verified at 2/4/8/16 threads), and
+since 0.4.6 parallel evaluation is the default. Setting
+\code{disable_parallel_gaussian = TRUE} restores the old single-thread
+behaviour -- a kill-switch for an unusual TMB/OpenMP build where the
+registered atomic still misbehaves. Ignored (threads never restricted)
+for every other dependence structure.}
 
-Setting \code{force_parallel_gaussian = TRUE} honors the requested
-thread count instead of capping it, with a \code{warning()} naming the
-crash risk explicitly. This is an escape hatch for someone who has read
-this paragraph and still wants to try it (e.g. to test whether a
-particular TMB/OpenMP build is actually affected) -- it does not fix the
-underlying defect, and a crash under this override can still corrupt
-memory and lose unsaved work in the R session. Ignored for every other
-dependence structure.}
+\item{force_parallel_gaussian}{Deprecated (pre-0.4.6 polarity); use
+\code{disable_parallel_gaussian} instead. Multithreaded Gaussian
+evaluation is now the default, so \code{TRUE} (the old opt-in) is a
+no-op beyond its deprecation warning, and an explicit \code{FALSE} --
+which used to select the single-thread cap -- is honored as
+\code{disable_parallel_gaussian = TRUE}. Any non-\code{NULL} value
+warns.}
 
 \item{.fixed}{Internal. A named numeric vector of parameters (in the
 optimization parameterization, e.g. \code{c("log_sd1:x" = -20)}) to pin

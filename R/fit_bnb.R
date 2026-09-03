@@ -9,11 +9,19 @@ new_bnb_fit <- function(coef, vcov, se, logLik, nobs, npar, dependence,
                         formula_1, formula_2, ll_trace, convergence, call,
                         cop_family = NULL, cop_par = NULL, cop_tau = NULL,
                         hessian_diag = NULL, predict_meta = NULL,
-                        poisson_1 = FALSE, poisson_2 = FALSE) {
+                        poisson_1 = FALSE, poisson_2 = FALSE,
+                        lambda_boundary_side = NA_character_) {
   structure(
     list(coef = coef, vcov = vcov, se = se, logLik = logLik,
          nobs = nobs, npar = npar, dependence = dependence,
-         lambda = lambda, bounds = bounds, mu1 = mu1, mu2 = mu2,
+         lambda = lambda, bounds = bounds,
+         # Set only for Famoye: NA_character_ (not pinned), or the side of the
+         # frozen [bounds[1], bounds[2]] interval z_lambda is pinned against --
+         # see famoye_lam_pinned_side(). summary()/.natural_scale_table() reads
+         # this to null the delta-method SE and explain why, instead of
+         # reporting a Wald z built from a link derivative near 0.
+         lambda_boundary_side = lambda_boundary_side,
+         mu1 = mu1, mu2 = mu2,
          X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
          formula_1 = formula_1, formula_2 = formula_2,
          ll_trace = ll_trace, convergence = convergence,
@@ -53,7 +61,7 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
 
   # Multi-start policy. The famoye analytic gradient freezes the lambda-bounds,
   # so the BFGS objective is start-sensitive and no single start dominates
-  # (inst/validation/start_sensitivity_famoye.R: a zero start wins on rwm1984 and
+  # (inst/dev/validation/start_sensitivity_famoye.R: a zero start wins on rwm1984 and
   # low/mid-mean data; marginal glm.nb starts win on high-mean data). With no
   # user start, optimize from BOTH candidates and keep the best converged
   # objective. A user-supplied start (positional or named) is honored as given.
@@ -187,6 +195,7 @@ fit_bnb_famoye <- function(Y1, Y2, X1, X2, cn1, cn2, start, control,
   list(coef = par_hat, vcov = vc, se = se, logLik = ll_hat,
        npar = length(par_hat) - length(fixed_names),   # pinned dispersions not free
        lambda = lambda_hat, bounds = c(bnds_hat[1], bnds_hat[2]),
+       lambda_boundary_side = famoye_lam_pinned_side(z_hat, bnds_hat),
        mu1 = mu1_hat, mu2 = mu2_hat,
        ll_trace = .ll_eval, convergence = convergence, hessian_diag = hdiag)
 }
@@ -366,6 +375,13 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'   at a tiny pinned dispersion. The famoye and independence paths are both
 #'   exact (the independence path fits a Poisson GLM margin). Not supported with
 #'   a [copula()] dependence.
+#' @param boundary_tests Run [bnb_boundary_tests()] on the converged fit and
+#'   attach the result as `fit$boundary_tests`, so `print()`/`summary()` fill
+#'   in the `m1`/`m2` LR/df/p columns instead of leaving them blank (see
+#'   [bnb_boundary_tests()] for what the test is and why a Wald `z`/`p` is not
+#'   valid there). Default `FALSE`: this costs up to two extra refits (one per
+#'   free margin), so it is opt-in rather than automatic. Not supported with a
+#'   [copula()] dependence, for the same reason `poisson_1`/`poisson_2` are not.
 #' @return An object of class `bnb_fit`.
 #' @export
 #' @examples
@@ -379,6 +395,11 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'                   dependence = "famoye", poisson_1 = TRUE)
 #' lr_test(fit_p1, fit, boundary = TRUE)
 #'
+#' # Same test for both margins, run automatically and attached to the fit
+#' fit2 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+#'                 dependence = "famoye", boundary_tests = TRUE)
+#' fit2$boundary_tests
+#'
 #' # Gaussian copula dependence instead of Famoye/Sarmanov
 #' fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #'                    dependence = copula("normal"))
@@ -386,7 +407,8 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 fit_bnb <- function(formula_1, formula_2, data,
                     dependence = c("independence", "famoye"),
                     start = NULL, control = rpbnb_control(),
-                    poisson_1 = FALSE, poisson_2 = FALSE) {
+                    poisson_1 = FALSE, poisson_2 = FALSE,
+                    boundary_tests = FALSE) {
 
   .chk_poisson_flag(poisson_1, "poisson_1")
   .chk_poisson_flag(poisson_2, "poisson_2")
@@ -403,6 +425,10 @@ fit_bnb <- function(formula_1, formula_2, data,
     if (isTRUE(poisson_1) || isTRUE(poisson_2)) {
       stop("poisson_1 / poisson_2 (Poisson-limit margins) are not supported ",
            "with a copula() dependence.", call. = FALSE)
+    }
+    if (isTRUE(boundary_tests)) {
+      stop("boundary_tests = TRUE is not supported with a copula() ",
+           "dependence (see ?bnb_boundary_tests).", call. = FALSE)
     }
     res <- fit_bnb_copula(Y1, Y2, X1, X2, cn1, cn2,
                           family = dependence$family, start = start, control = control,
@@ -435,12 +461,24 @@ fit_bnb <- function(formula_1, formula_2, data,
   out <- new_bnb_fit(coef = res$coef, vcov = res$vcov, se = res$se,
               logLik = res$logLik, nobs = length(Y1), npar = res$npar,
               dependence = dependence, lambda = res$lambda, bounds = res$bounds,
+              # NULL for the independence path (no z_lambda at all).
+              lambda_boundary_side = if (is.null(res$lambda_boundary_side)) {
+                NA_character_
+              } else {
+                res$lambda_boundary_side
+              },
               mu1 = res$mu1, mu2 = res$mu2, X1 = X1, X2 = X2, Y1 = Y1, Y2 = Y2,
               formula_1 = formula_1, formula_2 = formula_2,
               ll_trace = res$ll_trace, convergence = res$convergence,
               call = match.call(), hessian_diag = res$hessian_diag,
               predict_meta = .prep_predict_meta(prep),
               poisson_1 = poisson_1, poisson_2 = poisson_2)
+  if (isTRUE(boundary_tests)) {
+    # prep$data (the complete-case subset actually fit), not the raw `data`
+    # argument -- bnb_boundary_tests() refits must use exactly the rows the
+    # full fit used, or the LR comparison is not a clean nested restriction.
+    out$boundary_tests <- bnb_boundary_tests(out, prep$data)
+  }
   # dependence = "independence" is fit by two MASS::glm.nb margins and reads no
   # control field at all; the ignored-settings note is still attached from the
   # `bnb` applicability list, which is the right approximation -- it reports

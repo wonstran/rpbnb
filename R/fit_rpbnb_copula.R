@@ -1,7 +1,7 @@
 # Estimator for the copula random-parameter BNB model. Optimizes the copula
 # simulated log-likelihood (R/rpbnb_copula_likelihood.R) with BFGS + the
 # analytic gradient (bnbr_rp_copula_ll_grad); standard errors from OPG
-# (default recommendation) or the numeric Hessian, per control$se_method.
+# (the default) or the numeric Hessian, per control$se_method.
 # Internal.
 
 #' @keywords internal
@@ -91,7 +91,16 @@
   }
   free <- !(par_names %in% fixed_names)
 
-  se_method <- if (is.null(control$se_method)) "numeric" else control$se_method
+  # "opg", not "numeric": this path has no analytic Hessian, so its numeric
+  # Hessian is O(npar^2) threaded log-likelihood evaluations against OPG's one
+  # gradient pass (measured ~3x slower on an 11-parameter fit), for SEs that
+  # match OPG to a few percent on every parameter away from a boundary. The
+  # exception is the caveat ?rpbnb_control's se_method documents: a random-
+  # coefficient scale (log_sd) near a=0 is a boundary parameter, where OPG's
+  # information-matrix-equality assumption is unreliable (measured 17-25% off
+  # "numeric" there in the same fit) -- pass se_method = "numeric" explicitly
+  # to recompute just that when it matters.
+  se_method <- if (is.null(control$se_method)) "opg" else control$se_method
 
   # Preferred fast path: multithreaded (OpenMP) C++ likelihood, mirroring the
   # Famoye path in fit_rpbnb.R -- n_cores is interpreted as the OpenMP thread
@@ -126,7 +135,7 @@
   if (isTRUE(control$compute_se)) {
     if (identical(se_method, "analytic")) {
       stop("se_method = 'analytic' is not available for copula dependence; use ",
-           "'opg' (recommended) or 'numeric'.", call. = FALSE)
+           "'opg' (the default) or 'numeric'.", call. = FALSE)
     } else if (identical(se_method, "opg")) {
       res <- if (use_cpp)
         bnbr_rp_copula_ll_grad_cpp(par_hat, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2,
@@ -144,11 +153,28 @@
                               label = "copula RP-BNB (OPG)")
       vc <- inv$vcov; se <- inv$se; hdiag <- inv$diag
     } else {  # "numeric"
-      H <- numDeriv::hessian(function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
+      # Same substitution the Famoye path makes (bnbr_rp_ll_fixed_bounds_cpp
+      # in fit_rpbnb.R): numDeriv perturbs one coordinate at a time and
+      # re-evaluates the full log-likelihood at each step, so the finite-
+      # difference Hessian is n_threads-multithreaded (via the OpenMP kernel
+      # already used for the optimization objective and the OPG SEs above)
+      # whenever it is available, instead of always falling back to the pure-R
+      # bnbr_rp_copula_ll(). Math identity between the two is asserted in
+      # test-copula-cpp.R ("C++ copula value+gradient+scores match the R
+      # oracle"); as.numeric() drops the gradient/scores attributes numDeriv
+      # does not expect (it wants a bare scalar, unlike maxLik's `logLik`,
+      # which reads the gradient attribute deliberately).
+      ll_fh <- if (use_cpp)
+        function(p) as.numeric(bnbr_rp_copula_ll_grad_cpp(
+          p, Y1, Y2, X1, X2, XR1, XR2, rand_idx1, rand_idx2, Z1, Z2, family,
+          dist1, dist2, sign1, sign2, n_threads = cpp_threads,
+          pois1 = poisson_1, pois2 = poisson_2, off1 = off1, off2 = off2))
+      else
+        function(p) bnbr_rp_copula_ll(p, Y1, Y2, X1, X2, XR1, XR2,
                              rand_idx1, rand_idx2, Z1, Z2, family, dist1, dist2, sign1, sign2,
                              pois1 = poisson_1, pois2 = poisson_2,
-                             off1 = off1, off2 = off2),
-                             par_hat,
+                             off1 = off1, off2 = off2)
+      H <- numDeriv::hessian(ll_fh, par_hat,
                              method.args = list(r = control$hess_r, eps = control$hess_eps))
       inv <- .free_index_vcov(-H, par_names, free,
                               label = paste0(family, " copula RP-BNB (numeric Hessian)"))
@@ -185,6 +211,7 @@
     rp_meta = list(dist1 = dist1, dist2 = dist2, sign1 = sign1, sign2 = sign2,
                    Z1 = Z1, Z2 = Z2),
     predict_meta = .prep_predict_meta(prep),
-    poisson_1 = poisson_1, poisson_2 = poisson_2
+    poisson_1 = poisson_1, poisson_2 = poisson_2,
+    se_method = se_method
   )
 }

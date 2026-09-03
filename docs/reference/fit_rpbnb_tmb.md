@@ -23,7 +23,8 @@ fit_rpbnb_tmb(
   poisson_1 = FALSE,
   poisson_2 = FALSE,
   method = c("sml", "laplace"),
-  force_parallel_gaussian = FALSE,
+  disable_parallel_gaussian = FALSE,
+  force_parallel_gaussian = NULL,
   .fixed = NULL
 )
 ```
@@ -47,12 +48,19 @@ fit_rpbnb_tmb(
 - draws:
 
   Number of Halton simulation draws. Under `method = "sml"` this sets
-  the simulation grid the likelihood is averaged over, and tape size
-  scales with `nrow(data) * draws`. Under `method = "laplace"` it does
-  not affect the likelihood or the tape, but still sizes the Halton grid
-  used for the frozen Famoye lambda bounds and for the post-estimation
-  averaging in [`predict()`](https://rdrr.io/r/stats/predict.html) and
-  the marginal-effect functions.
+  the simulation grid the likelihood is averaged over. Tape size scales
+  with `nrow(data) * draws` unless the fit draw-chunks (see
+  `control$tape_chunks` at [`rpbnb_control()`](rpbnb_control.md)): when
+  the weighted workload exceeds `control$max_workload`, the fit is split
+  into several equal-sized draw chunks replayed over one smaller TMB
+  tape, dropping peak memory to `nrow(data) * ceiling(draws / chunks)`
+  at the cost of somewhat slower gradient evaluations – exact for the
+  requested `draws`, not an approximation. Under `method = "laplace"`
+  `draws` does not affect the likelihood, the tape, or chunking, but
+  still sizes the Halton grid used for the frozen Famoye lambda bounds
+  and for the post-estimation averaging in
+  [`predict()`](https://rdrr.io/r/stats/predict.html) and the
+  marginal-effect functions.
 
 - seed:
 
@@ -124,32 +132,32 @@ fit_rpbnb_tmb(
   from a Laplace fit is not meaningful to compare against an AIC from an
   SML fit of the same model.
 
+- disable_parallel_gaussian:
+
+  Opt-out that restricts a Gaussian-copula
+  (`dependence = copula("normal")`) fit to one thread. Default `FALSE`:
+  the requested `control$n_cores` / `control$parallel_tape` are honored
+  for every dependence family, Gaussian included. Multithreaded Gaussian
+  evaluation used to crash the R process (SIGSEGV) whenever a fit
+  realized more threads than an earlier fit in the same session – TMB's
+  `REGISTER_ATOMIC` cache sizes its per-thread array once, at first
+  initialization – and Gaussian fits were therefore capped to one thread
+  by default. That defect was fixed in 0.4.4 (`src/rpbnb_tmb.cpp` sizes
+  the atomic for the machine's full processor count at initialization;
+  verified at 2/4/8/16 threads), and since 0.4.6 parallel evaluation is
+  the default. Setting `disable_parallel_gaussian = TRUE` restores the
+  old single-thread behaviour – a kill-switch for an unusual TMB/OpenMP
+  build where the registered atomic still misbehaves. Ignored (threads
+  never restricted) for every other dependence structure.
+
 - force_parallel_gaussian:
 
-  Opt-in override of the Gaussian-copula
-  (`dependence = copula("normal")`) single-thread safety cap. Default
-  `FALSE`: whenever `control$n_cores > 1` or `control$parallel_tape` is
-  requested together with a Gaussian copula, the request is silently
-  capped to one thread with a
-  [`warning()`](https://rdrr.io/r/base/warning.html) instead of being
-  honored. This is not a performance knob – it exists because evaluating
-  a Gaussian-copula TMB object built with more than one OpenMP thread
-  has reliably crashed the R process (SIGSEGV) on the first objective
-  evaluation, a defect in the registered Gaussian atomic
-  (`REGISTER_ATOMIC(gauss_cell_vec)` in `src/rpbnb_tmb.cpp`) that is not
-  fixed by the existing `#pragma omp critical` force-init. Frank and
-  Clayton copulas are unaffected at any thread count and never see this
-  cap.
-
-  Setting `force_parallel_gaussian = TRUE` honors the requested thread
-  count instead of capping it, with a
-  [`warning()`](https://rdrr.io/r/base/warning.html) naming the crash
-  risk explicitly. This is an escape hatch for someone who has read this
-  paragraph and still wants to try it (e.g. to test whether a particular
-  TMB/OpenMP build is actually affected) – it does not fix the
-  underlying defect, and a crash under this override can still corrupt
-  memory and lose unsaved work in the R session. Ignored for every other
-  dependence structure.
+  Deprecated (pre-0.4.6 polarity); use `disable_parallel_gaussian`
+  instead. Multithreaded Gaussian evaluation is now the default, so
+  `TRUE` (the old opt-in) is a no-op beyond its deprecation warning, and
+  an explicit `FALSE` – which used to select the single-thread cap – is
+  honored as `disable_parallel_gaussian = TRUE`. Any non-`NULL` value
+  warns.
 
 - .fixed:
 

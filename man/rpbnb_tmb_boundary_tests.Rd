@@ -10,7 +10,8 @@ rpbnb_tmb_boundary_tests(
   control = NULL,
   which = c("sd", "dispersion"),
   draws = fit$draws,
-  force_parallel_gaussian = FALSE,
+  disable_parallel_gaussian = FALSE,
+  force_parallel_gaussian = NULL,
   sml_fallback = TRUE
 )
 }
@@ -67,15 +68,19 @@ log-likelihood surface as \code{fit}, so the LR statistic picks up simulation
 noise beyond the restriction under test -- prefer the default unless you
 have a specific reason to diverge.}
 
-\item{force_parallel_gaussian}{Opt-in override of the Gaussian-copula
-single-thread safety cap (see \code{?fit_rpbnb_tmb}), forwarded to every
-restricted refit. Default \code{FALSE}. This is intentionally a separate
+\item{disable_parallel_gaussian}{Opt-out that restricts each restricted
+refit's Gaussian-copula evaluation to one thread (see
+\code{?fit_rpbnb_tmb}), forwarded to every refit. Default \code{FALSE}
+(multithreaded, the 0.4.6+ default). This is intentionally a separate
 argument rather than something read off \code{fit}: \code{fit} does not record
-whether the original fit used the override, so passing
-\code{force_parallel_gaussian = TRUE} here is required even when the
-original \code{fit_rpbnb_tmb()}/\code{rpbnb()} call also passed it -- otherwise
-every refit silently falls back to one thread regardless of
-\code{control$n_cores}.}
+whether the original fit opted out, so a caller who wants
+single-threaded refits must pass \code{disable_parallel_gaussian = TRUE}
+here even when the original \code{fit_rpbnb_tmb()}/\code{rpbnb()} call also did.}
+
+\item{force_parallel_gaussian}{Deprecated (pre-0.4.6 polarity); use
+\code{disable_parallel_gaussian} instead. \code{TRUE} (the old opt-in) is a no-op
+beyond its deprecation warning; an explicit \code{FALSE} is honored as
+\code{disable_parallel_gaussian = TRUE}.}
 
 \item{sml_fallback}{When \code{fit} was estimated by \code{method = "laplace"} and
 a restricted refit's Laplace pair cannot be trusted, re-run \strong{that one

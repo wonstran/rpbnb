@@ -230,3 +230,79 @@ test_that("copula fit with se_method='opg' gives finite SEs; 'analytic' errors",
               control = rpbnb_control(se_method = "analytic")),
     "opg|numeric")
 })
+
+test_that("se_method='numeric' Hessian via the C++ kernel matches the pure-R oracle", {
+  skip_if_not(rpbnb_copula_cpp_available(), "copula C++ not compiled")
+  # se_method = "numeric" is explicit here (the default is "opg" as of this
+  # version -- see the next test). fit_rpbnb_copula.R's "numeric" path
+  # differentiates bnbr_rp_copula_ll_grad_cpp() when available -- multithreaded
+  # via n_threads, unlike the pure-R bnbr_rp_copula_ll() it replaced for this
+  # path -- instead of always falling back to the R oracle. Math identity
+  # between the two kernels is asserted pointwise in test-copula-cpp.R; this
+  # checks it survives numDeriv's finite differencing through the actual
+  # fit_rpbnb() code path (as.numeric() strips the gradient/scores attributes
+  # numDeriv does not expect on its objective's return value).
+  sim <- simulate_rpbnb_copula(
+    n = 400, beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("frank", par = 2), seed = 17)
+  ctrl <- rpbnb_control(se_method = "numeric", n_cores = 2L)
+
+  fit_cpp <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                       dependence = copula("frank"), draws = 60, seed = 5,
+                       control = ctrl)
+
+  ns <- asNamespace("rpbnb")
+  orig <- ns$rpbnb_copula_cpp_available
+  unlockBinding("rpbnb_copula_cpp_available", ns)
+  assign("rpbnb_copula_cpp_available", function() FALSE, envir = ns)
+  on.exit({
+    assign("rpbnb_copula_cpp_available", orig, envir = ns)
+    lockBinding("rpbnb_copula_cpp_available", ns)
+  }, add = TRUE)
+
+  fit_r <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                     dependence = copula("frank"), draws = 60, seed = 5,
+                     control = ctrl)
+
+  expect_true(all(is.finite(fit_cpp$se)))
+  expect_equal(unname(fit_cpp$se), unname(fit_r$se), tolerance = 1e-3)
+  expect_equal(unname(coef(fit_cpp)), unname(coef(fit_r)), tolerance = 1e-4)
+})
+
+test_that("se_method defaults to 'opg' for copula and 'numeric' for famoye", {
+  # rpbnb_control(se_method = NULL) means "this dependence family's own
+  # default" -- resolved by the fitter, not the constructor (which has no
+  # dependence argument to know which one applies; see ?rpbnb_control). OPG
+  # is markedly faster than the copula path's numeric Hessian (no analytic
+  # Hessian exists for copula at all) and agrees with it on every parameter
+  # away from a boundary -- see fit_rpbnb_copula.R's se_method comment for
+  # the measured numbers -- so it is the copula default; famoye keeps
+  # "numeric" since its own fast, exact "analytic" option is available but not
+  # itself the default, and this change should not silently reach past the
+  # copula path it was made for.
+  expect_null(rpbnb_control()$se_method)
+
+  sim <- simulate_rpbnb_copula(
+    n = 300, beta1 = c("(Intercept)" = 0.3, x1 = 0.2),
+    beta2 = c("(Intercept)" = 0.2, x1 = -0.1),
+    dispersion = c(m1 = 0.5, m2 = 0.6),
+    copula = copula("frank", par = 2), seed = 31)
+
+  cf <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                  dependence = copula("frank"), draws = 40, seed = 5,
+                  control = rpbnb_control(n_cores = 1L))
+  expect_identical(cf$se_method, "opg")
+
+  ff <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                  draws = 40, seed = 5,
+                  control = rpbnb_control(n_cores = 1L))
+  expect_identical(ff$se_method, "numeric")
+
+  # An explicit choice is still honored, not overridden by the new default.
+  cf2 <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data,
+                   dependence = copula("frank"), draws = 40, seed = 5,
+                   control = rpbnb_control(n_cores = 1L, se_method = "numeric"))
+  expect_identical(cf2$se_method, "numeric")
+})

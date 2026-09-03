@@ -15,7 +15,7 @@ to the fit itself and returns exactly what the chosen fitter returns."></head><b
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -170,9 +170,10 @@ versus OpenMP threads.</p></dd>
 <dd><p>Further arguments passed to the selected fitter. Names are
 validated against that fitter's formals; an argument belonging to the other
 engine, or an unrecognised name, is an error. Exception: the TMB tuning
-knobs <code>method</code> and <code>force_parallel_gaussian</code> are dropped with a warning
-(not an error) under <code>engine = "classic"</code>, so a call can switch engines
-without stripping them.</p></dd>
+knobs <code>method</code>, <code>disable_parallel_gaussian</code>, and the deprecated
+<code>force_parallel_gaussian</code> are dropped with a warning (not an error)
+under <code>engine = "classic"</code>, so a call can switch engines without
+stripping them.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -204,8 +205,8 @@ rather than a silently ignored <code>...</code> entry.</p>
     </div>
     <div class="section level2">
     <h2 id="automatic-centring-and-scaling">Automatic centring and scaling<a class="anchor" aria-label="anchor" href="#automatic-centring-and-scaling"></a></h2>
-    <p><code>standardize = TRUE</code> automates the pattern in <code>inst/rpbnb_frank_open.R</code> and
-<code>inst/tmb_rpbnb_frank_open.R</code>: continuous predictors are centred and scaled
+    <p><code>standardize = TRUE</code> automates the pattern in <code>inst/dev/rpbnb_frank_open.R</code> and
+<code>inst/dev/tmb_rpbnb_frank_open.R</code>: continuous predictors are centred and scaled
 (mean 0, SD 1) before fitting, which keeps a bounded random-coefficient
 carrier from acting as a disguised random intercept (see those scripts'
 headers) and fixes the design matrix's conditioning when regressors span
@@ -267,13 +268,14 @@ estimated by <code>method = "sml"</code> rather than reported <code>NA</code> �
 restrictions leave Laplace no valid optimum at all (see
 <code><a href="rpbnb_tmb_boundary_tests.html">rpbnb_tmb_boundary_tests()</a></code>'s <code>sml_fallback</code> argument, which is where to
 turn this off).</p>
-<p><code>force_parallel_gaussian</code> (<code>engine = "tmb"</code> only, passed via <code>...</code>) is
-forwarded to every restricted refit, so a Gaussian-copula fit's boundary
-tests honor <code>control$n_cores</code> the same way the original fit did instead
-of silently re-capping each refit to one thread – see
-<code><a href="rpbnb_tmb_boundary_tests.html">rpbnb_tmb_boundary_tests()</a></code>'s own <code>force_parallel_gaussian</code> argument for
-why this needs forwarding at all (the fit object does not record whether
-the override was used).</p>
+<p><code>disable_parallel_gaussian</code> (<code>engine = "tmb"</code> only, passed via <code>...</code>) is
+forwarded to every restricted refit, so a Gaussian-copula fit that opted
+out of multithreading gets single-threaded boundary refits too – see
+<code><a href="rpbnb_tmb_boundary_tests.html">rpbnb_tmb_boundary_tests()</a></code>'s own <code>disable_parallel_gaussian</code> argument
+for why this needs forwarding at all (the fit object does not record
+whether the opt-out was used). The deprecated pre-0.4.6
+<code>force_parallel_gaussian</code> is likewise accepted and mapped (see
+<code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>).</p>
 <p>Each restricted refit costs roughly as much as the original fit (more for
 a <code><a href="copula.html">copula()</a></code> dependence than for <code>"famoye"</code>; see <code><a href="rpbnb_boundary_tests.html">rpbnb_boundary_tests()</a></code>'s
 timing note), so this defaults to <code>FALSE</code>. <code>boundary_draws</code> (<code>engine = "tmb"</code> only) sets a <code>draws</code> for those refits other than the main fit's –
@@ -292,7 +294,7 @@ directly on the fit and assign its result to <code>fit$boundary_tests</code> (wi
     <div class="section level2">
     <h2 id="which-arguments-go-with-which-engine">Which arguments go with which engine<a class="anchor" aria-label="anchor" href="#which-arguments-go-with-which-engine"></a></h2>
 
-<table class="table table"><tr><td>Argument</td><td><code>engine = "classic"</code></td><td><code>engine = "tmb"</code></td></tr><tr><td><code>draw_type</code>, <code>.fixed</code>, <code>.opt_draws</code></td><td>yes</td><td>error</td></tr><tr><td><code>inference</code>, <code>keep</code></td><td>error</td><td>yes</td></tr><tr><td><code>method</code>, <code>force_parallel_gaussian</code></td><td>ignored with a warning</td><td>yes</td></tr><tr><td><code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> in a formula</td><td>yes</td><td>error</td></tr><tr><td><code>dependence = "independence"</code></td><td>error</td><td>yes</td></tr><tr><td><code>boundary_draws</code> (non-<code>NULL</code>)</td><td>error</td><td>yes</td></tr><tr><td><code>control</code> class</td><td><code>rpbnb_control</code></td><td><code>rpbnb_control</code> (same object)</td></tr><tr><td>optimizer</td><td><code>maxLik::maxLik(method = "BFGS")</code></td><td><code><a href="https://rdrr.io/r/stats/nlminb.html" class="external-link">stats::nlminb</a></code> + restarts</td></tr></table><p>Both engines freeze the Famoye admissible lambda interval at the starting
+<table class="table table"><tr><td>Argument</td><td><code>engine = "classic"</code></td><td><code>engine = "tmb"</code></td></tr><tr><td><code>draw_type</code>, <code>.fixed</code>, <code>.opt_draws</code></td><td>yes</td><td>error</td></tr><tr><td><code>inference</code>, <code>keep</code></td><td>error</td><td>yes</td></tr><tr><td><code>method</code>, <code>disable_parallel_gaussian</code>, <code>force_parallel_gaussian</code></td><td>ignored with a warning</td><td>yes</td></tr><tr><td><code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> in a formula</td><td>yes</td><td>error</td></tr><tr><td><code>dependence = "independence"</code></td><td>error</td><td>yes</td></tr><tr><td><code>boundary_draws</code> (non-<code>NULL</code>)</td><td>error</td><td>yes</td></tr><tr><td><code>control</code> class</td><td><code>rpbnb_control</code></td><td><code>rpbnb_control</code> (same object)</td></tr><tr><td>optimizer</td><td><code>maxLik::maxLik(method = "BFGS")</code></td><td><code><a href="https://rdrr.io/r/stats/nlminb.html" class="external-link">stats::nlminb</a></code> + restarts</td></tr></table><p>Both engines freeze the Famoye admissible lambda interval at the starting
 values (so the analytic gradient is exactly the derivative of the optimized
 objective) and validate the fitted lambda against the interval admissible at
 the optimum afterwards — check <code>lambda_admissible</code> on the fit. The

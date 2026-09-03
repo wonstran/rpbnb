@@ -97,3 +97,39 @@ test_that("d2ct_dmdbeta_factor matches numDeriv cross derivative of c_val", {
   e   <- rpbnb:::d2ct_dmdbeta_factor(mu, m0, rpbnb:::c_val(mu, m0))
   expect_equal(e * x, num, tolerance = 1e-6)          # d2c/dm dbj = e * x_j
 })
+
+test_that("famoye_lam_pinned_side flags saturation against the frozen box", {
+  # Same 2% margin as the TMB engine's near_smooth_cap() in tmb_inference.R --
+  # this is the classic engine's own copy of that test, applied to z_lambda /
+  # the objective's frozen bounds instead of the TMB template's z_dep.
+  b <- c(-1, 1)
+  expect_true(is.na(rpbnb:::famoye_lam_pinned_side(0, b)))       # centre: not pinned
+  expect_true(is.na(rpbnb:::famoye_lam_pinned_side(2, b)))       # interior: not pinned
+  expect_identical(rpbnb:::famoye_lam_pinned_side(25, b), "upper")
+  expect_identical(rpbnb:::famoye_lam_pinned_side(-25, b), "lower")
+  # plogis(z) alone sets how saturated the map is, and both the lambda gap to
+  # the endpoint and the 2% tolerance scale with (hi - lo) -- so which side of
+  # the margin a given z falls on does not depend on the box's width.
+  expect_identical(rpbnb:::famoye_lam_pinned_side(2, c(-5, 5)),
+                   rpbnb:::famoye_lam_pinned_side(2, b))
+  expect_identical(rpbnb:::famoye_lam_pinned_side(20, c(-5, 5)), "upper")
+})
+
+test_that("famoye_lam_pinned_side is degenerate/NA on non-finite input, not an error", {
+  expect_identical(rpbnb:::famoye_lam_pinned_side(NA_real_, c(-1, 1)), NA_character_)
+  expect_identical(rpbnb:::famoye_lam_pinned_side(Inf, c(-1, 1)), NA_character_)
+  expect_identical(rpbnb:::famoye_lam_pinned_side(0, c(NA_real_, 1)), NA_character_)
+  expect_identical(rpbnb:::famoye_lam_pinned_side(0, c(1, 1)), NA_character_)  # degenerate box
+})
+
+test_that("famoye_lam_pinned_side matches the sign of famoye_lam_from_z's saturation", {
+  # Not a re-derivation: cross-check against the map every objective actually
+  # evaluates, at the same z/bounds pairs, so the two cannot silently drift.
+  b <- c(-2, 3)
+  for (z in c(-30, -5, 0, 3, 30)) {
+    lam  <- rpbnb:::famoye_lam_from_z(b, z)
+    side <- rpbnb:::famoye_lam_pinned_side(z, b)
+    if (!is.na(side) && side == "upper") expect_gt(lam, b[2] - 0.5)
+    if (!is.na(side) && side == "lower") expect_lt(lam, b[1] + 0.5)
+  }
+})

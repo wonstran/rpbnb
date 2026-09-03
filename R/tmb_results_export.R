@@ -1,9 +1,9 @@
 # Write the dense truck example's captured reports as Markdown.
-# Internal helper used by inst/truck_rpbnb_diff_famoye_dense.R.
+# Internal helper used by inst/dev/tmb_truck_rpbnb_diff_famoye_dense.R.
 #
 # `dependence` and `method` are optional and default to NULL, which reproduces
 # the original three-section report byte for byte -- the four Famoye/Frank/
-# Clayton scripts in inst/ pass neither, and test-results-export.R pins the
+# Clayton scripts in inst/dev/ pass neither, and test-results-export.R pins the
 # exact lines.  Supplying them adds the "Model information" header, which
 # matters once several dependence structures are fitted to the same data into
 # the same results/ directory: the reports are named only by timestamp, so

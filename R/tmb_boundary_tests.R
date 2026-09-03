@@ -97,15 +97,18 @@
 #'   log-likelihood surface as `fit`, so the LR statistic picks up simulation
 #'   noise beyond the restriction under test -- prefer the default unless you
 #'   have a specific reason to diverge.
-#' @param force_parallel_gaussian Opt-in override of the Gaussian-copula
-#'   single-thread safety cap (see `?fit_rpbnb_tmb`), forwarded to every
-#'   restricted refit. Default `FALSE`. This is intentionally a separate
+#' @param disable_parallel_gaussian Opt-out that restricts each restricted
+#'   refit's Gaussian-copula evaluation to one thread (see
+#'   `?fit_rpbnb_tmb`), forwarded to every refit. Default `FALSE`
+#'   (multithreaded, the 0.4.6+ default). This is intentionally a separate
 #'   argument rather than something read off `fit`: `fit` does not record
-#'   whether the original fit used the override, so passing
-#'   `force_parallel_gaussian = TRUE` here is required even when the
-#'   original `fit_rpbnb_tmb()`/`rpbnb()` call also passed it -- otherwise
-#'   every refit silently falls back to one thread regardless of
-#'   `control$n_cores`.
+#'   whether the original fit opted out, so a caller who wants
+#'   single-threaded refits must pass `disable_parallel_gaussian = TRUE`
+#'   here even when the original `fit_rpbnb_tmb()`/`rpbnb()` call also did.
+#' @param force_parallel_gaussian Deprecated (pre-0.4.6 polarity); use
+#'   `disable_parallel_gaussian` instead. `TRUE` (the old opt-in) is a no-op
+#'   beyond its deprecation warning; an explicit `FALSE` is honored as
+#'   `disable_parallel_gaussian = TRUE`.
 #' @param sml_fallback When `fit` was estimated by `method = "laplace"` and
 #'   a restricted refit's Laplace pair cannot be trusted, re-run **that one
 #'   test's** LR with both sides estimated by `method = "sml"` instead of
@@ -177,11 +180,21 @@
 rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
                                      which = c("sd", "dispersion"),
                                      draws = fit$draws,
-                                     force_parallel_gaussian = FALSE,
+                                     disable_parallel_gaussian = FALSE,
+                                     force_parallel_gaussian = NULL,
                                      sml_fallback = TRUE) {
   if (!inherits(fit, "rpbnb_tmb_fit")) {
     stop("`fit` must be an rpbnb_tmb_fit (from fit_rpbnb_tmb() or ",
          "rpbnb(engine = \"tmb\")).", call. = FALSE)
+  }
+  # Same deprecation shim as fit_rpbnb_tmb(): TRUE asked for what is now the
+  # default; an explicit FALSE asked for the old single-thread cap.
+  if (!is.null(force_parallel_gaussian)) {
+    warning("`force_parallel_gaussian` is deprecated: multithreaded ",
+            "Gaussian-copula evaluation is now the default. Use ",
+            "`disable_parallel_gaussian = TRUE` to restrict the restricted ",
+            "refits to one thread.", call. = FALSE)
+    if (!isTRUE(force_parallel_gaussian)) disable_parallel_gaussian <- TRUE
   }
   if (!is.data.frame(data)) stop("`data` must be a data frame.", call. = FALSE)
   if (is.null(fit$formula_1) || is.null(fit$formula_2)) {
@@ -237,7 +250,7 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
     # tape_chunks was PINNED rather than auto-resolved: a pin can coexist
     # with max_workload = Inf (this data's own truck scripts do exactly
     # that, deliberately, because the calibration under-estimates its
-    # per-draw cost -- see inst/rpbnb_truck_open_v2.R), and Inf alone gives
+    # per-draw cost -- see inst/dev/rpbnb_truck_open_v2.R), and Inf alone gives
     # the refit's resolver no budget to auto-derive a layout from, so it
     # would silently fall back to C = 1 and reproduce the same OOM this is
     # meant to prevent. Propagating tape_chunks = fit$tape_integration$chunks
@@ -345,7 +358,7 @@ rpbnb_tmb_boundary_tests <- function(fit, data, control = NULL,
         control = control, inference = "none",
         poisson_1 = poisson_1, poisson_2 = poisson_2,
         method = method,
-        .fixed = fixed, force_parallel_gaussian = force_parallel_gaussian
+        .fixed = fixed, disable_parallel_gaussian = disable_parallel_gaussian
       ),
       error = function(e) {
         if (!grepl("NA/NaN", conditionMessage(e), fixed = TRUE)) stop(e)

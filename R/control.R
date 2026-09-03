@@ -20,12 +20,23 @@
 #    can say so out loud. Silence would be the actual hazard; an error would
 #    defeat the unification.
 #
-# 2. Two fields whose historical defaults DISAGREED between the constructors:
-#    `iterlim` (300 maxLik / 500 nlminb) and `print_level` (2 maxLik / 0 nlminb).
-#    Picking one number would silently change one engine's behaviour, so these
-#    default to NULL, meaning "whatever this estimator has always used", and are
-#    filled in by .resolve_control() once the estimator is known. An explicitly
-#    supplied value is always honored, for both engines.
+# 2. Two fields whose defaults differ between the estimators: `iterlim`
+#    (300 maxLik / 500 nlminb) and `print_level`. These default to NULL,
+#    meaning "this estimator's own default", and are filled in by
+#    .resolve_control() once the estimator is known. An explicitly supplied
+#    value is always honored, for every engine.
+#
+#    `print_level` is 2 under maxLik and, as of 0.4.6, 1 under the TMB engine
+#    (it was 0 there before). The engines split because the number means
+#    different things to each optimizer. Under TMB it drives two switches:
+#    MakeADFun(silent = print_level == 0) and nlminb's trace
+#    (max(0, print_level - 1)). At 1, TMB's own output is on -- the `outer
+#    mgc:` line per outer evaluation, plus the one-time tape/atomic setup --
+#    while nlminb stays quiet, which is enough to show a long fit is
+#    progressing without a screenful of parameter vectors per iteration. 2
+#    adds nlminb's per-iteration objective; 0 restores the pre-0.4.6 silence.
+#    Note nlminb's `trace` is a print INTERVAL, so print_level > 2 prints the
+#    objective LESS often, not more.
 
 # Every field the control object carries, in constructor order. Used to build
 # the "ignored" report, so a new field must be added here as well as to the
@@ -79,7 +90,7 @@
 .CONTROL_ENGINE_DEFAULTS <- list(
   classic = list(iterlim = 300L, print_level = 2L),
   bnb     = list(iterlim = 300L, print_level = 2L),
-  tmb     = list(iterlim = 500L, print_level = 0L)
+  tmb     = list(iterlim = 500L, print_level = 1L)
 )
 
 # Human-readable estimator names for the ignored-settings note.
@@ -119,9 +130,13 @@
 #' @section Defaults that depend on the estimator:
 #'
 #' `iterlim` and `print_level` default to `NULL`, which means "this estimator's
-#' own long-standing default": `iterlim` is 300 under `maxLik` and 500 under
-#' `nlminb`; `print_level` is 2 (progress) under `maxLik` and 0 (silent) under
-#' `nlminb`. Supplying either explicitly overrides that for every estimator.
+#' own default": `iterlim` is 300 under `maxLik` and 500 under `nlminb`.
+#' `print_level` is 2 under `maxLik` and, as of 0.4.6, 1 under the TMB engine
+#' (it was 0 -- fully silent -- before that, which left a long TMB fit
+#' printing nothing at all while it ran). The TMB default of 1 shows TMB's own
+#' progress without `nlminb`'s per-iteration parameter vectors; see
+#' `print_level` below for what each level prints. Supplying either explicitly
+#' overrides that for every estimator; `print_level = 0` restores silence.
 #' `max_threads` defaults to `n_cores` and `max_workload` is computed from
 #' available memory by [rpbnb_tmb_max_workload()] the first time a TMB fit
 #' needs it (so a non-TMB fit never pays for the memory probe).
@@ -132,8 +147,23 @@
 #'   the `maxLik` fitters and 500 for the TMB engine's `nlminb`.
 #' @param reltol Relative convergence tolerance.
 #' @param print_level Optimizer verbosity, and the switch that silences the
-#'   boundary-test progress messages. `NULL` (default) uses 2 for the `maxLik`
-#'   fitters and 0 (silent) for the TMB engine.
+#'   boundary-test progress messages. `NULL` (default) uses 2 under `maxLik`
+#'   and 1 under the TMB engine. Under TMB it drives two separate switches --
+#'   `MakeADFun(silent = print_level == 0)` and `nlminb`'s
+#'   `trace = max(0, print_level - 1)` -- so the levels are:
+#'   \describe{
+#'     \item{`0`}{Silent (the pre-0.4.6 TMB default).}
+#'     \item{`1`}{TMB's own output only: an `outer mgc:` line per outer
+#'       evaluation, plus the one-time tape/atomic construction on the first
+#'       fit of a session. No `nlminb` trace.}
+#'     \item{`2`}{Adds `nlminb`'s per-iteration objective and parameter
+#'       vector -- the lowest level that traces every iteration.}
+#'     \item{`>2`}{`nlminb`'s `trace` is a print *interval*, not a verbosity
+#'       level, so higher values print the objective *less* often.}
+#'   }
+#'   Note that `rpbnb_tmb_boundary_tests()` builds its own control when one is
+#'   not supplied, so its restricted refits print at their own default
+#'   regardless of this setting.
 #' @param draws_hessian Retained for backward compatibility but unused by every
 #'   estimator: the random-parameter numeric Hessian is taken with the same
 #'   optimization draws that produced the estimate (same-draw curvature), so it
@@ -150,16 +180,33 @@
 #'   closed-form Famoye (2010) Appendix Hessian). Both freeze the lambda-bounds
 #'   at the optimum and yield the same observed-information SEs.
 #' @param se_method Standard-error method for [fit_rpbnb()] (the random-parameter
-#'   model): "numeric" (default) uses the [numDeriv::hessian()] observed-
-#'   information Hessian; "analytic" uses the closed-form observed-information
-#'   Hessian (Famoye (2010) per-draw second derivatives assembled via the Louis
+#'   model): "numeric" uses the [numDeriv::hessian()] observed-information
+#'   Hessian; "analytic" uses the closed-form observed-information Hessian
+#'   (Famoye (2010) per-draw second derivatives assembled via the Louis
 #'   mixture formula) -- exact and much faster than "numeric" for larger models;
 #'   "opg" uses the BHHH / outer-product-of-gradients information from the
-#'   per-observation scores -- fastest, but relies on the information-matrix
-#'   equality so it is unreliable for parameters at a boundary (e.g. a random-
-#'   coefficient SD estimated near 0). For copula dependence ([fit_rpbnb()] with
-#'   `dependence = copula(...)`), only "opg" (recommended) and "numeric" are
-#'   available; "analytic" is not implemented for the copula path and errors.
+#'   per-observation scores -- fastest (one gradient pass, versus "numeric"'s
+#'   O(npar^2) finite-difference log-likelihood evaluations), but relies on the
+#'   information-matrix equality so it is unreliable for parameters at a
+#'   boundary (e.g. a random-coefficient SD estimated near 0). For copula
+#'   dependence ([fit_rpbnb()] with `dependence = copula(...)`), only "opg" and
+#'   "numeric" are available; "analytic" is not implemented for the copula path
+#'   and errors.
+#'
+#'   Default `NULL`, meaning "this dependence family's own default", resolved
+#'   once the fit is dispatched (same NULL-until-resolved pattern as
+#'   `iterlim`/`print_level`): "numeric" for `dependence = "famoye"`, "opg" for
+#'   `dependence = copula(...)`. The two differ because their speed/reliability
+#'   tradeoffs differ -- Famoye's fast, exact "analytic" Hessian makes
+#'   "numeric" (not "opg") the conservative default there, where the copula
+#'   path has no analytic Hessian at all and its own numeric Hessian is
+#'   markedly slower than OPG (measured ~3x on an 11-parameter fit) for SEs
+#'   that mostly agree with it anyway, except (per the boundary caveat above)
+#'   on random-coefficient scale parameters -- fall back to "numeric" for just
+#'   those, or use [rpbnb_boundary_tests()], if precise inference on an SD
+#'   estimated near 0 matters. Read back a resolved fit's own
+#'   `fit$control$se_method` (or the value read off `object$control` reported
+#'   by `print()`/`summary()`) rather than assuming which default applied.
 #' @param hess_eps,hess_r Step and Richardson order for [numDeriv::hessian()]
 #'   (used only when the numeric Hessian is selected).
 #' @param gradtol Stationarity tolerance for the TMB engine's score, applied
@@ -221,7 +268,7 @@ rpbnb_control <- function(method = c("BFGS"),
                           n_cores = 1L,
                           compute_se = TRUE,
                           hessian = c("numeric", "analytic"),
-                          se_method = c("numeric", "opg", "analytic"),
+                          se_method = NULL,
                           hess_eps = 1e-5,
                           hess_r = 4L,
                           gradtol = 1e-5,
@@ -246,9 +293,15 @@ rpbnb_control <- function(method = c("BFGS"),
   if (!hessian %in% c("numeric", "analytic")) {
     stop("`hessian` must be one of: numeric, analytic", call. = FALSE)
   }
-  if (length(se_method) > 1) se_method <- se_method[1]
-  if (!se_method %in% c("opg", "numeric", "analytic")) {
-    stop("`se_method` must be one of: numeric, analytic, opg", call. = FALSE)
+  # NULL means "this dependence family's own default" -- resolved by the
+  # fitter (fit_rpbnb.R: "numeric" for Famoye; fit_rpbnb_copula.R: "opg" for
+  # copula), not here, since the right default differs by dependence family
+  # and this constructor has no dependence argument to know which applies.
+  if (!is.null(se_method)) {
+    if (length(se_method) > 1) se_method <- se_method[1]
+    if (!se_method %in% c("opg", "numeric", "analytic")) {
+      stop("`se_method` must be one of: numeric, analytic, opg", call. = FALSE)
+    }
   }
 
   # Validate BEFORE coercion: as.integer() is what turns a bad value into a
@@ -335,7 +388,7 @@ rpbnb_control <- function(method = c("BFGS"),
 #'
 #' Only the arguments you actually supply are forwarded, so an untouched
 #' `iterlim`/`print_level` still resolves to the TMB engine's own defaults (500
-#' and 0) when the object is used for a TMB fit -- and to the `maxLik` defaults
+#' and 1) when the object is used for a TMB fit -- and to the `maxLik` defaults
 #' if the same object is handed to [fit_rpbnb()].
 #'
 #' @inheritParams rpbnb_control

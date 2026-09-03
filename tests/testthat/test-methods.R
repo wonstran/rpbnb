@@ -322,3 +322,96 @@ test_that("a singular Hessian is not mis-reported as a dependence bound", {
   expect_false(grepl("frozen lambda box", flat, fixed = TRUE))
   expect_true(all(nchar(block) <= 80L))
 })
+
+test_that("a pinned bnb_fit lambda nulls the delta-method SE and explains why", {
+  # Constructed, not fitted -- same style as "exact-Poisson natural-scale
+  # reports m = 0": the display logic under test is deterministic given
+  # coef/se/bounds, so build the fixture directly rather than chasing a real
+  # optimizer into a corner. z_lambda = 25 pins lambda against the upper end
+  # of bounds = c(-1, 1) (famoye_lam_pinned_side()'s own 2% margin).
+  cf <- c("b1:(Intercept)" = 0.3, "b2:(Intercept)" = 0.1,
+          log_m1 = log(0.5), log_m2 = log(0.5), z_lambda = 25)
+  se <- c("b1:(Intercept)" = 0.1, "b2:(Intercept)" = 0.1,
+          log_m1 = 0.1, log_m2 = 0.1, z_lambda = 5e5)
+  side <- rpbnb:::famoye_lam_pinned_side(25, c(-1, 1))
+  expect_identical(side, "upper")   # the premise: this fixture is actually pinned
+  fit <- structure(
+    list(coef = cf, se = se, poisson_1 = FALSE, poisson_2 = FALSE,
+         lambda = 0.999998, bounds = c(-1, 1), lambda_boundary_side = side,
+         dependence = "famoye", logLik = -100, AIC = 210, BIC = 220,
+         nobs = 400, npar = 5),
+    class = "bnb_fit"
+  )
+  nat <- rpbnb:::.natural_scale_flat(fit)
+  lam_row <- nat[nat$Parameter == "lambda (dependence)", ]
+  expect_true(is.na(lam_row$StdErr))
+  # Before the fix this computed a z from a tiny-but-nonzero delta-method SE
+  # (dlam/dz at z = 25 is ~2.8e-11) rather than the intended NA -- silently
+  # "significant" instead of undefined.
+  expect_true(is.na(lam_row$z))
+  expect_true(is.na(lam_row$p))
+
+  out <- capture.output(print(summary(fit)))
+  flat <- paste(out, collapse = " ")
+  expect_true(grepl("No Wald z/p for lambda", flat, fixed = TRUE))
+  expect_true(grepl("pinned against the upper end", flat, fixed = TRUE))
+  # fit_bnb()'s bounds are recomputed at the fitted means every evaluation
+  # (admissible by construction), not frozen at a starting value -- the note
+  # must say so, not point at a starting-value refit that cannot help here.
+  expect_true(grepl("recomputed at the fitted means", flat, fixed = TRUE))
+  expect_false(grepl("frozen at the starting values", flat, fixed = TRUE))
+  # Positive scale/dispersion rows keep their own note; lambda's null is
+  # interior (0), so it must not be folded into that boundary-null wording.
+  boundary_line <- grep("their null is a boundary", out, fixed = TRUE, value = TRUE)
+  expect_false(any(grepl("lambda", boundary_line)))
+})
+
+test_that("a non-pinned bnb_fit lambda keeps its ordinary Wald test", {
+  cf <- c("b1:(Intercept)" = 0.3, "b2:(Intercept)" = 0.1,
+          log_m1 = log(0.5), log_m2 = log(0.5), z_lambda = 0.4)
+  se <- c("b1:(Intercept)" = 0.1, "b2:(Intercept)" = 0.1,
+          log_m1 = 0.1, log_m2 = 0.1, z_lambda = 0.3)
+  fit <- structure(
+    list(coef = cf, se = se, poisson_1 = FALSE, poisson_2 = FALSE,
+         lambda = rpbnb:::famoye_lam_from_z(c(-1, 1), 0.4), bounds = c(-1, 1),
+         lambda_boundary_side = rpbnb:::famoye_lam_pinned_side(0.4, c(-1, 1)),
+         dependence = "famoye", logLik = -100, AIC = 210, BIC = 220,
+         nobs = 400, npar = 5),
+    class = "bnb_fit"
+  )
+  nat <- rpbnb:::.natural_scale_flat(fit)
+  lam_row <- nat[nat$Parameter == "lambda (dependence)", ]
+  expect_true(is.finite(lam_row$StdErr))
+  expect_true(is.finite(lam_row$z))
+  out <- capture.output(print(summary(fit)))
+  expect_false(any(grepl("No Wald z/p for lambda", out, fixed = TRUE)))
+})
+
+test_that("a pinned rpbnb_fit lambda nulls the SE with the frozen-box wording", {
+  cf <- c("b1:(Intercept)" = 0.3, "b2:(Intercept)" = 0.1,
+          "sd1:x1" = log(0.3), "sd2:x1" = log(0.3),
+          log_m1 = log(0.5), log_m2 = log(0.5), z_lambda = -25)
+  se <- c("b1:(Intercept)" = 0.1, "b2:(Intercept)" = 0.1,
+          "sd1:x1" = 0.1, "sd2:x1" = 0.1,
+          log_m1 = 0.1, log_m2 = 0.1, z_lambda = 5e5)
+  side <- rpbnb:::famoye_lam_pinned_side(-25, c(-1, 1))
+  expect_identical(side, "lower")
+  fit <- structure(
+    list(coef = cf, se = se, poisson_1 = FALSE, poisson_2 = FALSE,
+         lambda = 1e-6, bounds = c(-1, 1), lambda_boundary_side = side,
+         draws = 100, logLik = -100, AIC = 210, BIC = 220,
+         nobs = 400, npar = 7),
+    class = "rpbnb_fit"
+  )
+  nat <- rpbnb:::.natural_scale_flat(fit)
+  lam_row <- nat[nat$Parameter == "lambda (dependence)", ]
+  expect_true(is.na(lam_row$StdErr))
+  expect_true(is.na(lam_row$z))
+
+  out <- capture.output(print(summary(fit)))
+  flat <- paste(out, collapse = " ")
+  expect_true(grepl("No Wald z/p for lambda", flat, fixed = TRUE))
+  expect_true(grepl("pinned against the lower end", flat, fixed = TRUE))
+  expect_true(grepl("frozen at the starting values", flat, fixed = TRUE))
+  expect_false(grepl("recomputed at the fitted means", flat, fixed = TRUE))
+})

@@ -191,7 +191,11 @@ via `@export` roxygen tags. Do not add exports manually to NAMESPACE.
   (the TMB-engine specs moved here from `docs/` in the 0.4.0 merge;
   `docs/` is pkgdown output that `build_site()` cleans)
 - `docs/llms.txt` — machine-readable package index (subset of README)
-- `inst/legacy/` — original reference scripts (preserved for comparison,
-  not used by the package)
+- `inst/dev/legacy/` — original reference scripts (preserved for
+  comparison, not used by the package)
+- `inst/dev/` — investigation, benchmark, and truck/export scripts not
+  meant as user-facing examples (moved out of `inst/`’s top level so
+  `inst/example_bnb.R` and friends stay the only things a new user sees
+  there)
 - `NEWS.md` — changelog
 - `vignettes/rpbnb-intro.Rmd` — introductory vignette

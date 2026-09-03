@@ -30,7 +30,7 @@ test_that("engine-specific arguments are rejected by the other engine", {
   )
 })
 
-test_that("tmb-only method/force_parallel_gaussian are ignored (warning) under classic", {
+test_that("tmb-only method/disable_parallel_gaussian are ignored (warning) under classic", {
   d <- toy()
   # dependence = "independence" errors under classic immediately AFTER the
   # dots validation, so reaching it proves the tmb knobs were dropped (rather
@@ -43,6 +43,18 @@ test_that("tmb-only method/force_parallel_gaussian are ignored (warning) under c
     ),
     'does not implement dependence = "independence"'
   )
+  expect_error(
+    expect_warning(
+      rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
+            method = "laplace", disable_parallel_gaussian = TRUE,
+            dependence = "independence"),
+      "`method`, `disable_parallel_gaussian` ignored: tmb-only"
+    ),
+    'does not implement dependence = "independence"'
+  )
+  # The deprecated name is dropped the same way -- under classic it never
+  # reaches fit_rpbnb_tmb()'s own deprecation shim, so only the ignore
+  # warning fires, not a "deprecated" one.
   expect_error(
     expect_warning(
       rpbnb(y1 ~ x1, y2 ~ x1, data = d, engine = "classic",
@@ -123,7 +135,10 @@ test_that("estimator-dependent control defaults resolve per engine", {
 
   tm <- rpbnb:::.resolve_control(ctl, "tmb")
   expect_identical(tm$iterlim, 500L)
-  expect_identical(tm$print_level, 0L)
+  # 1, not 0: since 0.4.6 the TMB engine shows TMB's own progress (the `outer
+  # mgc:` lines) by default, but not nlminb's per-iteration trace, which needs
+  # 2. print_level = 0 restores the old silence.
+  expect_identical(tm$print_level, 1L)
 
   # An explicit value is honored by every engine.
   set <- rpbnb_control(iterlim = 77L, print_level = 3L)

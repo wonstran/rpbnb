@@ -230,6 +230,18 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
       dlam_dz <- (object$bounds[2] - object$bounds[1]) * (1 - 2 * eps) * sig * (1 - sig)
       lam_se <- abs(dlam_dz) * se_of("z_lambda")
     }
+    # A pinned z_lambda (see famoye_lam_pinned_side(), computed at fit time)
+    # means dlam_dz above is at or near 0 by construction -- the delta-method
+    # SE it produces measures how flat the LINK is, not how identified lambda
+    # is by the data. Null it regardless of what lam_se just computed (mirrors
+    # the TMB engine's tmb_inference.R, which nulls the same way for the same
+    # reason), and .print_natural_scale() explains why instead of leaving a
+    # Wald z built from a near-zero derivative to print as "highly
+    # significant".
+    if (!is.null(object$lambda_boundary_side) &&
+        !is.na(object$lambda_boundary_side)) {
+      lam_se <- NA_real_
+    }
     # `boundary_param = "lam"` only matters when the caller asked for the
     # dependence LR test (which = "dependence"); without such a row this
     # behaves exactly as before and keeps the ordinary Wald z/p, which is
@@ -297,7 +309,12 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
   if (is.null(tab) || !"z" %in% names(tab)) return(invisible(NULL))
   lr_tested <- if ("LR" %in% names(tab)) !is.na(tab$LR) else rep(FALSE, nrow(tab))
   has_lr <- any(lr_tested)
-  untested <- is.na(tab$z) & !lr_tested
+  # A pinned "lambda (dependence)" row also has z = NA, but its null is
+  # interior (lambda = 0), not a boundary -- the "SDs, m" wording below would
+  # misdescribe it, and it gets its own note from .print_natural_scale()
+  # (which has object$lambda_boundary_side to explain why).
+  is_lambda <- tab$Parameter == "lambda (dependence)"
+  untested <- is.na(tab$z) & !lr_tested & !is_lambda
   if (has_lr) {
     cat("Note: LR/df/p for rows with a likelihood-ratio test (H0: parameter = 0;\n",
         "      see rpbnb_boundary_tests()). Scale and dispersion nulls sit on the\n",
@@ -311,6 +328,49 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
         "      parameters (SDs, m) above without one; their null is a boundary.\n",
         "      Use rpbnb_boundary_tests() (or rpbnb(boundary_tests = TRUE)) to\n",
         "      test these.\n", sep = "")
+  }
+  invisible(NULL)
+}
+
+# Explain a pinned Famoye lambda instead of leaving its NA SE unexplained --
+# the classic-engine counterpart of tmb_methods.R's equivalent block for the
+# TMB engine's "lam" row (same trigger: z_lambda pinned against, or
+# degenerate at, its logistic map's bound; see famoye_lam_pinned_side()).
+# Takes the raw `side` (not the fit object) so both print.*_fit -- which has
+# the fit -- and print.summary.*_fit -- which only has the summary() list --
+# can call it; each summary() generator copies `lambda_boundary_side` over
+# for exactly this.
+#
+# `fit_rpbnb()`'s bounds are frozen at the starting values (so a refit, or
+# fit$bounds vs fit$bounds_at_optimum, is diagnostic); `fit_bnb()` recomputes
+# them fresh at the fitted means every evaluation, so there is no frozen/
+# recomputed distinction and pinning there is a structural limit of the
+# family for those means, full stop -- see AGENTS.md's "Lambda bounds" note.
+.print_lambda_pin_note <- function(side, is_rp) {
+  if (is.null(side) || is.na(side)) return(invisible(NULL))
+  say <- function(...) {
+    cat(paste(strwrap(paste0(...), width = 70), collapse = "\n"), "\n", sep = "")
+  }
+  why <- if (identical(side, "degenerate")) {
+    "its delta-method derivative has collapsed"
+  } else {
+    paste0("it is pinned against the ", side, " end of fit$bounds")
+  }
+  say("No Wald z/p for lambda (dependence): ", why, ", so the estimate is set ",
+      "by the implementation rather than by the data (see ",
+      "fit$lambda_boundary_side). Its standard error is reported as NA.")
+  if (isTRUE(is_rp)) {
+    say("fit$bounds is frozen at the starting values. Refit from different ",
+        "starting values, or compare fit$bounds to fit$bounds_at_optimum -- ",
+        "when they are equal (fit$lambda_admissible only confirms the fit is ",
+        "inside the box, not that it is away from its edge), the cap is ",
+        "structural and refitting cannot widen it: use a copula dependence ",
+        "instead.")
+  } else {
+    say("fit$bounds is recomputed at the fitted means on every evaluation ",
+        "(admissible by construction, not frozen), so this is a structural ",
+        "limit of the Famoye/Sarmanov family for these means, not a ",
+        "starting-value artefact: use a copula dependence instead.")
   }
   invisible(NULL)
 }
@@ -334,6 +394,7 @@ predict.bnb_fit <- function(object, newdata = NULL, ...) {
     cat("Signif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
   }
   .print_natural_scale_footnote(.natural_scale_flat(object))
+  .print_lambda_pin_note(object$lambda_boundary_side, inherits(object, "rpbnb_fit"))
 
   invisible(nat)
 }
@@ -377,7 +438,8 @@ summary.bnb_fit <- function(object, ...) {
                  dependence = object$dependence, call = object$call,
                  formula_1 = object$formula_1, formula_2 = object$formula_2,
                  control_ignored = object$control_ignored,
-                 control_engine = object$control_engine),
+                 control_engine = object$control_engine,
+                 lambda_boundary_side = object$lambda_boundary_side),
             class = "summary.bnb_fit")
 }
 
@@ -421,6 +483,7 @@ print.summary.bnb_fit <- function(x, digits = 4, ...) {
     .print_coef_matrix(x$natural, digits)
     .print_natural_scale_footnote(x$natural)
   }
+  .print_lambda_pin_note(x$lambda_boundary_side, is_rp = FALSE)
   cat(sprintf("\nn = %d   k = %d   logLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               x$nobs, x$npar, x$logLik, x$AIC, x$BIC))
   invisible(x)
@@ -605,7 +668,8 @@ summary.rpbnb_fit <- function(object, ...) {
                  formula_1 = object$formula_1, formula_2 = object$formula_2,
                  scaling = object$scaling, continuous_vars = object$continuous_vars,
                  control_ignored = object$control_ignored,
-                 control_engine = object$control_engine),
+                 control_engine = object$control_engine,
+                 lambda_boundary_side = object$lambda_boundary_side),
             class = "summary.rpbnb_fit")
 }
 
@@ -649,6 +713,7 @@ print.summary.rpbnb_fit <- function(x, digits = 4, ...) {
     .print_coef_matrix(x$natural, digits)
     .print_natural_scale_footnote(x$natural)
   }
+  .print_lambda_pin_note(x$lambda_boundary_side, is_rp = TRUE)
   cat(sprintf("\nn = %d   k = %d   logLik = %.4f   AIC = %.4f   BIC = %.4f\n",
               x$nobs, x$npar, x$logLik, x$AIC, x$BIC))
   invisible(x)

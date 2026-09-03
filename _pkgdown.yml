@@ -68,3 +68,4 @@ reference:
   - title: "Package"
     contents:
       - rpbnb-package
+      - rpbnb_build_info

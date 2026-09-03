@@ -251,3 +251,35 @@ famoye_lam_from_z <- function(bounds, z, eps = 1e-6) {
   lo <- bounds[[1]]; hi <- bounds[[2]]
   lo + (hi - lo) * (eps + (1 - 2 * eps) * stats::plogis(z))
 }
+
+#' Is a fitted Famoye z pinned against the logistic map's bound?
+#'
+#' Same test as the TMB engine's \code{near_smooth_cap()} /
+#' \code{flag()} in \code{tmb_inference.R} (2% margin, degenerate when the
+#' link derivative has collapsed), applied to the classic engine's own
+#' \code{z_lambda}/frozen-bounds pair so both engines flag the same thing the
+#' same way. A pinned z means the reported delta-method SE for lambda is an
+#' artefact of the (compressed) link, not of the data -- see
+#' \code{famoye_lam_from_z}'s own note on why the bounds must be the ones the
+#' objective actually used.
+#'
+#' @return \code{NA_character_} (not pinned), or \code{"lower"}/\code{"upper"}
+#'   (pinned against that end of the interval) or \code{"degenerate"} (the
+#'   link derivative is exactly 0 or non-finite, so the endpoint is
+#'   irrelevant -- the SE is undefined either way).
+#' @keywords internal
+#' @noRd
+famoye_lam_pinned_side <- function(z, bounds, eps = 1e-6, margin = 0.02) {
+  lo <- bounds[[1]]; hi <- bounds[[2]]
+  if (!is.finite(z) || !is.finite(lo) || !is.finite(hi) || !(hi > lo)) {
+    return(NA_character_)
+  }
+  sig <- stats::plogis(z)
+  dlam_dz <- (hi - lo) * (1 - 2 * eps) * sig * (1 - sig)
+  if (!is.finite(dlam_dz) || dlam_dz == 0) return("degenerate")
+  lam <- lo + (hi - lo) * (eps + (1 - 2 * eps) * sig)
+  tol <- margin * (hi - lo)
+  if ((lam - lo) <= tol) return("lower")
+  if ((hi - lam) <= tol) return("upper")
+  NA_character_
+}
