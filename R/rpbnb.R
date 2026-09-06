@@ -1,35 +1,59 @@
-# Splices the standalone inst/ example scripts into ?rpbnb's Examples
-# section, alongside one small hand-written example that IS actually run.
-# Each script is a full worked model on real data (some with restarts or
-# boundary-test refits) -- too slow for a routine R CMD check -- and one
-# (example_rpbnb_tmb_sml.R) carries a post-fit convergence gate that is
-# meant to stop() on this specific dataset/spec, and two more (the dense
-# pair) read a local research CSV this package deliberately does not ship
-# (see inst/extdata's gitignore entries). All five are therefore wrapped in
-# \dontrun{}: shown verbatim for reference, never executed by
-# --run-examples or --run-donttest. Read from disk at document() time
-# (paths are relative to the package root), so the embedded text can never
-# drift from the scripts themselves.
+# Extracts just the `<var> <- rpbnb(...)` call from a script -- not the data
+# loading, formulas, or diagnostics around it -- by counting parens from the
+# line matching `<- rpbnb(` until they balance back to zero. Then dedents by
+# the block's own common leading whitespace, so a call that was indented
+# inside e.g. `system.time( fit <- rpbnb(...) )` starts at column 0 with its
+# continuation lines' relative alignment intact. Safe here because none of
+# these calls' arguments hide a paren inside a string literal.
+#' @keywords internal
+#' @noRd
+.extract_rpbnb_call <- function(path) {
+  lines <- readLines(path, warn = FALSE)
+  start <- grep("<-\\s*rpbnb\\(", lines)[1]
+  if (is.na(start)) {
+    stop("no `<- rpbnb(` call found in ", path, call. = FALSE)
+  }
+  depth <- 0L
+  end <- start
+  for (i in start:length(lines)) {
+    chars <- strsplit(lines[i], "", fixed = TRUE)[[1]]
+    depth <- depth + sum(chars == "(") - sum(chars == ")")
+    if (depth <= 0L) {
+      end <- i
+      break
+    }
+  }
+  call_lines <- lines[start:end]
+  indent <- regmatches(call_lines, regexpr("^ *", call_lines))
+  trimmed <- substring(call_lines, min(nchar(indent)) + 1L)
+  trimws(trimmed, which = "right")
+}
+
+# Splices just the rpbnb() call from each standalone inst/ example script
+# into ?rpbnb's Examples section, alongside one small hand-written example
+# that IS actually run -- not the scripts' full source (data loading,
+# formulas, diagnostics, printing), which ran well past a printed page's
+# margin and added little a reader could not get from inst/ itself. Every
+# call is read from disk at document() time (paths relative to the package
+# root), so it can never drift from the scripts themselves. Wrapped in
+# \dontrun{}, kept separate from the runnable \donttest{} snippet above it,
+# because three of the five are full real-data fits (one with a post-fit
+# convergence gate meant to stop() on this specific dataset/spec) and the
+# dense pair needs a local research CSV this package does not ship.
 #' @keywords internal
 #' @noRd
 .rpbnb_inst_examples_doc <- function() {
   scripts <- c(
-    "inst/example_rpbnb_tmb_famoye.R" =
-      "TMB, method = \"sml\", Famoye/Sarmanov dependence (rwm1984.csv)",
-    "inst/example_rpbnb_tmb_sml.R" =
-      "TMB, method = \"sml\", copula dependence (rwm1984.csv)",
-    "inst/example_rpbnb_tmb_laplace.R" =
-      "TMB, method = \"laplace\", copula dependence (rwm1984.csv)",
-    "inst/example_rpbnb_dense_tmb_sml.R" =
-      paste("TMB, method = \"sml\", dense-section truck-crash data",
-            "(local research data, not shipped)"),
+    "inst/example_rpbnb_tmb_famoye.R" = "sml, Famoye/Sarmanov",
+    "inst/example_rpbnb_tmb_sml.R" = "sml, copula",
+    "inst/example_rpbnb_tmb_laplace.R" = "laplace, copula",
+    "inst/example_rpbnb_dense_tmb_sml.R" = "sml, dense truck-crash data",
     "inst/example_rpbnb_dense_tmb_laplace.R" =
-      paste("TMB, method = \"laplace\", dense-section truck-crash data",
-            "(local research data, not shipped)")
+      "laplace, dense truck-crash data"
   )
   blocks <- vapply(names(scripts), function(path) {
-    body <- paste(readLines(path, warn = FALSE), collapse = "\n")
-    sprintf("# ---- %s: %s ----\n%s", path, scripts[[path]], body)
+    sprintf("# %s (%s)\n%s", basename(path), scripts[[path]],
+            paste(.extract_rpbnb_call(path), collapse = "\n"))
   }, character(1))
   paste0(
     "@examples\n",
@@ -38,12 +62,10 @@
     "fit <- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,\n",
     "             engine = \"tmb\", random_1 = \"outwork\", draws = 50)\n",
     "}\n\n",
+    "# The rpbnb() call from each standalone example under inst/ (see\n",
+    "# inst/example_*.R for the full script: data, formulas, diagnostics).\n",
+    "# Illustration only -- not run by R CMD check.\n",
     "\\dontrun{\n",
-    "# Fuller worked examples, shipped as standalone scripts under inst/ --\n",
-    "# run with Rscript inst/<file>.R from a source checkout, or\n",
-    "# Rscript system.file(\"<file>.R\", package = \"rpbnb\") after install.\n",
-    "# Shown here for reference only (see the comment above .rpbnb_inst_",
-    "examples_doc()\n# in R/rpbnb.R for why none of these run under R CMD check).\n\n",
     paste(blocks, collapse = "\n\n"),
     "\n}"
   )
