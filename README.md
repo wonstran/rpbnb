@@ -32,6 +32,7 @@ interchangeable engines.
   - [Exact draw chunking](#exact-draw-chunking-new)
   - [Laplace approximation](#laplace-approximation)
 - [Multithreaded Gaussian copula (parallel by default since 0.4.6)](#multithreaded-gaussian-copula-parallel-by-default-since-046)
+- [Example scripts](#example-scripts)
 - [Example datasets](#example-datasets)
 - [Documentation](#documentation)
 - [Development](#development)
@@ -468,8 +469,8 @@ enough to matter.
 
 Frank peaks at over three and a half times Famoye per unit, so a Frank fit buys
 proportionally fewer draws for the same memory. Raise `max_workload`
-deliberately against the memory you actually have —
-`inst/dev/tmb_fit_rpbnb_diff_copula.R` shows that opt-in — and `max_workload = Inf`
+deliberately against the memory you actually have — `rpbnb_tmb_max_workload()`
+converts a memory budget into the right value — and `max_workload = Inf`
 disables the guard entirely (both the pre-flight refusal and auto-chunking;
 pin `tape_chunks` explicitly if you still want chunking with the guard off).
 
@@ -504,6 +505,35 @@ old `force_parallel_gaussian` argument is deprecated: `TRUE` is now a no-op
 `disable_parallel_gaussian = TRUE`, both with a warning. `fit$parallel`
 records both the `requested` and `realized` thread counts.
 
+## Example scripts
+
+Standalone, runnable scripts under `inst/` — `Rscript inst/<file>.R` from a
+source checkout, or `Rscript system.file("<file>.R", package = "rpbnb")` after
+install. Each is a full worked model spec (data, formulas, control object,
+diagnostics) rather than the short snippets in [Usage examples](#usage-examples)
+above; every script's own header comment explains its choices in detail.
+
+**German health-care panel (`rwm1984.csv`, ships with the package — same data
+as [Quick start](#quick-start)):**
+
+| Script | Method | Dependence | Notes |
+| --- | --- | --- | --- |
+| `example_rpbnb_tmb_famoye.R` | `"sml"` | Famoye/Sarmanov | `kids` random in both equations |
+| `example_rpbnb_tmb_sml.R` | `"sml"` | `copula(COPULA_FAMILY)`, default `"normal"` | Companion to the Famoye script; includes a post-fit convergence gate that diagnoses a non-converged fit's weak-identification signature instead of surfacing a raw optimizer error |
+| `example_rpbnb_tmb_laplace.R` | `"laplace"` | `copula(COPULA_FAMILY)`, default `"normal"` | Laplace counterpart of `example_rpbnb_tmb_sml.R` — run both to compare the two approximations on the same model |
+
+**Dense-section truck-crash data (`export_dense_all.csv` — local research
+data, gitignored and not published in this repo; see
+[Example datasets](#example-datasets)):**
+
+| Script | Method | Notes |
+| --- | --- | --- |
+| `example_rpbnb_dense_tmb_sml.R` | `"sml"` | Random coefficient on `SR40_MI3` in both equations, Famoye/Sarmanov dependence |
+| `example_rpbnb_dense_tmb_laplace.R` | `"laplace"` | Same model, Laplace estimator (`draws` and `max_workload`/`tape_chunks` have no effect under Laplace) |
+
+All five use `engine = "tmb"` (via `rpbnb()`) and print `summary()` plus their
+`control` object; see each script's header for its exact boundary tests.
+
 ## Example datasets
 
 Available via `system.file("extdata", "<file>", package = "rpbnb")`:
@@ -513,9 +543,7 @@ Available via `system.file("extdata", "<file>", package = "rpbnb")`:
 | `rwm1984.csv` | Raw German health-care utilization panel (docvis, hospvis, and demographic/employment covariates) |
 | `rwm1984_clean.csv` | Same data plus derived dummy variables; used throughout the function examples above and the vignette |
 | `rwm1984_bnb.csv` | `rwm1984_clean.csv` with generic `y1`/`y2` alias columns |
-| `simulated_nb_data.csv` | Small simulated bivariate NB dataset from `simulate_bnb()` |
-| `simulated_rpbnb_copula.csv` | Simulated copula-dependent RP-BNB data from `simulate_rpbnb_copula()` |
-| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data used by the benchmark and worked-example scripts under `inst/dev/` |
+| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data behind the [dense-model example scripts](#example-scripts); local research data, gitignored and not shipped in this repo, so those two scripts only run against your own local copy |
 | `memory_calibration.csv` | Raw TMB memory benchmark measurements behind `TAPE_CALIBRATION` |
 
 ## Documentation
