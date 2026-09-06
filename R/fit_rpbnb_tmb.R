@@ -27,8 +27,25 @@
 #'   support, independent of \code{draws} under either estimator.)
 #' @param seed Random seed for draws.
 #' @param start Optional starting parameter vector (named or positional).
-#' @param dependence Dependence structure: "famoye", "independence", or a
-#'   \code{copula()} object for copula dependence.
+#' @param dependence How the two margins are linked. \code{"famoye"} (default)
+#'   is Famoye/Sarmanov dependence: a single bounded association parameter
+#'   (\code{lam}), admissible interval frozen at the starting values. A
+#'   \code{copula()} object joins the margins with a discrete copula instead
+#'   -- \code{copula("frank")}, \code{copula("normal")} (Gaussian), or
+#'   \code{copula("kimeldorf")} (Clayton) -- each with its own native
+#'   dependence parameter, always estimated (\code{copula()}'s \code{par}
+#'   argument is for the simulators only). Copula evaluation costs more per
+#'   iteration than Famoye at comparable \code{draws}/\code{n}, and the
+#'   dependence family also changes peak memory under this engine -- see
+#'   \code{max_workload} at [rpbnb_control()] for the measured per-family
+#'   weights. \code{"independence"} -- two separate NB2 margins, no
+#'   association parameter at all -- is only available here; the classic
+#'   engine ([fit_rpbnb()]) has no independence path for random-parameter
+#'   models (use [fit_bnb()] for a fixed-coefficient independence model).
+#'   Whichever dependence is chosen, a random coefficient on a 0/1 dummy
+#'   regressor present in both equations is weakly identified (NB dispersion
+#'   trades off against the random-coefficient scale); prefer a continuous
+#'   regressor for a shared random coefficient when one is available.
 #' @param control An [rpbnb_control()] object (\code{rpbnb_tmb_control()} is a
 #'   retained alias that returns the same object). One control object serves
 #'   every estimator in the package; settings this engine does not read --

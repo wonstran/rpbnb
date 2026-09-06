@@ -144,13 +144,48 @@
 #'
 #' @param formula_1,formula_2 Model formulas for the two count responses.
 #' @param data A data frame containing the model variables.
-#' @param engine Estimation engine: `"classic"` (default) or `"tmb"`.
+#' @param engine Which fitter estimates the model. `"classic"` (default) calls
+#'   [fit_rpbnb()]: a multithreaded (OpenMP) Rcpp simulated-likelihood engine
+#'   optimized by `maxLik::maxLik(method = "BFGS")` with a numerical gradient.
+#'   `"tmb"` calls [fit_rpbnb_tmb()]: it builds an automatic-differentiation
+#'   tape with TMB (Template Model Builder) and optimizes it with
+#'   `stats::nlminb` plus a restart polish -- the exact gradient this gives
+#'   tends to converge faster and more reliably than the classic engine's
+#'   numerical one, especially under copula dependence. `"tmb"` is also the
+#'   only engine that accepts `dependence = "independence"`, the Laplace
+#'   estimator (`method = "laplace"`, passed via `...` -- see the "estimator"
+#'   discussion below and [fit_rpbnb_tmb()]'s `method` argument), and
+#'   memory-aware draw chunking for large `draws`; `"classic"` is the only one
+#'   that accepts an `offset()` term in a formula. Both engines share one
+#'   [rpbnb_control()] object and this function's cross-engine argument
+#'   checking, but otherwise a fit is exactly what a direct call to the chosen
+#'   fitter would return -- see "Which arguments go with which engine" below
+#'   for the full compatibility table, and the Return section for how the fit
+#'   class depends on `engine`.
 #' @param random_1,random_2 Random-coefficient specifications for each equation.
 #' @param draws Number of simulation draws.
 #' @param seed Random seed for the draw sequence.
 #' @param start Optional named or unnamed starting values.
-#' @param dependence `"famoye"` (default), a [copula()] object, or
-#'   `"independence"` (TMB engine only).
+#' @param dependence How the two margins are linked. `"famoye"` (default) is
+#'   Famoye/Sarmanov dependence: a single bounded association parameter
+#'   (`lam`), with an admissible interval frozen at the starting values (see
+#'   "Which arguments go with which engine" below). A [copula()] object joins
+#'   the margins with a discrete copula instead -- `copula("frank")`,
+#'   `copula("normal")` (Gaussian), or `copula("kimeldorf")` (Clayton) -- each
+#'   with its own native dependence parameter, always estimated (`copula()`'s
+#'   `par` argument is for the simulators only, not the fitters). Copula
+#'   evaluation costs more per iteration than Famoye at comparable
+#'   `draws`/`n` (discrete-copula pmf plus a per-draw NB CDF corner), and
+#'   under `engine = "tmb"` the dependence family also changes peak memory --
+#'   see `max_workload` at [rpbnb_control()] for the measured per-family
+#'   weights. `"independence"` -- two separate NB2 margins, no association
+#'   parameter at all -- is `engine = "tmb"` only; the fixed-coefficient
+#'   [fit_bnb()] supports it under `engine = "classic"`, but the
+#'   random-parameter classic engine ([fit_rpbnb()]) does not. Whichever
+#'   dependence is chosen, a random coefficient on a 0/1 dummy regressor
+#'   present in both equations is weakly identified (NB dispersion trades off
+#'   against the random-coefficient scale); prefer a continuous regressor for
+#'   a shared random coefficient when one is available.
 #' @param poisson_1,poisson_2 Restrict the corresponding margin to its Poisson
 #'   limit.
 #' @param standardize Centre and scale continuous predictors before fitting,
@@ -199,6 +234,23 @@
 #'   `force_parallel_gaussian` are dropped with a warning (not an error)
 #'   under `engine = "classic"`, so a call can switch engines without
 #'   stripping them.
+#'
+#'   The estimator, `method` (`engine = "tmb"` only, default `"sml"`), picks
+#'   how the random-coefficient integral is approximated. `"sml"` is
+#'   simulated maximum likelihood over `draws` Halton points -- the same
+#'   integral the classic engine approximates, but with an exact
+#'   automatic-differentiation gradient. `"laplace"` instead uses TMB's
+#'   Laplace approximation: a sparse-Hessian integration over one latent
+#'   vector per observation that removes `draws` from the memory cost
+#'   entirely (tape size then scales with `nrow(data)` alone, not
+#'   `nrow(data) * draws`), at the cost of requiring at least one random
+#'   coefficient and restricting it to `"normal"`/`"lognormal"` (`"uniform"`
+#'   and `"triangular"` error under Laplace). The two estimators agree
+#'   asymptotically but are different approximations to the same integral --
+#'   not interchangeable point-for-point on a given dataset, and their
+#'   `summary()` AIC/BIC are not comparable to each other for the same reason.
+#'   See [fit_rpbnb_tmb()]'s `method` argument for the full detail, including
+#'   how boundary tests and `predict()` behave differently under each.
 #'
 #' @return The engine-native fit object, identical to what a direct call to the
 #'   underlying fitter would return: an object of class `rpbnb_fit` for

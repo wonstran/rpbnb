@@ -45,16 +45,35 @@ draw chunks replayed over one smaller TMB tape, dropping peak memory to
 \code{nrow(data) * ceiling(draws / chunks)} at the cost of somewhat
 slower gradient evaluations -- exact for the requested \code{draws}, not
 an approximation. Under \code{method = "laplace"} \code{draws} does not
-affect the likelihood, the tape, or chunking, but still sizes the Halton
-grid used for the frozen Famoye lambda bounds and for the post-estimation
-averaging in \code{predict()} and the marginal-effect functions.}
+affect the likelihood, the tape, or chunking; its only remaining job is
+sizing the Halton grid used for the post-estimation averaging in
+\code{predict()} and the marginal-effect functions. (The frozen Famoye
+admissible-lambda interval is derived from the random coefficients'
+support, independent of \code{draws} under either estimator.)}
 
 \item{seed}{Random seed for draws.}
 
 \item{start}{Optional starting parameter vector (named or positional).}
 
-\item{dependence}{Dependence structure: "famoye", "independence", or a
-\code{copula()} object for copula dependence.}
+\item{dependence}{How the two margins are linked. \code{"famoye"} (default)
+is Famoye/Sarmanov dependence: a single bounded association parameter
+(\code{lam}), admissible interval frozen at the starting values. A
+\code{copula()} object joins the margins with a discrete copula instead
+-- \code{copula("frank")}, \code{copula("normal")} (Gaussian), or
+\code{copula("kimeldorf")} (Clayton) -- each with its own native
+dependence parameter, always estimated (\code{copula()}'s \code{par}
+argument is for the simulators only). Copula evaluation costs more per
+iteration than Famoye at comparable \code{draws}/\code{n}, and the
+dependence family also changes peak memory under this engine -- see
+\code{max_workload} at \code{\link[=rpbnb_control]{rpbnb_control()}} for the measured per-family
+weights. \code{"independence"} -- two separate NB2 margins, no
+association parameter at all -- is only available here; the classic
+engine (\code{\link[=fit_rpbnb]{fit_rpbnb()}}) has no independence path for random-parameter
+models (use \code{\link[=fit_bnb]{fit_bnb()}} for a fixed-coefficient independence model).
+Whichever dependence is chosen, a random coefficient on a 0/1 dummy
+regressor present in both equations is weakly identified (NB dispersion
+trades off against the random-coefficient scale); prefer a continuous
+regressor for a shared random coefficient when one is available.}
 
 \item{control}{An \code{\link[=rpbnb_control]{rpbnb_control()}} object (\code{rpbnb_tmb_control()} is a
 retained alias that returns the same object). One control object serves

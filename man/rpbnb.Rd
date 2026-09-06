@@ -30,7 +30,24 @@ rpbnb(
 
 \item{data}{A data frame containing the model variables.}
 
-\item{engine}{Estimation engine: \code{"classic"} (default) or \code{"tmb"}.}
+\item{engine}{Which fitter estimates the model. \code{"classic"} (default) calls
+\code{\link[=fit_rpbnb]{fit_rpbnb()}}: a multithreaded (OpenMP) Rcpp simulated-likelihood engine
+optimized by \code{maxLik::maxLik(method = "BFGS")} with a numerical gradient.
+\code{"tmb"} calls \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}: it builds an automatic-differentiation
+tape with TMB (Template Model Builder) and optimizes it with
+\code{stats::nlminb} plus a restart polish -- the exact gradient this gives
+tends to converge faster and more reliably than the classic engine's
+numerical one, especially under copula dependence. \code{"tmb"} is also the
+only engine that accepts \code{dependence = "independence"}, the Laplace
+estimator (\code{method = "laplace"}, passed via \code{...} -- see the "estimator"
+discussion below and \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}'s \code{method} argument), and
+memory-aware draw chunking for large \code{draws}; \code{"classic"} is the only one
+that accepts an \code{offset()} term in a formula. Both engines share one
+\code{\link[=rpbnb_control]{rpbnb_control()}} object and this function's cross-engine argument
+checking, but otherwise a fit is exactly what a direct call to the chosen
+fitter would return -- see "Which arguments go with which engine" below
+for the full compatibility table, and the Return section for how the fit
+class depends on \code{engine}.}
 
 \item{random_1, random_2}{Random-coefficient specifications for each equation.}
 
@@ -40,8 +57,26 @@ rpbnb(
 
 \item{start}{Optional named or unnamed starting values.}
 
-\item{dependence}{\code{"famoye"} (default), a \code{\link[=copula]{copula()}} object, or
-\code{"independence"} (TMB engine only).}
+\item{dependence}{How the two margins are linked. \code{"famoye"} (default) is
+Famoye/Sarmanov dependence: a single bounded association parameter
+(\code{lam}), with an admissible interval frozen at the starting values (see
+"Which arguments go with which engine" below). A \code{\link[=copula]{copula()}} object joins
+the margins with a discrete copula instead -- \code{copula("frank")},
+\code{copula("normal")} (Gaussian), or \code{copula("kimeldorf")} (Clayton) -- each
+with its own native dependence parameter, always estimated (\code{copula()}'s
+\code{par} argument is for the simulators only, not the fitters). Copula
+evaluation costs more per iteration than Famoye at comparable
+\code{draws}/\code{n} (discrete-copula pmf plus a per-draw NB CDF corner), and
+under \code{engine = "tmb"} the dependence family also changes peak memory --
+see \code{max_workload} at \code{\link[=rpbnb_control]{rpbnb_control()}} for the measured per-family
+weights. \code{"independence"} -- two separate NB2 margins, no association
+parameter at all -- is \code{engine = "tmb"} only; the fixed-coefficient
+\code{\link[=fit_bnb]{fit_bnb()}} supports it under \code{engine = "classic"}, but the
+random-parameter classic engine (\code{\link[=fit_rpbnb]{fit_rpbnb()}}) does not. Whichever
+dependence is chosen, a random coefficient on a 0/1 dummy regressor
+present in both equations is weakly identified (NB dispersion trades off
+against the random-coefficient scale); prefer a continuous regressor for
+a shared random coefficient when one is available.}
 
 \item{poisson_1, poisson_2}{Restrict the corresponding margin to its Poisson
 limit.}
@@ -96,7 +131,24 @@ engine, or an unrecognised name, is an error. Exception: the TMB tuning
 knobs \code{method}, \code{disable_parallel_gaussian}, and the deprecated
 \code{force_parallel_gaussian} are dropped with a warning (not an error)
 under \code{engine = "classic"}, so a call can switch engines without
-stripping them.}
+stripping them.
+
+The estimator, \code{method} (\code{engine = "tmb"} only, default \code{"sml"}), picks
+how the random-coefficient integral is approximated. \code{"sml"} is
+simulated maximum likelihood over \code{draws} Halton points -- the same
+integral the classic engine approximates, but with an exact
+automatic-differentiation gradient. \code{"laplace"} instead uses TMB's
+Laplace approximation: a sparse-Hessian integration over one latent
+vector per observation that removes \code{draws} from the memory cost
+entirely (tape size then scales with \code{nrow(data)} alone, not
+\code{nrow(data) * draws}), at the cost of requiring at least one random
+coefficient and restricting it to \code{"normal"}/\code{"lognormal"} (\code{"uniform"}
+and \code{"triangular"} error under Laplace). The two estimators agree
+asymptotically but are different approximations to the same integral --
+not interchangeable point-for-point on a given dataset, and their
+\code{summary()} AIC/BIC are not comparable to each other for the same reason.
+See \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}'s \code{method} argument for the full detail, including
+how boundary tests and \code{predict()} behave differently under each.}
 }
 \value{
 The engine-native fit object, identical to what a direct call to the
