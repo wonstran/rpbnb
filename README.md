@@ -1,6 +1,6 @@
 # Random Parameter Bivariate Negative Binomial (RPBNB) Model
 
-[**Reference manual (PDF)**](ref/rpbnb_0.4.6.pdf) — full CRAN-style function
+[**Reference manual (PDF)**](ref/rpbnb_0.4.7.pdf) — full CRAN-style function
 documentation, regenerated from the current `man/` pages.
 
 Maximum-likelihood and maximum-simulated-likelihood estimation of bivariate
@@ -65,7 +65,7 @@ Windows x64 `.zip` binary, a macOS arm64 `.tgz` binary, and a `.tar.gz`
 source package (installs on any platform, compiling locally):
 
 `install.packages()` accepts the release URL directly, so there is no need to
-download the file first (substitute the version you want for `0.4.6`; browse
+download the file first (substitute the version you want for `0.4.7`; browse
 all releases at
 [github.com/wonstran/rpbnb/releases](https://github.com/wonstran/rpbnb/releases)):
 
@@ -73,7 +73,7 @@ all releases at
 
 ```r
 install.packages(
-  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6.zip",
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.7/rpbnb_0.4.7.zip",
   repos = NULL, type = "win.binary")
 ```
 
@@ -81,7 +81,7 @@ install.packages(
 
 ```r
 install.packages(
-  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6-macos-arm64.tgz",
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.7/rpbnb_0.4.7-macos-arm64.tgz",
   repos = NULL)
 ```
 
@@ -89,7 +89,7 @@ install.packages(
 
 ```r
 install.packages(
-  "https://github.com/wonstran/rpbnb/releases/download/v0.4.6/rpbnb_0.4.6.tar.gz",
+  "https://github.com/wonstran/rpbnb/releases/download/v0.4.7/rpbnb_0.4.7.tar.gz",
   repos = NULL, type = "source")
 ```
 

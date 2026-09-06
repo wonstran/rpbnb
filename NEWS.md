@@ -1,3 +1,20 @@
+# rpbnb 0.4.7
+
+* Reference-manual documentation for `engine`, `dependence`, and the TMB
+  estimator (`method = "sml"`/`"laplace"`) is substantially expanded --
+  see `?rpbnb`, `?fit_rpbnb_tmb`, and `?rpbnb_control` (the last gains a new
+  section on how `n_cores`, `max_workload`, and `tape_chunks` interact under
+  SML) -- and `?rpbnb`'s `@examples` now splices the `rpbnb()` call from each
+  standalone script under `inst/` directly from disk, so the reference
+  manual's examples can never drift from the scripts themselves.
+* The `inst/` example scripts now default to `library(rpbnb)`, with
+  `devtools::load_all()` commented out as the alternative for developing
+  against the source tree (was the reverse). `example_rpbnb_tmb_sml.R` gains
+  a post-fit convergence gate diagnosing why its copula fit does not
+  converge on this specification (a weak-identification saddle point, not
+  an optimizer-tuning problem) instead of surfacing a cryptic refusal from
+  `rpbnb_tmb_boundary_tests()`, and lowers `DRAWS` to 500.
+
 # rpbnb 0.4.6
 
 * **TMB engine: tapes are built concurrently by default.**
