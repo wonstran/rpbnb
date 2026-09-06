@@ -141,6 +141,46 @@
 #' available memory by [rpbnb_tmb_max_workload()] the first time a TMB fit
 #' needs it (so a non-TMB fit never pays for the memory probe).
 #'
+#' @section How `n_cores`, `max_workload`, and `tape_chunks` interact (TMB, `method = "sml"`):
+#'
+#' These three only interact through `parallel_tape`. Before
+#' [fit_rpbnb_tmb()] builds a tape, it estimates a weighted workload:
+#' `nrow(data) * draws * <family weight> * (realized n_cores if
+#' parallel_tape = TRUE, else 1)`. `max_workload` caps that number, and
+#' `tape_chunks` is what lets a fit exceed it anyway by building several
+#' smaller tapes instead of one.
+#'
+#' * `n_cores` sets OpenMP threads for the objective/gradient, which are
+#'   always evaluated in parallel regardless of anything else here. With the
+#'   default `parallel_tape = TRUE`, the *realized* thread count (after
+#'   `max_threads` and hardware capping) also multiplies the workload above,
+#'   because each thread builds its own full tape concurrently -- so raising
+#'   `n_cores` speeds up evaluation but can push a fit that fit comfortably
+#'   at one thread over `max_workload` at eight. Set `parallel_tape = FALSE`
+#'   to decouple the two: tapes then build one at a time (peak memory
+#'   unaffected by `n_cores`) while evaluation stays fully parallel.
+#' * `max_workload` (`NULL` auto-detects available memory; see above) is
+#'   checked against that workload number. Exceeding it does not always
+#'   error: under `method = "sml"` the fit auto-chunks instead (next point).
+#'   `Inf` disables the check *and* auto-chunking entirely, so nothing sizes
+#'   the tape for you -- pin `tape_chunks` yourself if you still want the
+#'   memory benefit with the guard off.
+#' * `tape_chunks` (SML fits only; ignored under `method = "laplace"`, whose
+#'   tape scales with `nrow(data)` alone, not `draws`) is what absorbs a
+#'   workload over budget: `NULL` auto-selects the smallest chunk count that
+#'   brings the per-chunk workload back under `max_workload`; an explicit
+#'   value pins the layout (validated against both `draws` and the budget).
+#'   More chunks trade slower gradient evaluations (each chunk's contribution
+#'   is recomputed on every outer step) and the loss of a taped Hessian
+#'   (`confint(method = "profile")`/`rpbnb_tmb_dependence_profile()` fall
+#'   back to a Wald interval) for lower peak memory.
+#'
+#' Net effect for a large SML fit: pick `n_cores` for speed first. If that
+#' trips `max_workload`, either let auto-chunking absorb it, set
+#' `parallel_tape = FALSE` if the extra peak memory isn't worth the
+#' tape-build speedup, or raise `max_workload` deliberately against memory
+#' you actually have (see [rpbnb_tmb_max_workload()]).
+#'
 #' @param method Optimizer used by the `maxLik` fitters. Only "BFGS" is
 #'   implemented and wired through; it is the sole accepted value.
 #' @param iterlim Maximum optimizer iterations. `NULL` (default) uses 300 for
@@ -172,7 +212,11 @@
 #' @param halton_burn Number of leading Halton points discarded before forming
 #'   the simulation draws.
 #' @param n_cores Worker processes for [fit_rpbnb()]'s optional cluster path, or
-#'   OpenMP threads for [fit_rpbnb_tmb()] (1 = sequential in both cases).
+#'   OpenMP threads for [fit_rpbnb_tmb()] (1 = sequential in both cases). Under
+#'   the TMB engine the *realized* thread count -- after `max_threads` and
+#'   hardware capping -- is also what `max_workload`/`tape_chunks` size the
+#'   tape against when `parallel_tape = TRUE`; see "How `n_cores`,
+#'   `max_workload`, and `tape_chunks` interact" below.
 #' @param compute_se If FALSE, skip the Hessian and standard errors. The TMB
 #'   engine has its own `inference` argument for this instead.
 #' @param hessian How [fit_bnb()] (famoye) computes the Hessian for standard
@@ -232,8 +276,15 @@
 #'   set explicitly below \code{n_cores}.
 #' @eval .calibration_doc()
 #' @param parallel_tape Construct per-thread TMB tapes concurrently. The
-#'   default \code{FALSE} constructs them sequentially to reduce peak memory;
-#'   objective and gradient evaluation remains parallel.
+#'   default \code{TRUE} builds them in parallel for faster tape
+#'   construction; objective and gradient evaluation remains parallel either
+#'   way. Set \code{FALSE} to build tapes sequentially instead and reduce
+#'   peak memory. Concurrent tape construction multiplies the per-tape
+#'   memory workload the \code{max_workload}/\code{tape_chunks} guard sizes
+#'   against by the realized thread count (see \code{max_workload} above);
+#'   pairing \code{parallel_tape = TRUE} with \code{max_workload = Inf}
+#'   disables that guard entirely; \code{rpbnb_control()} warns when it sees
+#'   that combination.
 #' @param tape_chunks TMB engine, SML fits only. Number of draw chunks to
 #'   split \code{draws} into (see \code{draws} at [fit_rpbnb_tmb()]).
 #'   \code{NULL} (default) auto-selects the smallest sufficient count when
@@ -275,7 +326,7 @@ rpbnb_control <- function(method = c("BFGS"),
                           restarts = 10L,
                           max_threads = NULL,
                           max_workload = NULL,
-                          parallel_tape = FALSE,
+                          parallel_tape = TRUE,
                           tape_chunks = NULL) {
   # match.call() names positionally-supplied arguments too (this function has no
   # `...`), so this is the set of names the caller actually wrote -- which is
@@ -342,6 +393,22 @@ rpbnb_control <- function(method = c("BFGS"),
       is.na(parallel_tape)) {
     stop("parallel_tape must be one non-missing logical value.", call. = FALSE)
   }
+  # parallel_tape = TRUE multiplies the per-tape workload .resolve_tape_chunks()
+  # sizes tape_chunks against by the realized thread count; max_workload = Inf
+  # disables that guard on both the auto and pinned tape_chunks paths (see
+  # .resolve_tape_chunks()'s own Inf branch), so this combination builds
+  # concurrent tapes with nothing sizing them to available memory.
+  if (isTRUE(parallel_tape) && !is.null(max_workload) &&
+      is.infinite(max_workload)) {
+    warning(
+      "parallel_tape = TRUE with max_workload = Inf disables the workload ",
+      "guard that would size tape_chunks for the extra per-thread memory ",
+      "concurrent tape construction adds, risking out-of-memory fits. Set ",
+      "max_workload to a finite budget (NULL auto-detects available memory) ",
+      "or pin control$tape_chunks yourself, or set parallel_tape = FALSE.",
+      call. = FALSE
+    )
+  }
   if (!is.logical(compute_se) || length(compute_se) != 1L ||
       is.na(compute_se)) {
     stop("compute_se must be one non-missing logical value.", call. = FALSE)
@@ -406,7 +473,7 @@ rpbnb_tmb_control <- function(iterlim = NULL,
                               n_cores = 1L,
                               max_threads = NULL,
                               max_workload = NULL,
-                              parallel_tape = FALSE,
+                              parallel_tape = TRUE,
                               halton_burn = 300L,
                               tape_chunks = NULL) {
   # Forward only what the caller wrote, so `supplied` on the returned object

@@ -13,7 +13,7 @@ rpbnb_tmb_control(
   n_cores = 1L,
   max_threads = NULL,
   max_workload = NULL,
-  parallel_tape = FALSE,
+  parallel_tape = TRUE,
   halton_burn = 300L,
   tape_chunks = NULL
 )
@@ -64,7 +64,11 @@ not supplied, so its restricted refits print at their own default
 regardless of this setting.}
 
 \item{n_cores}{Worker processes for \code{\link[=fit_rpbnb]{fit_rpbnb()}}'s optional cluster path, or
-OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases).}
+OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases). Under
+the TMB engine the \emph{realized} thread count -- after \code{max_threads} and
+hardware capping -- is also what \code{max_workload}/\code{tape_chunks} size the
+tape against when \code{parallel_tape = TRUE}; see "How \code{n_cores},
+\code{max_workload}, and \code{tape_chunks} interact" below.}
 
 \item{max_threads}{Maximum OpenMP threads permitted for one TMB fit.
 \code{NULL} (default) means \code{n_cores}, so threads are not capped unless
@@ -72,7 +76,7 @@ set explicitly below \code{n_cores}.}
 
 \item{max_workload}{Maximum weighted observation-draw evaluations permitted before TMB tape construction; \code{Inf} disables the guard. The default and every figure here are derived from \code{TAPE_CALIBRATION}, so this text cannot drift from the shipped behaviour.
 
-With the default \code{parallel_tape = FALSE} the budget is per fit; with \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
+With \code{parallel_tape = FALSE} the budget is per fit; with the default \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count (see \code{n_cores} above for how that count is realized).
 
 One unit is one weighted observation-draw. All figures are measured by \code{inst/dev/tmb_benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
 
@@ -87,8 +91,15 @@ Raise \code{max_workload} deliberately against the memory you actually have, not
 As of \code{rpbnb_tmb_max_workload()}, the value \code{rpbnb_tmb_control()} actually uses by default is no longer the fixed figure above: it will auto-detect available memory and budget 80\% of it, falling back to the fixed 8 GiB figure only when detection is unavailable on the current platform. Call \code{\link{rpbnb_tmb_max_workload}} directly to set your own budget or detection fraction.}
 
 \item{parallel_tape}{Construct per-thread TMB tapes concurrently. The
-default \code{FALSE} constructs them sequentially to reduce peak memory;
-objective and gradient evaluation remains parallel.}
+default \code{TRUE} builds them in parallel for faster tape
+construction; objective and gradient evaluation remains parallel either
+way. Set \code{FALSE} to build tapes sequentially instead and reduce
+peak memory. Concurrent tape construction multiplies the per-tape
+memory workload the \code{max_workload}/\code{tape_chunks} guard sizes
+against by the realized thread count (see \code{max_workload} above);
+pairing \code{parallel_tape = TRUE} with \code{max_workload = Inf}
+disables that guard entirely; \code{rpbnb_control()} warns when it sees
+that combination.}
 
 \item{halton_burn}{Number of leading Halton points discarded before forming
 the simulation draws.}

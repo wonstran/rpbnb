@@ -141,7 +141,8 @@ test_that("laplace keeps draws meaningful for post-estimation averaging", {
     fit <- fit_rpbnb_tmb(y1 ~ x1, y2 ~ x1, data = dat, random_1 = "x1",
                          dependence = "independence", draws = 25,
                          method = "laplace",
-                         control = rpbnb_tmb_control(max_workload = Inf))
+                         control = rpbnb_tmb_control(max_workload = Inf,
+                                                     parallel_tape = FALSE))
   )
   expect_identical(nrow(fit$rp_meta$Z1), 25L)
   expect_identical(fit$method, "laplace")

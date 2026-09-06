@@ -1,5 +1,17 @@
 # rpbnb 0.4.6
 
+* **TMB engine: tapes are built concurrently by default.**
+  `rpbnb_control(parallel_tape = )` now defaults to `TRUE` (was `FALSE`), so
+  each OpenMP thread builds its own TMB tape in parallel instead of
+  sequentially -- faster tape construction, at the cost of peak memory that
+  now scales with the realized thread count (objective/gradient evaluation
+  was, and remains, parallel either way). Set `parallel_tape = FALSE` to
+  restore the old sequential-build behaviour. Because concurrent tape
+  construction multiplies the per-tape workload the `max_workload`/
+  `tape_chunks` guard sizes against, `rpbnb_control()` now warns when
+  `parallel_tape = TRUE` is combined with `max_workload = Inf`: that pairing
+  disables the guard entirely (on both the auto and pinned `tape_chunks`
+  paths) with nothing left to size the extra memory `parallel_tape` adds.
 * **TMB engine: fits now show progress by default.**
   `rpbnb_control(print_level = )` resolves to 1 for the TMB engine, where it
   was 0 (silent) -- so a long TMB fit printed nothing at all while it ran,

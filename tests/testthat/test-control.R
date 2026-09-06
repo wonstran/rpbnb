@@ -9,7 +9,7 @@ test_that("rpbnb_control returns documented defaults", {
   # TMB-side fields are on the same object since the two constructors merged.
   expect_equal(ctl$gradtol, 1e-5)
   expect_equal(ctl$restarts, 10L)
-  expect_false(ctl$parallel_tape)
+  expect_true(ctl$parallel_tape)
   # iterlim/print_level are the two fields whose default differs by estimator,
   # so they stay NULL until .resolve_control() knows which one is running.
   expect_null(ctl$iterlim)

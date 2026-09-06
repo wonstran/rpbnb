@@ -21,7 +21,7 @@ rpbnb_control(
   restarts = 10L,
   max_threads = NULL,
   max_workload = NULL,
-  parallel_tape = FALSE,
+  parallel_tape = TRUE,
   tape_chunks = NULL
 )
 }
@@ -63,7 +63,11 @@ reported as an ignored setting.}
 the simulation draws.}
 
 \item{n_cores}{Worker processes for \code{\link[=fit_rpbnb]{fit_rpbnb()}}'s optional cluster path, or
-OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases).}
+OpenMP threads for \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} (1 = sequential in both cases). Under
+the TMB engine the \emph{realized} thread count -- after \code{max_threads} and
+hardware capping -- is also what \code{max_workload}/\code{tape_chunks} size the
+tape against when \code{parallel_tape = TRUE}; see "How \code{n_cores},
+\code{max_workload}, and \code{tape_chunks} interact" below.}
 
 \item{compute_se}{If FALSE, skip the Hessian and standard errors. The TMB
 engine has its own \code{inference} argument for this instead.}
@@ -131,7 +135,7 @@ set explicitly below \code{n_cores}.}
 
 \item{max_workload}{Maximum weighted observation-draw evaluations permitted before TMB tape construction; \code{Inf} disables the guard. The default and every figure here are derived from \code{TAPE_CALIBRATION}, so this text cannot drift from the shipped behaviour.
 
-With the default \code{parallel_tape = FALSE} the budget is per fit; with \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count.
+With \code{parallel_tape = FALSE} the budget is per fit; with the default \code{parallel_tape = TRUE} the tapes are built concurrently and the guard multiplies the workload by the realized thread count (see \code{n_cores} above for how that count is realized).
 
 One unit is one weighted observation-draw. All figures are measured by \code{inst/dev/tmb_benchmark_memory.R}, whose raw results are stored in \code{inst/extdata/memory_calibration.csv}.
 
@@ -146,8 +150,15 @@ Raise \code{max_workload} deliberately against the memory you actually have, not
 As of \code{rpbnb_tmb_max_workload()}, the value \code{rpbnb_tmb_control()} actually uses by default is no longer the fixed figure above: it will auto-detect available memory and budget 80\% of it, falling back to the fixed 8 GiB figure only when detection is unavailable on the current platform. Call \code{\link{rpbnb_tmb_max_workload}} directly to set your own budget or detection fraction.}
 
 \item{parallel_tape}{Construct per-thread TMB tapes concurrently. The
-default \code{FALSE} constructs them sequentially to reduce peak memory;
-objective and gradient evaluation remains parallel.}
+default \code{TRUE} builds them in parallel for faster tape
+construction; objective and gradient evaluation remains parallel either
+way. Set \code{FALSE} to build tapes sequentially instead and reduce
+peak memory. Concurrent tape construction multiplies the per-tape
+memory workload the \code{max_workload}/\code{tape_chunks} guard sizes
+against by the realized thread count (see \code{max_workload} above);
+pairing \code{parallel_tape = TRUE} with \code{max_workload = Inf}
+disables that guard entirely; \code{rpbnb_control()} warns when it sees
+that combination.}
 
 \item{tape_chunks}{TMB engine, SML fits only. Number of draw chunks to
 split \code{draws} into (see \code{draws} at \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}).
@@ -209,6 +220,48 @@ overrides that for every estimator; \code{print_level = 0} restores silence.
 \code{max_threads} defaults to \code{n_cores} and \code{max_workload} is computed from
 available memory by \code{\link[=rpbnb_tmb_max_workload]{rpbnb_tmb_max_workload()}} the first time a TMB fit
 needs it (so a non-TMB fit never pays for the memory probe).
+}
+
+\section{How \code{n_cores}, \code{max_workload}, and \code{tape_chunks} interact (TMB, \code{method = "sml"})}{
+
+
+These three only interact through \code{parallel_tape}. Before
+\code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}} builds a tape, it estimates a weighted workload:
+\verb{nrow(data) * draws * <family weight> * (realized n_cores if parallel_tape = TRUE, else 1)}. \code{max_workload} caps that number, and
+\code{tape_chunks} is what lets a fit exceed it anyway by building several
+smaller tapes instead of one.
+\itemize{
+\item \code{n_cores} sets OpenMP threads for the objective/gradient, which are
+always evaluated in parallel regardless of anything else here. With the
+default \code{parallel_tape = TRUE}, the \emph{realized} thread count (after
+\code{max_threads} and hardware capping) also multiplies the workload above,
+because each thread builds its own full tape concurrently -- so raising
+\code{n_cores} speeds up evaluation but can push a fit that fit comfortably
+at one thread over \code{max_workload} at eight. Set \code{parallel_tape = FALSE}
+to decouple the two: tapes then build one at a time (peak memory
+unaffected by \code{n_cores}) while evaluation stays fully parallel.
+\item \code{max_workload} (\code{NULL} auto-detects available memory; see above) is
+checked against that workload number. Exceeding it does not always
+error: under \code{method = "sml"} the fit auto-chunks instead (next point).
+\code{Inf} disables the check \emph{and} auto-chunking entirely, so nothing sizes
+the tape for you -- pin \code{tape_chunks} yourself if you still want the
+memory benefit with the guard off.
+\item \code{tape_chunks} (SML fits only; ignored under \code{method = "laplace"}, whose
+tape scales with \code{nrow(data)} alone, not \code{draws}) is what absorbs a
+workload over budget: \code{NULL} auto-selects the smallest chunk count that
+brings the per-chunk workload back under \code{max_workload}; an explicit
+value pins the layout (validated against both \code{draws} and the budget).
+More chunks trade slower gradient evaluations (each chunk's contribution
+is recomputed on every outer step) and the loss of a taped Hessian
+(\code{confint(method = "profile")}/\code{rpbnb_tmb_dependence_profile()} fall
+back to a Wald interval) for lower peak memory.
+}
+
+Net effect for a large SML fit: pick \code{n_cores} for speed first. If that
+trips \code{max_workload}, either let auto-chunking absorb it, set
+\code{parallel_tape = FALSE} if the extra peak memory isn't worth the
+tape-build speedup, or raise \code{max_workload} deliberately against memory
+you actually have (see \code{\link[=rpbnb_tmb_max_workload]{rpbnb_tmb_max_workload()}}).
 }
 
 \examples{

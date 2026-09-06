@@ -668,7 +668,7 @@ test_that("sml_fallback = FALSE keeps the NA-with-warning behaviour", {
     bt <- rpbnb_tmb_boundary_tests(
       a$fit, a$d, which = "dispersion", sml_fallback = FALSE,
       control = rpbnb_tmb_control(print_level = 0L, n_cores = 1L,
-                                  max_workload = Inf))
+                                  max_workload = Inf, parallel_tape = FALSE))
   )
   expect_true(all(grepl("did not converge", warns)))
   expect_true(all(is.na(bt$LR)))
@@ -754,7 +754,7 @@ test_that("an SML fit never engages the fallback (nothing different to try)", {
     bt <- rpbnb_tmb_boundary_tests(
       fit, d, which = "dispersion",
       control = rpbnb_tmb_control(print_level = 1L, n_cores = 1L,
-                                  max_workload = Inf))
+                                  max_workload = Inf, parallel_tape = FALSE))
   ))
   expect_false(any(grepl("retrying the test", msgs)))
   expect_true(all(grepl("did not converge", warns)))

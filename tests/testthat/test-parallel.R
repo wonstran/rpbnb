@@ -79,12 +79,18 @@ test_that("rpbnb_tmb_control validates memory guardrails", {
   expect_error(rpbnb_tmb_control(max_workload = NA_real_), "max_workload")
   expect_error(rpbnb_tmb_control(max_workload = "large"), "max_workload")
 
-  control <- rpbnb_tmb_control(max_threads = 3, max_workload = Inf)
+  control <- rpbnb_tmb_control(max_threads = 3, max_workload = Inf,
+                               parallel_tape = FALSE)
   expect_identical(control$max_threads, 3L)
   expect_identical(control$max_workload, Inf)
   expect_error(rpbnb_tmb_control(parallel_tape = NA), "parallel_tape")
   expect_error(rpbnb_tmb_control(parallel_tape = 1), "parallel_tape")
-  expect_false(rpbnb_tmb_control()$parallel_tape)
+  expect_true(rpbnb_tmb_control()$parallel_tape)
+  expect_warning(
+    rpbnb_tmb_control(max_workload = Inf),
+    "parallel_tape = TRUE with max_workload = Inf"
+  )
+  expect_no_warning(rpbnb_tmb_control(max_workload = Inf, parallel_tape = FALSE))
 })
 
 test_that("thread configuration respects the memory-aware cap", {
@@ -573,7 +579,8 @@ test_that("Gaussian copula fits run multithreaded by default", {
     dependence = copula("normal"),
     draws = 5L, inference = "none",
     control = rpbnb_tmb_control(iterlim = 2L, n_cores = 2L,
-                                max_threads = 2L, max_workload = Inf)
+                                max_threads = 2L, max_workload = Inf,
+                                parallel_tape = FALSE)
   ))
   expect_identical(fit$parallel$realized, 2L)
   expect_identical(fit$parallel$requested, 2L)
@@ -593,7 +600,8 @@ test_that("disable_parallel_gaussian = TRUE caps a Gaussian copula fit to one th
     draws = 5L, inference = "none",
     disable_parallel_gaussian = TRUE,
     control = rpbnb_tmb_control(iterlim = 2L, n_cores = 4L,
-                                max_threads = 4L, max_workload = Inf)
+                                max_threads = 4L, max_workload = Inf,
+                                parallel_tape = FALSE)
   ))
   expect_identical(fit$parallel$realized, 1L)
   expect_identical(fit$parallel$requested, 4L)
@@ -680,7 +688,8 @@ test_that("non-Gaussian copulas are not capped", {
     y1 ~ x, y2 ~ x, data = d, dependence = copula("frank"),
     draws = 5L, inference = "none",
     control = rpbnb_tmb_control(iterlim = 2L, n_cores = 2L,
-                                max_threads = 2L, max_workload = Inf)
+                                max_threads = 2L, max_workload = Inf,
+                                parallel_tape = FALSE)
   ))
   expect_identical(fit$parallel$realized, 2L)
 })
