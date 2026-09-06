@@ -43,8 +43,12 @@
 #   Rscript -e 'source(system.file("example_rpbnb_tmb_laplace.R", package = "rpbnb"))'
 # =============================================================================
 
-#library(rpbnb)
-devtools::load_all()
+# Load the package. Use library(rpbnb) once the package is installed; while
+# developing against the current source tree (not yet installed), comment the
+# library() line out and uncomment devtools::load_all() instead -- it rebuilds
+# and loads the package from this working copy.
+library(rpbnb)
+# devtools::load_all()
 
 # ---- Load data ---------------------------------------------------------------
 d <- read.csv(system.file("extdata", "rwm1984.csv", package = "rpbnb", mustWork = TRUE))

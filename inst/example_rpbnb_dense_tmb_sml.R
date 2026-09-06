@@ -34,13 +34,18 @@
 # boundary_tests to c("dispersion", "dependence") for a much cheaper run, or
 # set max_rows below for a smoke test.
 #
-# devtools::load_all() (not library()): the script must run against the
-# current source tree. Run from the package root:
+# The script loads via library(rpbnb) by default (see the load block below);
+# to run against the current source tree instead, comment out the library()
+# line and uncomment devtools::load_all(). Run from the package root:
 #     Rscript inst/example_rpbnb_dense_tmb_sml.R
 # =============================================================================
 
-# library(rpbnb)  # use this instead of load_all() once installed
-devtools::load_all()
+# Load the package. Use library(rpbnb) once the package is installed; while
+# developing against the current source tree (not yet installed), comment the
+# library() line out and uncomment devtools::load_all() instead -- it rebuilds
+# and loads the package from this working copy.
+library(rpbnb)
+# devtools::load_all()
 
 # Prints a horizontal separator line between output sections.
 sep <- function() cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
