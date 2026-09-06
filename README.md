@@ -1,5 +1,8 @@
 # Random Parameter Bivariate Negative Binomial (RPBNB) Model
 
+[**Reference manual (PDF)**](ref/rpbnb_0.4.6.pdf) — full CRAN-style function
+documentation, regenerated from the current `man/` pages.
+
 Maximum-likelihood and maximum-simulated-likelihood estimation of bivariate
 negative binomial (NB2) regression models, with Famoye/Sarmanov or
 discrete-copula (Frank, Gaussian, Clayton) dependence between the two count
