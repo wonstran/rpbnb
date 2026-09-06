@@ -1,3 +1,54 @@
+# Splices the standalone inst/ example scripts into ?rpbnb's Examples
+# section, alongside one small hand-written example that IS actually run.
+# Each script is a full worked model on real data (some with restarts or
+# boundary-test refits) -- too slow for a routine R CMD check -- and one
+# (example_rpbnb_tmb_sml.R) carries a post-fit convergence gate that is
+# meant to stop() on this specific dataset/spec, and two more (the dense
+# pair) read a local research CSV this package deliberately does not ship
+# (see inst/extdata's gitignore entries). All five are therefore wrapped in
+# \dontrun{}: shown verbatim for reference, never executed by
+# --run-examples or --run-donttest. Read from disk at document() time
+# (paths are relative to the package root), so the embedded text can never
+# drift from the scripts themselves.
+#' @keywords internal
+#' @noRd
+.rpbnb_inst_examples_doc <- function() {
+  scripts <- c(
+    "inst/example_rpbnb_tmb_famoye.R" =
+      "TMB, method = \"sml\", Famoye/Sarmanov dependence (rwm1984.csv)",
+    "inst/example_rpbnb_tmb_sml.R" =
+      "TMB, method = \"sml\", copula dependence (rwm1984.csv)",
+    "inst/example_rpbnb_tmb_laplace.R" =
+      "TMB, method = \"laplace\", copula dependence (rwm1984.csv)",
+    "inst/example_rpbnb_dense_tmb_sml.R" =
+      paste("TMB, method = \"sml\", dense-section truck-crash data",
+            "(local research data, not shipped)"),
+    "inst/example_rpbnb_dense_tmb_laplace.R" =
+      paste("TMB, method = \"laplace\", dense-section truck-crash data",
+            "(local research data, not shipped)")
+  )
+  blocks <- vapply(names(scripts), function(path) {
+    body <- paste(readLines(path, warn = FALSE), collapse = "\n")
+    sprintf("# ---- %s: %s ----\n%s", path, scripts[[path]], body)
+  }, character(1))
+  paste0(
+    "@examples\n",
+    "\\donttest{\n",
+    "d <- read.csv(system.file(\"extdata\", \"rwm1984_bnb.csv\", package = \"rpbnb\"))\n",
+    "fit <- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,\n",
+    "             engine = \"tmb\", random_1 = \"outwork\", draws = 50)\n",
+    "}\n\n",
+    "\\dontrun{\n",
+    "# Fuller worked examples, shipped as standalone scripts under inst/ --\n",
+    "# run with Rscript inst/<file>.R from a source checkout, or\n",
+    "# Rscript system.file(\"<file>.R\", package = \"rpbnb\") after install.\n",
+    "# Shown here for reference only (see the comment above .rpbnb_inst_",
+    "examples_doc()\n# in R/rpbnb.R for why none of these run under R CMD check).\n\n",
+    paste(blocks, collapse = "\n\n"),
+    "\n}"
+  )
+}
+
 #' Fit a random-parameter bivariate NB model with either engine
 #'
 #' A common front end over the package's two estimation engines. `engine =
@@ -270,12 +321,7 @@
 #' @seealso [fit_rpbnb()], [fit_rpbnb_tmb()], [rpbnb_control()],
 #'   [rpbnb_tmb_control()], [copula()], [fit_bnb()]
 #' @export
-#' @examples
-#' \donttest{
-#' d <- read.csv(system.file("extdata", "rwm1984_bnb.csv", package = "rpbnb"))
-#' fit <- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,
-#'              engine = "tmb", random_1 = "outwork", draws = 50)
-#' }
+#' @eval .rpbnb_inst_examples_doc()
 rpbnb <- function(formula_1, formula_2, data,
                   engine = c("classic", "tmb"),
                   random_1 = NULL, random_2 = NULL,

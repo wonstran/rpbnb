@@ -316,6 +316,1019 @@ d <- read.csv(system.file("extdata", "rwm1984_bnb.csv", package = "rpbnb"))
 fit <- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,
              engine = "tmb", random_1 = "outwork", draws = 50)
 }
+
+\dontrun{
+# Fuller worked examples, shipped as standalone scripts under inst/ --
+# run with Rscript inst/<file>.R from a source checkout, or
+# Rscript system.file("<file>.R", package = "rpbnb") after install.
+# Shown here for reference only (see the comment above .rpbnb_inst_examples_doc()
+# in R/rpbnb.R for why none of these run under R CMD check).
+
+# ---- inst/example_rpbnb_tmb_famoye.R: TMB, method = "sml", Famoye/Sarmanov dependence (rwm1984.csv) ----
+#!/usr/bin/env Rscript
+# =============================================================================
+# example_rpbnb_tmb_famoye.R -- random-parameter bivariate NB (RP-BNB), TMB
+# engine, method = "sml", Famoye/Sarmanov dependence
+#
+# Estimates the same random-parameter bivariate NB2 model as
+# inst/example_rpbnb_classic.R's Famoye fit -- same data (rwm1984.csv), same
+# dummy variables (see inst/example_bnb.R), same formulas, same random
+# coefficient (kids, in both equations) -- but via the TMB engine
+# (fit_rpbnb_tmb() / rpbnb(engine = "tmb")) instead of the classic engine, and
+# with method = "sml" explicit rather than relying on it being the default.
+#
+# This is the Famoye/Sarmanov side of the TMB engine's SML estimator; see
+# inst/example_rpbnb_tmb_sml.R for the copula-dependence counterpart (the two
+# were one script until split so each dependence structure -- and its own
+# boundary-test cost -- can be run independently rather than paying for both
+# every time).
+#
+# The TMB engine has two estimators for the random-coefficient integral:
+# "sml" (simulated maximum likelihood over Halton draws, the same integral
+# the classic engine approximates, but with an exact automatic-differentiation
+# gradient instead of a numerical one) and "laplace" (a sparse-Hessian
+# approximation that removes `draws` from the memory cost -- see
+# ?fit_rpbnb_tmb's `method` argument). This script is the "sml" side of that
+# choice: it should give estimates close to inst/example_rpbnb_classic.R's
+# (same integral, same data, same draws), not close to a Laplace fit of the
+# same model, which approximates a different way and need not agree closely
+# on any given dataset (see ?fit_rpbnb_tmb). The two scripts' boundary tests
+# do NOT match, though: this one narrows LR_TEST to "sd" (2 refits), while
+# the classic script uses boundary_tests = TRUE (sd + dispersion, 4 refits)
+# -- see LR_TEST below to widen this one to match.
+#
+# `kids` is loaded as random in BOTH equations: under Famoye/Sarmanov
+# dependence, a normal/lognormal random coefficient present in both margins
+# makes the admissible lambda interval the constant c(-1, 1) (see
+# ?fit_rpbnb_tmb's Return section, `lambda_bounds`), which the optimizer can
+# never escape. A single-margin random coefficient does not have that
+# guarantee.
+#
+# Run with:   Rscript inst/example_rpbnb_tmb_famoye.R
+# or, after install:
+#   Rscript -e 'source(system.file("example_rpbnb_tmb_famoye.R", package = "rpbnb"))'
+# =============================================================================
+
+#library(rpbnb)
+devtools::load_all()
+
+# ---- Load data ---------------------------------------------------------------
+d <- read.csv(system.file("extdata", "rwm1984.csv", package = "rpbnb", mustWork = TRUE))
+
+cat("=== rwm1984.csv ===\n")
+cat("Observations:", nrow(d), "\n")
+cat("docvis  (doctor visits) : mean =", round(mean(d$docvis), 2),
+    " var =", round(var(d$docvis), 2), "\n")
+cat("hospvis (hospital visits): mean =", round(mean(d$hospvis), 2),
+    " var =", round(var(d$hospvis), 2), "\n\n")
+
+# ---- Dummy variables from the raw categorical columns --------------------------
+# Same derivation as inst/example_bnb.R -- see that script for the full
+# explanation. postHS: schooling beyond the lowest track (edlevel >= 2). MarM/
+# MarF/SinM/SinF: sex x marital-status, four mutually exclusive dummies; SinM
+# (single male) is left out of the formulas below as the reference category.
+d$postHS <- as.integer(d$edlevel >= 2)
+d$MarM <- as.integer(d$married == 1 & d$female == 0)  # married male
+d$MarF <- as.integer(d$married == 1 & d$female == 1)  # married female
+d$SinM <- as.integer(d$married == 0 & d$female == 0)  # single male (reference)
+d$SinF <- as.integer(d$married == 0 & d$female == 1)  # single female
+
+f1 <- docvis  ~ outwork + kids + postHS + MarM + MarF + SinF
+f2 <- hospvis ~ outwork + kids + postHS + MarM + MarF + SinF
+
+DRAWS <- 1000
+SEED  <- 1234
+# rpbnb_control()'s n_cores is the OpenMP thread count for both TMB estimators
+# (see ?rpbnb_control); leave 1 core free for the rest of the system. TMB's
+# se_method-equivalent is the `inference` argument to fit_rpbnb_tmb() (full
+# covariance by default), not a control field -- control$se_method is a
+# classic-engine-only knob and is ignored here.
+N_CORES <- max(1L, parallel::detectCores() - 1L)
+# Which boundary_tests group(s) to run -- see ?rpbnb's boundary_tests table.
+# "sd" tests only the random-coefficient scales (sd1:kids, sd2:kids); add
+# "dispersion" (or pass TRUE for both) to also test m1/m2, at the cost of two
+# more restricted refits.
+LR_TEST <- "sd"
+ctrl <- rpbnb_control(n_cores = N_CORES)
+cat("Using", N_CORES, "OpenMP threads,", DRAWS, "draws.\n\n")
+
+# ---- Famoye/Sarmanov RP-BNB, TMB engine, SML ------------------------------------
+# boundary_tests = LR_TEST runs rpbnb_tmb_boundary_tests() on the converged fit
+# and attaches it as fit$boundary_tests, so summary() below fills in the
+# sd1:kids/sd2:kids LR/df/p columns instead of leaving them blank -- no
+# separate rpbnb_tmb_boundary_tests() call needed.
+cat("=== Fitting RP-BNB (TMB engine, method = sml, Famoye/Sarmanov, random kids) ===\n")
+t_famoye <- system.time(
+  fit_famoye <- rpbnb(f1, f2, data = d, engine = "tmb", method = "sml",
+                      random_1 = "kids", random_2 = "kids",
+                      draws = DRAWS,
+                      seed = SEED,
+                      dependence = "famoye",
+                      control = ctrl,
+                      boundary_tests = LR_TEST)
+)[["elapsed"]]
+cat(sprintf("Estimation finished in \%.1f s\n\n", t_famoye))
+print(summary(fit_famoye))
+
+# The same table summary() just read from, printed standalone: H0: sd(kids) = 0
+# in each equation (kids' coefficient is not actually random). This null sits
+# on the boundary of the parameter space, which is why summary() reports no
+# Wald z/p for it without this test.
+cat("\n=== Boundary LR tests (sd1:kids, sd2:kids) ===\n")
+print(fit_famoye$boundary_tests)
+
+# ---- Predicted means for a couple of profiles ----------------------------------
+# Two married women, one working, one not, otherwise identical (one kid,
+# post-Hauptschule schooling); MarM/SinF both 0 -> MarF = 1. Unlike the
+# classic engine's predict.rpbnb_fit() (columns mu1/mu2), predict.rpbnb_tmb_fit()
+# returns a matrix with columns y1/y2.
+newdata <- data.frame(outwork = c(0, 1), kids = c(1, 1), postHS = c(1, 1),
+                      MarM = c(0, 0), MarF = c(1, 1), SinF = c(0, 0))
+cat("\n=== Predicted means (Famoye/Sarmanov fit) ===\n")
+print(cbind(newdata, predict(fit_famoye, newdata = newdata)))
+
+# ---- inst/example_rpbnb_tmb_sml.R: TMB, method = "sml", copula dependence (rwm1984.csv) ----
+#!/usr/bin/env Rscript
+# =============================================================================
+# example_rpbnb_tmb_sml.R -- random-parameter bivariate NB (RP-BNB), TMB
+# engine, method = "sml", copula dependence
+#
+# Estimates a random-parameter bivariate NB2 model for the two count outcomes
+# in the German health-care utilization panel (rwm1984.csv) under copula
+# dependence (COPULA_FAMILY below), via the TMB engine's SML estimator. Same
+# data, dummy variables (see inst/example_bnb.R), formulas, and random
+# coefficient (kids, in both equations) as inst/example_rpbnb_tmb_famoye.R --
+# that script covers Famoye/Sarmanov dependence; this one was split out of it
+# so each dependence structure -- and its own boundary-test cost -- can be run
+# independently rather than paying for both every time.
+#
+# The TMB engine has two estimators for the random-coefficient integral:
+# "sml" (simulated maximum likelihood over Halton draws, the same integral
+# the classic engine approximates, but with an exact automatic-differentiation
+# gradient instead of a numerical one) and "laplace" (a sparse-Hessian
+# approximation that removes `draws` from the memory cost -- see
+# ?fit_rpbnb_tmb's `method` argument). This script is the "sml" side of that
+# choice, not close to a Laplace fit of the same model, which approximates a
+# different way and need not agree closely on any given dataset (see
+# ?fit_rpbnb_tmb). At COPULA_FAMILY = "normal" it should also give estimates
+# close to inst/example_rpbnb_classic.R's copula fit (same integral, same
+# data, same draws) -- that script only demonstrates the Gaussian copula, so
+# the comparison holds only for that one family, not for whichever
+# COPULA_FAMILY happens to be set below. The two scripts' boundary tests do
+# NOT match, either: this one narrows LR_TEST to "sd" (2 refits), while the
+# classic script uses boundary_tests = TRUE (sd + dispersion, 4 refits) -- see
+# LR_TEST below to widen this one to match.
+#
+# `kids` is loaded as random in BOTH equations, for consistency with
+# inst/example_rpbnb_tmb_famoye.R and to avoid identifying the random
+# coefficient off only one margin's variation. Note this cuts against
+# ?fit_rpbnb_tmb's own advice for the copula path specifically: `kids` is a
+# 0/1 dummy in this data, and a random coefficient on a dummy regressor is
+# weakly identified under copula dependence (NB dispersion trades off against
+# the random-coefficient scale) -- kept anyway here so the two scripts'
+# specifications line up; a continuous regressor would identify more cleanly.
+#
+# If the full model does not converge -- "false convergence (8)" with a
+# non-positive-definite Hessian and NA scale/dispersion SEs -- that is the
+# weak-identification signature of a 0/1 dummy (kids) as the random
+# coefficient in both equations under a Gaussian copula, NOT an
+# optimizer-settings problem. A convergence gate after the fit (the
+# "Convergence gate" block) stops with an actionable diagnostic: make the
+# random coefficient a CONTINUOUS regressor in at least one equation, or load
+# kids in only one equation, or use a dependence structure that identifies the
+# scale better. No restarts/iterlim/rel.tol change manufactures the missing
+# curvature.
+#
+# Run with:   Rscript inst/example_rpbnb_tmb_sml.R
+# or, after install:
+#   Rscript -e 'source(system.file("example_rpbnb_tmb_sml.R", package = "rpbnb"))'
+# =============================================================================
+
+library(rpbnb)
+#devtools::load_all()
+
+# ---- Load data ---------------------------------------------------------------
+d <- read.csv(system.file("extdata", "rwm1984.csv", package = "rpbnb", mustWork = TRUE))
+
+cat("=== rwm1984.csv ===\n")
+cat("Observations:", nrow(d), "\n")
+cat("docvis  (doctor visits) : mean =", round(mean(d$docvis), 2),
+    " var =", round(var(d$docvis), 2), "\n")
+cat("hospvis (hospital visits): mean =", round(mean(d$hospvis), 2),
+    " var =", round(var(d$hospvis), 2), "\n\n")
+
+# ---- Dummy variables from the raw categorical columns --------------------------
+# Same derivation as inst/example_bnb.R -- see that script for the full
+# explanation. postHS: schooling beyond the lowest track (edlevel >= 2). MarM/
+# MarF/SinM/SinF: sex x marital-status, four mutually exclusive dummies; SinM
+# (single male) is left out of the formulas below as the reference category.
+d$postHS <- as.integer(d$edlevel >= 2)
+d$MarM <- as.integer(d$married == 1 & d$female == 0)  # married male
+d$MarF <- as.integer(d$married == 1 & d$female == 1)  # married female
+d$SinM <- as.integer(d$married == 0 & d$female == 0)  # single male (reference)
+d$SinF <- as.integer(d$married == 0 & d$female == 1)  # single female
+
+f1 <- docvis  ~ outwork + kids + postHS + MarM + MarF + SinF
+f2 <- hospvis ~ outwork + kids + postHS + MarM + MarF + SinF
+
+DRAWS <- 500
+SEED  <- 1234
+# Which copula to fit. copula() accepts exactly these three families;
+# everything downstream (labels, the reported native parameter, Kendall's
+# tau) adapts to whichever is set here.
+#   "frank"     -- theta on the whole real line, no tail dependence
+#   "normal"    -- Gaussian, rho in (-1, 1)
+#   "kimeldorf" -- Kimeldorf-Sampson (Clayton), theta > 0, lower-tail dependence
+COPULA_FAMILY <- "normal"
+
+# rpbnb_control()'s n_cores is the OpenMP thread count for both TMB estimators
+# (see ?rpbnb_control); leave 1 core free for the rest of the system. TMB's
+# se_method-equivalent is the `inference` argument to fit_rpbnb_tmb() (full
+# covariance by default), not a control field -- control$se_method is a
+# classic-engine-only knob and is ignored here.
+N_CORES <- max(1L, parallel::detectCores() - 1L)
+
+# Which boundary_tests group(s) to run -- see ?rpbnb's boundary_tests table.
+# "sd" tests only the random-coefficient scales (sd1:kids, sd2:kids); add
+# "dispersion" (or pass TRUE for both) to also test m1/m2, at the cost of two
+# more restricted refits.
+LR_TEST <- "sd"
+
+# ---- TMB engine control ------------------------------------------------------
+# One rpbnb_control() object drives every estimator; here only the TMB fields
+# below matter (n_cores, max_threads, max_workload, tape_chunks), the rest are
+# resolved or ignored for this fit. See ?rpbnb_control for the full field
+# reference and ?fit_rpbnb_tmb for the memory/chunking model.
+ctrl <- rpbnb_control(
+  n_cores = N_CORES,
+  # OpenMP thread count for both TMB estimators (see ?rpbnb_control). Left 1
+  # core free above via N_CORES.
+  max_threads = N_CORES,
+  # Ceiling on OpenMP threads permitted for one TMB fit. NULL would default to
+  # n_cores; set equal here so the ceiling never binds below the request.
+  max_workload = rpbnb_tmb_max_workload(budget_gib = 32),
+  # Memory guard: the largest weighted observation-draw count the TMB tape may
+  # build before the fit is refused or chunked. Weighted workload is
+  # n * draws * family_weight (frank = 3.6, the heaviest family) with peak at
+  # ~12083 bytes/unit, so this budgets a ~32 GiB peak for one fit. Inf disables
+  # the guard entirely.
+  tape_chunks = NULL,
+  # SML-only: split the draws into this many chunks, replayed over one smaller
+  # TMB tape, cutting peak tape memory to nrow * ceiling(DRAWS / chunks) at the
+  # cost of somewhat slower gradient evaluations. A fixed integer must be 1L or
+  # greater and not exceed draws (validated at fit time in .resolve_tape_chunks()).
+  #
+  # NOTE: NULL here (the default) auto-selects the smallest sufficient chunk
+  # count when the weighted workload exceeds max_workload, or 1L (no chunking)
+  # when it does not -- so with max_workload pinned to the 32 GiB budget above,
+  # NULL picks the layout on its own from that budget. Pass a fixed integer
+  # (e.g. 4L) to pin the layout regardless of the auto-threshold.
+  #
+  # Any chunked fit (value > 1L, including an auto-picked one) has no taped
+  # Hessian, so profile-based inference (confint(method = "profile"),
+  # rpbnb_tmb_dependence_profile()) falls back to Wald with a warning; default
+  # Wald/optimHess is unaffected.
+)
+cat("Using", N_CORES, "OpenMP threads,", DRAWS, "draws.\n\n")
+
+# ---- Copula RP-BNB, TMB engine, SML ---------------------------------------------
+# boundary_tests = LR_TEST runs rpbnb_tmb_boundary_tests() on the converged fit
+# and attaches it as fit$boundary_tests, so summary() below fills in the
+# sd1:kids/sd2:kids LR/df/p columns instead of leaving them blank -- no
+# separate rpbnb_tmb_boundary_tests() call needed. (Gaussian-copula evaluation
+# runs multithreaded by default since 0.4.6 -- see NEWS.md -- so
+# COPULA_FAMILY = "normal" needs no extra argument either.)
+cat(sprintf(
+  "=== Fitting RP-BNB (TMB engine, method = sml, \%s copula, random kids) ===\n",
+  COPULA_FAMILY))
+t_copula <- system.time(
+  fit_copula <- rpbnb(f1, f2, data = d, engine = "tmb", method = "sml",
+                      random_1 = "kids", 
+                      random_2 = "kids",
+                      dependence = copula(COPULA_FAMILY),
+                      draws = DRAWS, 
+                      seed = SEED,
+                      control = ctrl,
+                      boundary_tests = LR_TEST)
+)[["elapsed"]]
+cat(sprintf("Estimation finished in \%.1f s\n\n", t_copula))
+
+# ---- Convergence gate before the boundary tests ----------------------------
+# rpbnb_tmb_boundary_tests() refuses to run on a full model that nlminb did
+# not drive to stationarity (code 0), so check it here and explain WHY rather
+# than surfacing the cryptic stop from the boundary tester.
+#
+# "false convergence (8)" on THIS specification is a symptom of weak
+# identification, not of the optimizer giving up too early: the score is far
+# from stationarity AND the Hessian is not positive definite. Verified by a
+# keep = "full" re-fit and eigendecomposition of the Hessian AT THE OPTIMUM
+# (last.par.best, not the MakeADFun zero start): 3 negative eigenvalues
+# (-58.8, -43.2, -24.7) out of 19 free parameters, i.e. the "optimum" is a
+# saddle, not a maximum. The two smallest negative directions load almost
+# entirely on log_sd1:kids (0.99) and log_sd2:kids (0.95) -- both random-
+# coefficient scales curve the wrong way -- and the largest (-58.8) mixes
+# log_m2 (0.85) with log_sd2:kids (0.26). The gradient is dominated by the
+# dispersion/scale/dependence block (log_m1, log_m2, z_dep) rather than clean
+# coefficient signal. kids is a 0/1 dummy in both equations, and a random
+# coefficient on a dummy is weakly identified under a Gaussian copula (NB
+# dispersion trades off against the random-coefficient scale) -- the exact
+# caveat in this script's header. No optimizer knob (more restarts, a bigger
+# iterlim, a tighter rel.tol) can converge to a saddle; it will burn hours and
+# return the same code. See the "Fix" below for what does.
+if (!identical(fit_copula$optimizer$convergence, 0L)) {
+  stop(
+    "The full model did not converge (nlminb code ", fit_copula$optimizer$convergence,
+    ": ", fit_copula$optimizer$message,
+    "; max|gradient| = ", signif(fit_copula$optimizer$max_abs_gradient, 4),
+    " vs tolerance ", signif(fit_copula$optimizer$gradient_tolerance, 4),
+    "), and the Hessian is not positive definite (sdreport$pdHess = ",
+    fit_copula$sdreport$pdHess, "). This is the weak-identification signature ",
+    "of a 0/1 dummy (kids) as the random coefficient in both equations under a ",
+    "Gaussian copula -- not an optimizer-settings problem.\n",
+    "Fix: put the random coefficient on a CONTINUOUS regressor (kids is 0/1 in ",
+    "both equations, and every other regressor here is also 0/1 -- so a ",
+    "continuous column must come from the data), or load kids in only ONE ",
+    "equation, or switch to a dependence structure that identifies the scale ",
+    "better. Once the score is near stationarity, the boundary tests below run ",
+    "unconditionally.",
+    call. = FALSE)
+}
+print(summary(fit_copula))
+
+# ---- (Optional) Saddle-point diagnostic -------------------------------------
+# Un-comment to reproduce the weak-identification verification above. It
+# confirms, from the curvature itself, that a non-converged fit is a saddle
+# (negative curvature in the random-scale block) rather than a stalled trust
+# region. Costs one more full Hessian evaluation at the optimum (o$he()), which
+# is expensive on this data (n = 3874 x 500 draws), so it is off by default.
+#
+# Three requirements:
+#   (1) keep = "full" so the TMB objective o <- fit$obj is stored (the
+#       default keep = "postfit" does not retain it -- o$he()/o$gr() then
+#       error). Re-fit identically except for keep, or refit this one.
+#   (2) Evaluate at o$env$last.par.best (the true optimum, objective =
+#       -logLik), NOT o$par -- o$par is the all-zero MakeADFun START, where the
+#       objective (~3e4 here) and gradient (hundreds-to-thousands everywhere)
+#       are meaningless and would masquerade as "the whole model is bad".
+#   (3) Symmetric eigen() for both the eigenvalues (saddle test) and the
+#       eigenvector loadings (which parameters the negative directions live in).
+#
+# Expected on this weakly-identified spec: 3 negative eigenvalues out of 19
+# (the two smallest loading ~entirely on log_sd1:kids / log_sd2:kids, the
+# largest mixing log_m2 with log_sd2:kids), confirming a saddle, not a maximum.
+# A healthy, well-identified fit instead shows all-positive eigenvalues and a
+# small max|gradient| at last.par.best.
+#
+# Runs only when the fit did not converge (the case worth inspecting). To
+# check a fit that DID converge (a sanity check that all eigenvalues are
+# positive), drop the `if` guard and run the body unconditionally.
+#
+# if (!identical(fit_copula$optimizer$convergence, 0L)) {
+#   if (is.null(fit_copula$obj))
+#     stop("Refit with keep = \"full\" first: fit$obj (the TMB objective) is ",
+#          "not stored under the default keep = \"postfit\".")
+#   o <- fit_copula$obj
+#   p <- o$env$last.par.best
+#   par_names <- names(coef(fit_copula))
+#   H <- o$he(p)
+#   g <- as.numeric(as.matrix(o$gr(p)))
+#   cat("objective at optimum:", o$fn(p), " (== -logLik = ",
+#       -as.numeric(fit_copula$logLik), ")\n")
+#   cat("max|gradient| at optimum:", max(abs(g)), "\n")
+#   ev <- eigen(H, symmetric = TRUE)
+#   cat("Hessian eigenvalues (ascending):\n"); print(round(ev$values, 3))
+#   cat("negative eigenvalues:", sum(ev$values < 0), " of", length(ev$values),
+#       "\n")
+#   # Which parameters the negative (saddle) directions live in:
+#   for (i in which(ev$values < 0)) {
+#     v <- ev$vectors[, i]
+#     top <- order(abs(v), decreasing = TRUE)[1:6]
+#     cat(sprintf("\neigenvalue \%s:\n", signif(ev$values[i], 4)))
+#     print(cbind(name = par_names[top], load = v[top]))
+#   }
+# }
+
+# ---- Threading diagnostics ----------------------------------------------------
+# fit$parallel$realized can come in below $requested for reasons that are easy
+# to conflate: no OpenMP in this build (openmp: FALSE below -- affects every
+# family, e.g. Apple clang with no libomp linked), fewer threads actually
+# supported than requested (TMB::openmp(max = TRUE) returned less than
+# max_threads), or -- Gaussian copula only, and only on a pre-0.4.6 install --
+# the single-thread safety cap that used to apply unconditionally (see
+# ?fit_rpbnb_tmb's `disable_parallel_gaussian`). Printed here because
+# COPULA_FAMILY = "normal" above is exactly the case that cap used to affect.
+cat(sprintf("Threads requested: \%d, realized: \%d\n",
+            fit_copula$parallel$requested, fit_copula$parallel$realized))
+print(rpbnb_build_info())
+
+# ---- inst/example_rpbnb_tmb_laplace.R: TMB, method = "laplace", copula dependence (rwm1984.csv) ----
+#!/usr/bin/env Rscript
+# =============================================================================
+# example_rpbnb_tmb_laplace.R -- random-parameter bivariate NB (RP-BNB), TMB
+# engine, method = "laplace", copula dependence
+#
+# Estimates a random-parameter bivariate NB2 model for the two count outcomes
+# in the German health-care utilization panel (rwm1984.csv) under copula
+# dependence (COPULA_FAMILY below), via the TMB engine's Laplace-approximation
+# estimator. Same data, dummy variables (see inst/example_bnb.R), formulas,
+# and random coefficient (kids, in both equations) as
+# inst/example_rpbnb_tmb_sml.R -- this one is the "laplace" side of that
+# script's estimator choice; run the two side by side to compare the two
+# approximations on the same model.
+#
+# The TMB engine has two estimators for the random-coefficient integral:
+# "sml" (simulated maximum likelihood over Halton draws, the same integral
+# the classic engine approximates, but with an exact automatic-differentiation
+# gradient instead of a numerical one) and "laplace" (a sparse-Hessian
+# approximation over one latent vector per observation that removes `draws`
+# from the memory cost -- tape size scales with nrow(data) alone, see
+# ?fit_rpbnb_tmb's `method` argument). This script is the "laplace" side of
+# that choice. The two are DIFFERENT approximations to the same integral:
+# they agree asymptotically but need not agree closely on any given dataset,
+# so a Laplace fit is not a drop-in reproduction of an SML fit. summary()
+# still reports AIC/BIC, but under "laplace" they are computed from an
+# approximated marginal likelihood, so an AIC from a Laplace fit is not
+# meaningful to compare against an AIC from an SML fit of the same model.
+# "laplace" also supports "normal" and "lognormal" random coefficients only
+# and requires at least one random coefficient -- `kids` is Normal in both
+# equations, so both hold here.
+#
+# `kids` is loaded as random in BOTH equations, for consistency with
+# inst/example_rpbnb_tmb_sml.R and to avoid identifying the random
+# coefficient off only one margin's variation. Note this cuts against
+# ?fit_rpbnb_tmb's own advice for the copula path specifically: `kids` is a
+# 0/1 dummy in this data, and a random coefficient on a dummy regressor is
+# weakly identified under copula dependence (NB dispersion trades off against
+# the random-coefficient scale) -- kept anyway here so the two scripts'
+# specifications line up; a continuous regressor would identify more cleanly.
+#
+# Run with:   Rscript inst/example_rpbnb_tmb_laplace.R
+# or, after install:
+#   Rscript -e 'source(system.file("example_rpbnb_tmb_laplace.R", package = "rpbnb"))'
+# =============================================================================
+
+#library(rpbnb)
+devtools::load_all()
+
+# ---- Load data ---------------------------------------------------------------
+d <- read.csv(system.file("extdata", "rwm1984.csv", package = "rpbnb", mustWork = TRUE))
+
+cat("=== rwm1984.csv ===\n")
+cat("Observations:", nrow(d), "\n")
+cat("docvis  (doctor visits) : mean =", round(mean(d$docvis), 2),
+    " var =", round(var(d$docvis), 2), "\n")
+cat("hospvis (hospital visits): mean =", round(mean(d$hospvis), 2),
+    " var =", round(var(d$hospvis), 2), "\n\n")
+
+# ---- Dummy variables from the raw categorical columns --------------------------
+# Same derivation as inst/example_bnb.R -- see that script for the full
+# explanation. postHS: schooling beyond the lowest track (edlevel >= 2). MarM/
+# MarF/SinM/SinF: sex x marital-status, four mutually exclusive dummies; SinM
+# (single male) is left out of the formulas below as the reference category.
+d$postHS <- as.integer(d$edlevel >= 2)
+d$MarM <- as.integer(d$married == 1 & d$female == 0)  # married male
+d$MarF <- as.integer(d$married == 1 & d$female == 1)  # married female
+d$SinM <- as.integer(d$married == 0 & d$female == 0)  # single male (reference)
+d$SinF <- as.integer(d$married == 0 & d$female == 1)  # single female
+
+f1 <- docvis  ~ outwork + kids + postHS + MarM + MarF + SinF
+f2 <- hospvis ~ outwork + kids + postHS + MarM + MarF + SinF
+
+# `draws`/`seed` (fit_rpbnb_tmb()'s Halton-grid arguments) are left at their
+# defaults here on purpose. Under method = "laplace" `draws` does NOT affect
+# the likelihood, the TMB tape, or any chunking (tape size scales with
+# nrow(data) alone); its only remaining job is sizing the Halton grid used by
+# predict() and the marginal-effect functions for post-estimation averaging
+# (the frozen Famoye admissible-lambda interval is derived from the random
+# coefficients' support instead, independent of draws/seed under either
+# estimator -- see ?fit_rpbnb_tmb's `draws` argument). This script calls
+# neither predict() nor a marginal-effect function, so draws/seed have no
+# observable effect on anything it prints; set them explicitly only once you
+# add such a call and want its averaging grid reproducible or sized to taste.
+# Which copula to fit. copula() accepts exactly these three families;
+# everything downstream (labels, the reported native parameter, Kendall's
+# tau) adapts to whichever is set here.
+#   "frank"     -- theta on the whole real line, no tail dependence
+#   "normal"    -- Gaussian, rho in (-1, 1)
+#   "kimeldorf" -- Kimeldorf-Sampson (Clayton), theta > 0, lower-tail dependence
+COPULA_FAMILY <- "normal"
+
+# rpbnb_control()'s n_cores is the OpenMP thread count for both TMB estimators
+# (see ?rpbnb_control); leave 1 core free for the rest of the system. TMB's
+# se_method-equivalent is the `inference` argument to fit_rpbnb_tmb() (full
+# covariance by default), not a control field -- control$se_method is a
+# classic-engine-only knob and is ignored here.
+N_CORES <- max(1L, parallel::detectCores() - 1L)
+
+# Which boundary_tests group(s) to run -- see ?rpbnb's boundary_tests table.
+# "sd" tests only the random-coefficient scales (sd1:kids, sd2:kids); add
+# "dispersion" (or pass TRUE for both) to also test m1/m2, at the cost of two
+# more restricted refits.
+LR_TEST <- "sd"
+
+# ---- TMB engine control ------------------------------------------------------
+# One rpbnb_control() object drives every estimator; here only the thread
+# fields matter for this fit (n_cores, max_threads). The SML-only memory
+# knobs (max_workload, tape_chunks) are NOT set: under method = "laplace" the
+# tape scales with nrow(data) alone, so there is no draw dimension to chunk
+# and the weighted-workload guard bounds nothing -- .resolve_tape_chunks()
+# reports them as ignored rather than erroring (see ?rpbnb_control).
+ctrl <- rpbnb_control(
+  n_cores = N_CORES,
+  # OpenMP thread count for both TMB estimators (see ?rpbnb_control). Left 1
+  # core free above via N_CORES.
+  max_threads = N_CORES,
+  # Ceiling on OpenMP threads permitted for one TMB fit. NULL would default to
+  # n_cores; set equal here so the ceiling never binds below the request.
+  # (max_workload / tape_chunks deliberately omitted: SML-only, ignored for
+  # method = "laplace".)
+)
+cat("Using", N_CORES, "OpenMP threads.\n\n")
+
+# ---- Copula RP-BNB, TMB engine, Laplace -----------------------------------------
+# method = "laplace" uses TMB's Laplace approximation with a sparse Hessian
+# over one latent vector per observation; tape size scales with nrow(data)
+# alone, so this fit uses far less peak memory than the SML script's.
+# boundary_tests = LR_TEST runs rpbnb_tmb_boundary_tests() on the converged fit
+# and attaches it as fit$boundary_tests, so summary() below fills in the
+# sd1:kids/sd2:kids LR/df/p columns instead of leaving them blank -- no
+# separate rpbnb_tmb_boundary_tests() call needed. (Gaussian-copula evaluation
+# runs multithreaded by default since 0.4.6 -- see NEWS.md -- so
+# COPULA_FAMILY = "normal" needs no extra argument either.)
+cat(sprintf(
+  "=== Fitting RP-BNB (TMB engine, method = laplace, \%s copula, random kids) ===\n",
+  COPULA_FAMILY))
+t_copula <- system.time(
+  fit_copula <- rpbnb(f1, f2, data = d, engine = "tmb", method = "laplace",
+                      random_1 = "kids",
+                      random_2 = "kids",
+                      dependence = copula(COPULA_FAMILY),
+                      control = ctrl,
+                      boundary_tests = LR_TEST)
+)[["elapsed"]]
+cat(sprintf("Estimation finished in \%.1f s\n\n", t_copula))
+print(summary(fit_copula))
+
+# ---- Threading diagnostics ----------------------------------------------------
+# fit$parallel$realized can come in below $requested for reasons that are easy
+# to conflate: no OpenMP in this build (openmp: FALSE below -- affects every
+# family, e.g. Apple clang with no libomp linked), fewer threads actually
+# supported than requested (TMB::openmp(max = TRUE) returned less than
+# max_threads), or -- Gaussian copula only, and only on a pre-0.4.6 install --
+# the single-thread safety cap that used to apply unconditionally (see
+# ?fit_rpbnb_tmb's `disable_parallel_gaussian`) -- directly relevant here
+# since COPULA_FAMILY = "normal" above is exactly the case that cap affected.
+cat(sprintf("Threads requested: \%d, realized: \%d\n",
+            fit_copula$parallel$requested, fit_copula$parallel$realized))
+print(rpbnb_build_info())
+
+# ---- inst/example_rpbnb_dense_tmb_sml.R: TMB, method = "sml", dense-section truck-crash data (local research data, not shipped) ----
+#!/usr/bin/env Rscript
+# =============================================================================
+# rpbnb(engine = "tmb", method = "sml") on the dense-section truck-crash data.
+#
+# A trimmed version of inst/dev/rpbnb_truck_dense.R: that script fits BOTH
+# engines from one rpbnb_control() object to demonstrate the control object is
+# a superset either engine accepts. This script keeps the same dense model
+# structure but fits only the TMB engine, so there is no engine loop, no
+# engine-comparison section, and no maxLik-only control knobs (se_method,
+# hess_eps) -- nothing here reads them. It is the dense-data counterpart of
+# inst/dev/rpbnb_truck_open_v2.R; see that header for the same trimming
+# rationale.
+#
+# DATA and MODEL STRUCTURE (taken from rpbnb_truck_dense.R):
+#
+#   * inst/extdata/export_dense_all.csv (dense sections), not the
+#     open-section export_open_all.csv.
+#   * The two equations use DIFFERENT covariate sets -- ALL_3 in eq 1,
+#     C_DISTR in eq 2 -- and one random coefficient on SR40_MI3 in each
+#     equation. The same random coefficient, weakly identified, is shared as
+#     in the open scripts so every truck script fits the same style of model.
+#   * dependence = "famoye" (Famoye/Sarmanov), matching the referenced dense
+#     script, rather than a copula.
+#
+# standardize = TRUE (same as rpbnb_truck_dense.R): the dense data carries
+# strictly-positive continuous covariates (SR40_MI3, MPD_ME, MPD_STD, ...)
+# that would otherwise make a random-coefficient carrier a random intercept in
+# disguise and would inflate the design-matrix condition number. summary()
+# back-transforms the coefficient table to original units automatically.
+#
+# COST. One full fit plus one restricted refit per tested parameter: 2
+# random-coefficient scales (SR40_MI3 in each equation) + 2 dispersions +
+# 1 dependence = 5 refits, i.e. roughly six full fits total. Drop
+# boundary_tests to c("dispersion", "dependence") for a much cheaper run, or
+# set max_rows below for a smoke test.
+#
+# devtools::load_all() (not library()): the script must run against the
+# current source tree. Run from the package root:
+#     Rscript inst/example_rpbnb_dense_tmb_sml.R
+# =============================================================================
+
+# library(rpbnb)  # use this instead of load_all() once installed
+devtools::load_all()
+
+# Prints a horizontal separator line between output sections.
+sep <- function() cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+
+# ---- Knobs ------------------------------------------------------------------
+# n_cores: OpenMP threads the TMB engine uses for the simulated-likelihood
+#         draws. This is the ONE parallel knob the TMB engine reads; max_threads
+#         (a cap on it, defaulting to n_cores) is not set here because
+#         requesting n_cores and capping at n_cores is the same thing.
+n_cores <- 12L
+
+# draws: number of Halton simulation draws. Under method = "sml" these
+#        define the simulated likelihood being maximized.
+draws   <- 1000L
+
+# seed: drives the Cranley-Patterson rotation of the Halton draws, making the
+#       draw grid (and so the fit) reproducible run-to-run.
+seed    <- 20240712L
+
+# tmb_method: the TMB engine's estimator. "sml" (simulated ML) or
+#             "laplace" (TMB's memory-saving analytic alternative).
+tmb_method <- "sml"
+
+# dependence: the inter-equation dependence. "famoye" (Famoye/Sarmanov) here.
+#             A copula() object is also accepted, one of three families:
+#               copula("frank")       -- Frank copula (theta; symmetric)
+#               copula("normal")      -- Gaussian copula (rho in (-1, 1))
+#               copula("kimeldorf")   -- Clayton copula (theta > 0)
+#             (an optional par argument fixes the dependence parameter for
+#             simulation). Note copula("normal") runs multithreaded by default
+#             (since 0.4.6 -- the SIGSEGV the old single-thread cap guarded
+#             against was fixed in 0.4.4), so set disable_parallel_gaussian =
+#             TRUE on the fit to pin a Gaussian run to one thread.
+dependence <- copula("normal")
+
+# boundary_tests: which parameter groups to LR-test against their boundary
+#                 restriction. "all" = c("sd", "dispersion", "dependence") --
+#                 one restricted refit per tested parameter. FALSE or "none"
+#                 skips the LR tests entirely.
+boundary_tests <- FALSE
+
+# boundary_draws: draws used by the restricted LR refits. NULL reuses the main
+#                 fit's `draws`, which keeps the restricted and full simulated
+#                 likelihoods on common random numbers -- diverge only
+#                 deliberately.
+boundary_draws <- NULL
+
+# max_rows: smoke-test cap. NULL uses every row; set e.g. 400L to rehearse the
+#           whole script cheaply before committing to a full run.
+max_rows <- NULL
+
+data <- read.csv(system.file("extdata", "export_dense_all.csv", package = "rpbnb", mustWork = TRUE))
+if (!is.null(max_rows)) {
+  data <- utils::head(data, max_rows)
+  cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")
+}
+
+# is_cop / dep_label: build the header label from `dependence` -- a copula
+# object reports its family name, a bare string ("famoye") reports itself.
+is_cop <- inherits(dependence, "rpbnb_copula")
+dep_label <- if (is_cop) paste0(dependence$family, " copula") else as.character(dependence)
+cat("=== rpbnb(engine = \"tmb\") on truck all crashes, dense sections (",
+    dep_label, ") ===\n", sep = "")
+cat("Observations   :", nrow(data), "\n")
+cat("Cores asked    :", n_cores, "\n")
+cat("Draws          :", draws, "\n")
+cat("LR test groups :",
+    if (isFALSE(boundary_tests)) "none" else paste(boundary_tests, collapse = ", "),
+    "\n")
+
+# f1, f2: the two marginal equations. Each is a count response regressed on a
+# covariate set; the equations deliberately use DIFFERENT covariate sets
+# (ALL_3 in eq 1, C_DISTR in eq 2), taken from rpbnb_truck_dense.R.
+f1 <- ALL_3   ~ LNAADT_3 + SR40_MI3 + MPD_ME + MPD_STD + IRI_ME + RUT_L + SP50GE + ACCPNTS + SIGNAL1 + NEAR_SIG + AUXLNUM + DP10_ME
+f2 <- C_DISTR ~ LNAADT_3 + SR40_MI3 + MPD_ME + MPD_STD + RUT_9 + ACCPNTS + SIGNAL1 + NEAR_SIG + AUXLNUM + DP01_ME + CS_MINAB
+
+cat("Equation 1     :", deparse(f1), "\n")
+cat("Equation 2     :", deparse(f2), "\n")
+
+# random_1, random_2: the covariates given a random (varying) slope in each
+# equation, i.e. whose coefficient varies across observations from a random
+# distribution. Both equations put the one random slope on SR40_MI3.
+random_1 <- c("SR40_MI3")
+random_2 <- c("SR40_MI3")
+
+# ---- Control object (TMB knobs only) -----------------------------------------
+# Three TMB settings are named here; only one of them differs from its package
+# default:
+#   max_workload -- the TMB workload guard's budget. Set to Inf to disable the
+#                   guard: its default calibration under-estimates this data's
+#                   per-draw cost (see rpbnb_truck_dense.R's header), so leaving
+#                   it engaged would block the fit rather than merely warn.
+#   print_level  -- verbosity, and the switch that silences the per-refit
+#                   LR-test messages. Kept at the TMB default of 1 but stated
+#                   so that the per-refit LR-test messages it gates are
+#                   explained.
+#   n_cores      -- OpenMP threads for the simulated-likelihood draws; the
+#                   single parallel knob the TMB engine reads.
+# Everything else the TMB engine reads -- iterlim, reltol, halton_burn,
+# gradtol, restarts, max_threads -- is left at its package default and
+# therefore not named here (reltol resolves to 1e-8, its default).
+ctrl <- rpbnb_control(
+  print_level  = 1,
+  n_cores      = n_cores,
+  parallel_tape = TRUE
+)
+
+# The banner carries the same engine/method/dependence/draws identity the
+# print below is narrowed to, so the header names the parameters it is about
+# to show (the print itself has no dependence field to echo).
+sep(); cat(sprintf(
+  "CONTROL OBJECT (engine = \"tmb\", method = \"\%s\", dependence = \"\%s\", draws = \%d)\n",
+  tmb_method, dep_label, draws)); sep()
+# engine=/method=/draws narrow this print to the settings the TMB + SML fit
+# actually reads and report the simulated-likelihood draw count.
+print(ctrl, engine = "tmb", method = tmb_method, draws = draws)
+
+# ---- Fit ----------------------------------------------------------------
+# stamp / results: a timestamped run label and the directory the fit is saved
+# to.
+stamp <- format(Sys.time(), "\%Y-\%m-\%d-\%H\%M\%S")
+dir.create("results", recursive = TRUE, showWarnings = FALSE)
+
+sep(); cat("FIT: engine = \"tmb\"\n", sep = ""); sep()
+
+# t_fit: wall-clock seconds for the whole fit, INCLUDING the restricted LR
+# refits boundary_tests triggers.
+t_fit <- system.time(
+  fit <- rpbnb(
+    formula_1      = f1,
+    formula_2      = f2,
+    data           = data,
+    engine         = "tmb",
+    method         = tmb_method,
+    boundary_draws = boundary_draws,
+    random_1       = random_1,
+    random_2       = random_2,
+    dependence     = dependence,
+    seed           = seed,
+    draws          = draws,
+    standardize    = TRUE,
+    boundary_tests = boundary_tests,
+    control        = ctrl
+  )
+)[["elapsed"]]
+
+cat(sprintf("\nFinished in \%.2f s\%s\n", t_fit,
+            if (isFALSE(boundary_tests) || !length(boundary_tests)) ""
+            else " (includes the restricted LR refits)"))
+# Convergence of the TMB engine's nlminb optimizer (code + message).
+cat(sprintf("Convergence  : nlminb code=\%d, \%s\n",
+            fit$optimizer$convergence, fit$optimizer$message))
+
+fit_path <- file.path("results", paste0("fit_truck_dense_tmb_", stamp, ".rds"))
+saveRDS(fit, fit_path)
+cat("Saved to     :", fit_path, "\n")
+
+# Names any supplied control setting the TMB engine did not read (none are
+# expected here, since ctrl sets only TMB-applicable fields).
+cat("Control settings this engine did not read: ",
+    if (length(fit$control_ignored)) paste(fit$control_ignored, collapse = ", ")
+    else "(none)", "\n", sep = "")
+
+# ---- Summary ------------------------------------------------------------
+# standardize = TRUE back-transforms the coefficient table to original units
+# automatically. With the LR tests attached, the natural-scale block carries
+# LR/df/p for the scale and dispersion rows in place of the NA they would
+# otherwise show, and the dependence row shows its LR test instead of a Wald z.
+sep(); cat("MODEL SUMMARY (original covariate units)\n"); sep()
+summary(fit)
+cat("\n")
+
+# ---- LR tests, standalone -------------------------------------------------
+sep(); cat("LR TESTS\n"); sep()
+if (is.null(fit$boundary_tests)) {
+  cat("Skipped: `boundary_tests` named no group.  Set it at the top of this\n")
+  cat("script -- \"all\", or e.g. c(\"dispersion\", \"dependence\") for the\n")
+  cat("cheap subset -- to run them.\n")
+} else {
+  print(fit$boundary_tests)
+}
+
+sep(); cat("DONE\n"); sep()
+
+# ---- inst/example_rpbnb_dense_tmb_laplace.R: TMB, method = "laplace", dense-section truck-crash data (local research data, not shipped) ----
+#!/usr/bin/env Rscript
+# =============================================================================
+# rpbnb(engine = "tmb", method = "laplace") on the dense-section truck-crash data.
+#
+# The method = "laplace" twin of inst/example_rpbnb_dense_tmb_sml.R: the same
+# dense model structure (same data, equations, and random coefficient) run
+# through the TMB engine's Laplace approximation instead of its SML estimator.
+# Laplace is the TMB engine's memory-saving analytic alternative to SML: it
+# works over one latent vector per observation, so the tape -- and peak
+# memory -- scale with nrow(data) alone rather than nrow(data) * draws (see
+# ?fit_rpbnb_tmb's `method` argument). The two estimators approximate the same
+# random-coefficient integral DIFFERENTLY; they agree asymptotically but need
+# not agree closely on any given dataset, so this is not a drop-in
+# reproduction of the SML script's fit.
+#
+# Under method = "laplace" the SML-only parameters have no effect and are
+# therefore not set anywhere in this script:
+#   * `draws` / `seed` -- the Halton draw grid. Under Laplace `draws` does not
+#     affect the likelihood, the tape, or any chunking; its only remaining job
+#     is sizing the averaging grid for predict() and the marginal-effect
+#     functions. This script calls none of those, so draws/seed are left at
+#     their package defaults.
+#   * `boundary_draws` -- the draws for the restricted LR refits. SML-only for
+#     the same reason; the LR refits here are Laplace fits too, so there is no
+#     draw dimension to keep on common random numbers.
+#
+# DATA and MODEL STRUCTURE (taken from rpbnb_truck_dense.R, same as the SML
+# twin):
+#
+#   * inst/extdata/export_dense_all.csv (dense sections), not the
+#     open-section export_open_all.csv.
+#   * The two equations use DIFFERENT covariate sets -- ALL_3 in eq 1,
+#     C_DISTR in eq 2 -- and one random coefficient on SR40_MI3 in each
+#     equation. The same random coefficient, weakly identified, is shared as
+#     in the open scripts so every truck script fits the same style of model.
+#   * dependence = "famoye" (Famoye/Sarmanov), matching the referenced dense
+#     script, rather than a copula.
+#
+# standardize = TRUE (same as rpbnb_truck_dense.R): the dense data carries
+# strictly-positive continuous covariates (SR40_MI3, MPD_ME, MPD_STD, ...)
+# that would otherwise make a random-coefficient carrier a random intercept in
+# disguise and would inflate the design-matrix condition number. summary()
+# back-transforms the coefficient table to original units automatically.
+#
+# COST. One full fit plus one restricted refit per tested parameter: 2
+# random-coefficient scales (SR40_MI3 in each equation) + 2 dispersions +
+# 1 dependence = 5 refits, i.e. roughly six full fits total. Drop
+# boundary_tests to c("dispersion", "dependence") for a much cheaper run, or
+# set max_rows below for a smoke test.
+#
+# devtools::load_all() (not library()): the script must run against the
+# current source tree. Run from the package root:
+#     Rscript inst/example_rpbnb_dense_tmb_laplace.R
+# =============================================================================
+
+# library(rpbnb)  # use this instead of load_all() once installed
+devtools::load_all()
+
+# Prints a horizontal separator line between output sections.
+sep <- function() cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
+
+# ---- Knobs ------------------------------------------------------------------
+# n_cores: OpenMP threads the TMB engine uses. This is the ONE parallel knob
+#         the TMB engine reads; max_threads (a cap on it, defaulting to
+#         n_cores) is not set here because requesting n_cores and capping at
+#         n_cores is the same thing.
+n_cores <- 23L
+
+# tmb_method: the TMB engine's estimator. "laplace" here -- the memory-saving
+#             Laplace approximation, as opposed to "sml" (the SML twin's
+#             estimator), which maximizes the simulated likelihood over
+#             Halton draws.
+tmb_method <- "laplace"
+
+# dependence: the inter-equation dependence. "famoye" (Famoye/Sarmanov) here.
+#             A copula() object is also accepted, one of three families:
+#               copula("frank")       -- Frank copula (theta; symmetric)
+#               copula("normal")      -- Gaussian copula (rho in (-1, 1))
+#               copula("kimeldorf")   -- Clayton copula (theta > 0)
+#             (an optional par argument fixes the dependence parameter for
+#             simulation). Note copula("normal") runs multithreaded by default
+#             (since 0.4.6 -- the SIGSEGV the old single-thread cap guarded
+#             against was fixed in 0.4.4), so set disable_parallel_gaussian =
+#             TRUE on the fit to pin a Gaussian run to one thread.
+dependence <- copula("frank")
+
+# boundary_tests: which parameter groups to LR-test against their boundary
+#                 restriction. "all" = c("sd", "dispersion", "dependence") --
+#                 one restricted refit per tested parameter. FALSE or "none"
+#                 skips the LR tests entirely.
+boundary_tests <- FALSE
+
+# max_rows: smoke-test cap. NULL uses every row; set e.g. 400L to rehearse the
+#           whole script cheaply before committing to a full run.
+max_rows <- NULL
+
+data <- read.csv(system.file("extdata", "export_dense_all.csv", package = "rpbnb", mustWork = TRUE))
+if (!is.null(max_rows)) {
+  data <- utils::head(data, max_rows)
+  cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")
+}
+
+# is_cop / dep_label: build the header label from `dependence` -- a copula
+# object reports its family name, a bare string ("famoye") reports itself.
+is_cop <- inherits(dependence, "rpbnb_copula")
+dep_label <- if (is_cop) paste0(dependence$family, " copula") else as.character(dependence)
+cat("=== rpbnb(engine = \"tmb\", method = \"laplace\") on truck all crashes, dense sections (",
+    dep_label, ") ===\n", sep = "")
+cat("Observations   :", nrow(data), "\n")
+cat("Cores asked    :", n_cores, "\n")
+cat("LR test groups :",
+    if (isFALSE(boundary_tests)) "none" else paste(boundary_tests, collapse = ", "),
+    "\n")
+
+# f1, f2: the two marginal equations. Each is a count response regressed on a
+# covariate set; the equations deliberately use DIFFERENT covariate sets
+# (ALL_3 in eq 1, C_DISTR in eq 2), taken from rpbnb_truck_dense.R.
+f1 <- ALL_3   ~ LNAADT_3 + SR40_MI3 + MPD_ME + MPD_STD + IRI_ME + RUT_L + SP50GE + ACCPNTS + SIGNAL1 + NEAR_SIG + AUXLNUM + DP10_ME
+f2 <- C_DISTR ~ LNAADT_3 + SR40_MI3 + MPD_ME + MPD_STD + RUT_9 + ACCPNTS + SIGNAL1 + NEAR_SIG + AUXLNUM + DP01_ME + CS_MINAB
+
+cat("Equation 1     :", deparse(f1), "\n")
+cat("Equation 2     :", deparse(f2), "\n")
+
+# random_1, random_2: the covariates given a random (varying) slope in each
+# equation, i.e. whose coefficient varies across observations from a random
+# distribution. Both equations put the one random slope on SR40_MI3.
+random_1 <- c("SR40_MI3")
+random_2 <- c("SR40_MI3")
+
+# ---- Control object (TMB knobs only) -----------------------------------------
+# One TMB setting is named here -- n_cores, the OpenMP thread count for the
+# Laplace fit; the single parallel knob the TMB engine reads. print_level is
+# left at the TMB default of 1 (it is also the switch that silences the
+# per-refit LR-test messages, none of which fire while boundary_tests is
+# FALSE). Everything else the TMB engine reads -- iterlim, reltol, gradtol,
+# restarts, max_threads, parallel_tape -- is left at its package default and
+# therefore not named here. The SML-only memory knobs (max_workload,
+# tape_chunks) are likewise omitted: under method = "laplace" the tape scales
+# with nrow(data) alone, so there is no draw dimension to chunk and the
+# weighted-workload guard bounds nothing.
+ctrl <- rpbnb_control(
+  n_cores = n_cores
+)
+
+# The banner carries the same engine/method/dependence identity the print
+# below is narrowed to, so the header names the parameters it is about to show
+# (the print itself has no dependence field to echo).
+sep(); cat(sprintf(
+  "CONTROL OBJECT (engine = \"tmb\", method = \"\%s\", dependence = \"\%s\")\n",
+  tmb_method, dep_label)); sep()
+# engine=/method= narrow this print to the settings the TMB + Laplace fit
+# actually reads.
+print(ctrl, engine = "tmb", method = tmb_method)
+
+# ---- Fit ----------------------------------------------------------------
+# stamp / results: a timestamped run label and the directory the fit is saved
+# to.
+stamp <- format(Sys.time(), "\%Y-\%m-\%d-\%H\%M\%S")
+dir.create("results", recursive = TRUE, showWarnings = FALSE)
+
+sep(); cat("FIT: engine = \"tmb\", method = \"laplace\"\n", sep = ""); sep()
+
+# t_fit: wall-clock seconds for the whole fit, INCLUDING the restricted LR
+# refits boundary_tests triggers.
+t_fit <- system.time(
+  fit <- rpbnb(
+    formula_1      = f1,
+    formula_2      = f2,
+    data           = data,
+    engine         = "tmb",
+    method         = tmb_method,
+    random_1       = random_1,
+    random_2       = random_2,
+    dependence     = dependence,
+    standardize    = TRUE,
+    boundary_tests = boundary_tests,
+    control        = ctrl
+  )
+)[["elapsed"]]
+
+cat(sprintf("\nFinished in \%.2f s\%s\n", t_fit,
+            if (isFALSE(boundary_tests) || !length(boundary_tests)) ""
+            else " (includes the restricted LR refits)"))
+# Convergence of the TMB engine's nlminb optimizer (code + message).
+cat(sprintf("Convergence  : nlminb code=\%d, \%s\n",
+            fit$optimizer$convergence, fit$optimizer$message))
+
+fit_path <- file.path("results", paste0("fit_truck_dense_tmb_", stamp, ".rds"))
+saveRDS(fit, fit_path)
+cat("Saved to     :", fit_path, "\n")
+
+# Names any supplied control setting the TMB engine did not read (none are
+# expected here, since ctrl sets only TMB-applicable fields).
+cat("Control settings this engine did not read: ",
+    if (length(fit$control_ignored)) paste(fit$control_ignored, collapse = ", ")
+    else "(none)", "\n", sep = "")
+
+# ---- Summary ------------------------------------------------------------
+# standardize = TRUE back-transforms the coefficient table to original units
+# automatically. With the LR tests attached, the natural-scale block carries
+# LR/df/p for the scale and dispersion rows in place of the NA they would
+# otherwise show, and the dependence row shows its LR test instead of a Wald z.
+sep(); cat("MODEL SUMMARY (original covariate units)\n"); sep()
+summary(fit)
+cat("\n")
+
+# ---- LR tests, standalone -------------------------------------------------
+sep(); cat("LR TESTS\n"); sep()
+if (is.null(fit$boundary_tests)) {
+  cat("Skipped: `boundary_tests` named no group.  Set it at the top of this\n")
+  cat("script -- \"all\", or e.g. c(\"dispersion\", \"dependence\") for the\n")
+  cat("cheap subset -- to run them.\n")
+} else {
+  print(fit$boundary_tests)
+}
+
+sep(); cat("DONE\n"); sep()
+}
 }
 \seealso{
 \code{\link[=fit_rpbnb]{fit_rpbnb()}}, \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}, \code{\link[=rpbnb_control]{rpbnb_control()}},
