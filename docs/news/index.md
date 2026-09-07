@@ -1,7 +1,92 @@
 # Changelog
 
+## rpbnb 0.4.8
+
+- **Fixed: `Error: C stack usage <n> is too close to the limit` on
+  multithreaded TMB fits.** With 0.4.6’s two default flips in force –
+  `parallel_tape = TRUE` and `print_level = 1` for the TMB engine – a
+  fit at more than one thread could abort during tape construction, most
+  often on the Laplace path where `MakeADHessObject2()` builds one
+  sparse-Hessian tape per parallel region. TMB’s `optimizeTape()` prints
+  `Optimizing tape...` through `Rcout` from inside that OpenMP loop, and
+  the `R_CheckStack()` call reached via `Rprintf` measures a *worker*
+  thread’s stack pointer against the *main* thread’s recorded stack
+  base, yielding a nonsense depth (754 GB and 1.3 GB were both observed,
+  differing run to run) that makes R abort. It is a race rather than a
+  threshold, so the odds rose with the thread count: an 8-thread fit
+  reproduced it reliably where 4 and 2 came through.
+  `.configure_tmb_threads()` now zeroes TMB’s `trace.optimize`,
+  `trace.atomic`, and `trace.parallel` for exactly the case that is
+  exposed – concurrent taping at a realized count above one. Tapes are
+  still built concurrently, and the progress `print_level = 1` promises
+  is unaffected, since the `outer mgc:` lines (and `nlminb`’s trace at
+  `print_level = 2`) print from the main thread; only TMB’s C-level tape
+  and atomic construction lines – `Optimizing tape...`,
+  `Constructing atomic ...`, and the `N regions found` /
+  `Using N threads` pair – are dropped.
+  [`rpbnb_tmb_boundary_tests()`](../reference/rpbnb_tmb_boundary_tests.md)
+  configures its restricted refits through the same helper, so its LR
+  refits are covered too. The flags are also now reset on every call
+  rather than only when silencing:
+  [`TMB::config()`](https://rdrr.io/pkg/TMB/man/config.html) is per-DLL
+  session state and `MakeADFun(silent = TRUE)` zeroes every `trace.*`
+  without restoring it, so a `print_level = 0` fit used to silence every
+  later fit in the same session. Workarounds for earlier versions –
+  `print_level = 0L`, or `parallel_tape = FALSE` – remain valid and are
+  no longer needed.
+
+## rpbnb 0.4.7
+
+- Reference-manual documentation for `engine`, `dependence`, and the TMB
+  estimator (`method = "sml"`/`"laplace"`) is substantially expanded –
+  see [`?rpbnb`](../reference/rpbnb.md),
+  [`?fit_rpbnb_tmb`](../reference/fit_rpbnb_tmb.md), and
+  [`?rpbnb_control`](../reference/rpbnb_control.md) (the last gains a
+  new section on how `n_cores`, `max_workload`, and `tape_chunks`
+  interact under SML) – and [`?rpbnb`](../reference/rpbnb.md)’s
+  `@examples` now splices the [`rpbnb()`](../reference/rpbnb.md) call
+  from each standalone script under `inst/` directly from disk, so the
+  reference manual’s examples can never drift from the scripts
+  themselves.
+- The `inst/` example scripts now default to
+  [`library(rpbnb)`](https://rdrr.io/r/base/library.html), with
+  [`devtools::load_all()`](https://devtools.r-lib.org/reference/load_all.html)
+  commented out as the alternative for developing against the source
+  tree (was the reverse). `example_rpbnb_tmb_sml.R` gains a post-fit
+  convergence gate diagnosing why its copula fit does not converge on
+  this specification (a weak-identification saddle point, not an
+  optimizer-tuning problem) instead of surfacing a cryptic refusal from
+  [`rpbnb_tmb_boundary_tests()`](../reference/rpbnb_tmb_boundary_tests.md),
+  and lowers `DRAWS` to 500.
+
 ## rpbnb 0.4.6
 
+- **TMB engine: tapes are built concurrently by default.**
+  `rpbnb_control(parallel_tape = )` now defaults to `TRUE` (was
+  `FALSE`), so each OpenMP thread builds its own TMB tape in parallel
+  instead of sequentially – faster tape construction, at the cost of
+  peak memory that now scales with the realized thread count
+  (objective/gradient evaluation was, and remains, parallel either way).
+  Set `parallel_tape = FALSE` to restore the old sequential-build
+  behaviour. Because concurrent tape construction multiplies the
+  per-tape workload the `max_workload`/ `tape_chunks` guard sizes
+  against, [`rpbnb_control()`](../reference/rpbnb_control.md) now warns
+  when `parallel_tape = TRUE` is combined with `max_workload = Inf`:
+  that pairing disables the guard entirely (on both the auto and pinned
+  `tape_chunks` paths) with nothing left to size the extra memory
+  `parallel_tape` adds.
+- **TMB engine: fits now show progress by default.**
+  `rpbnb_control(print_level = )` resolves to 1 for the TMB engine,
+  where it was 0 (silent) – so a long TMB fit printed nothing at all
+  while it ran, while the `maxLik` fitters had always traced theirs. At
+  1 the fit prints TMB’s own output (an `outer mgc:` line per outer
+  evaluation, plus the one-time tape/atomic construction) but not
+  `nlminb`’s per-iteration parameter vectors, which is enough to show a
+  slow fit is progressing. `print_level = 2` adds the `nlminb` trace
+  (the `maxLik` default is still 2); `print_level = 0` restores the old
+  silence, and still silences the boundary-test progress messages too.
+  Note `nlminb`’s `trace` is a print *interval*, so a value above 2
+  prints the objective *less* often, not more.
 - **TMB engine: Gaussian-copula fits run multithreaded by default.** The
   atomic-sizing SIGSEGV this cap guarded against was fixed in 0.4.4;
   0.4.5 left the cap itself in place while the fix settled.

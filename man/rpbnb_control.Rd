@@ -43,7 +43,14 @@ and 1 under the TMB engine. Under TMB it drives two separate switches --
 \item{\code{0}}{Silent (the pre-0.4.6 TMB default).}
 \item{\code{1}}{TMB's own output only: an \verb{outer mgc:} line per outer
 evaluation, plus the one-time tape/atomic construction on the first
-fit of a session. No \code{nlminb} trace.}
+fit of a session. No \code{nlminb} trace. The C-level trace lines
+(\verb{Optimizing tape... }, \verb{Constructing atomic ...}, and the
+\verb{N regions found} / \verb{Using N threads} pair) are
+suppressed when tapes are built concurrently at more than one thread
+(\code{parallel_tape = TRUE}, the default, with \code{n_cores > 1}), because
+TMB emits them from its OpenMP worker threads, where printing
+aborts the fit; the \verb{outer mgc:} lines print from the main thread
+and are unaffected.}
 \item{\code{2}}{Adds \code{nlminb}'s per-iteration objective and parameter
 vector -- the lowest level that traces every iteration.}
 \item{\verb{>2}}{\code{nlminb}'s \code{trace} is a print \emph{interval}, not a verbosity
@@ -158,7 +165,10 @@ memory workload the \code{max_workload}/\code{tape_chunks} guard sizes
 against by the realized thread count (see \code{max_workload} above);
 pairing \code{parallel_tape = TRUE} with \code{max_workload = Inf}
 disables that guard entirely; \code{rpbnb_control()} warns when it sees
-that combination.}
+that combination. Concurrent construction at a realized count above one
+also suppresses TMB's C-level tape, atomic, and parallel-region trace
+lines at
+\code{print_level >= 1} -- see \code{print_level} below.}
 
 \item{tape_chunks}{TMB engine, SML fits only. Number of draw chunks to
 split \code{draws} into (see \code{draws} at \code{\link[=fit_rpbnb_tmb]{fit_rpbnb_tmb()}}).

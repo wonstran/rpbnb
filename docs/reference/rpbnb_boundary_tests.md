@@ -131,14 +131,14 @@ fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
 #> final  value 1880.543576 
 #> converged
 rpbnb_boundary_tests(fit, sim$data)
-#> initial  value 1947.816465 
+#> initial  value 1947.816464 
 #> iter   2 value 1929.535548
 #> iter   3 value 1909.461118
 #> iter   4 value 1906.913903
 #> iter   5 value 1906.868878
 #> iter   6 value 1906.814172
 #> iter   7 value 1904.951886
-#> iter   8 value 1904.492674
+#> iter   8 value 1904.492675
 #> iter   9 value 1902.485228
 #> iter  10 value 1901.685794
 #> iter  11 value 1901.259202

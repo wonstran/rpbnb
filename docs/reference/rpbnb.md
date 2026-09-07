@@ -46,7 +46,29 @@ rpbnb(
 
 - engine:
 
-  Estimation engine: `"classic"` (default) or `"tmb"`.
+  Which fitter estimates the model. `"classic"` (default) calls
+  [`fit_rpbnb()`](fit_rpbnb.md): a multithreaded (OpenMP) Rcpp
+  simulated-likelihood engine optimized by
+  `maxLik::maxLik(method = "BFGS")` with a numerical gradient. `"tmb"`
+  calls [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md): it builds an
+  automatic-differentiation tape with TMB (Template Model Builder) and
+  optimizes it with
+  [`stats::nlminb`](https://rdrr.io/r/stats/nlminb.html) plus a restart
+  polish – the exact gradient this gives tends to converge faster and
+  more reliably than the classic engine's numerical one, especially
+  under copula dependence. `"tmb"` is also the only engine that accepts
+  `dependence = "independence"`, the Laplace estimator
+  (`method = "laplace"`, passed via `...` – see the "estimator"
+  discussion below and [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)'s `method`
+  argument), and memory-aware draw chunking for large `draws`;
+  `"classic"` is the only one that accepts an
+  [`offset()`](https://rdrr.io/r/stats/offset.html) term in a formula.
+  Both engines share one [`rpbnb_control()`](rpbnb_control.md) object
+  and this function's cross-engine argument checking, but otherwise a
+  fit is exactly what a direct call to the chosen fitter would return –
+  see "Which arguments go with which engine" below for the full
+  compatibility table, and the Return section for how the fit class
+  depends on `engine`.
 
 - random_1, random_2:
 
@@ -66,8 +88,28 @@ rpbnb(
 
 - dependence:
 
-  `"famoye"` (default), a [`copula()`](copula.md) object, or
-  `"independence"` (TMB engine only).
+  How the two margins are linked. `"famoye"` (default) is
+  Famoye/Sarmanov dependence: a single bounded association parameter
+  (`lam`), with an admissible interval frozen at the starting values
+  (see "Which arguments go with which engine" below). A
+  [`copula()`](copula.md) object joins the margins with a discrete
+  copula instead – `copula("frank")`, `copula("normal")` (Gaussian), or
+  `copula("kimeldorf")` (Clayton) – each with its own native dependence
+  parameter, always estimated ([`copula()`](copula.md)'s `par` argument
+  is for the simulators only, not the fitters). Copula evaluation costs
+  more per iteration than Famoye at comparable `draws`/`n`
+  (discrete-copula pmf plus a per-draw NB CDF corner), and under
+  `engine = "tmb"` the dependence family also changes peak memory – see
+  `max_workload` at [`rpbnb_control()`](rpbnb_control.md) for the
+  measured per-family weights. `"independence"` – two separate NB2
+  margins, no association parameter at all – is `engine = "tmb"` only;
+  the fixed-coefficient [`fit_bnb()`](fit_bnb.md) supports it under
+  `engine = "classic"`, but the random-parameter classic engine
+  ([`fit_rpbnb()`](fit_rpbnb.md)) does not. Whichever dependence is
+  chosen, a random coefficient on a 0/1 dummy regressor present in both
+  equations is weakly identified (NB dispersion trades off against the
+  random-coefficient scale); prefer a continuous regressor for a shared
+  random coefficient when one is available.
 
 - poisson_1, poisson_2:
 
@@ -144,6 +186,26 @@ rpbnb(
   `force_parallel_gaussian` are dropped with a warning (not an error)
   under `engine = "classic"`, so a call can switch engines without
   stripping them.
+
+  The estimator, `method` (`engine = "tmb"` only, default `"sml"`),
+  picks how the random-coefficient integral is approximated. `"sml"` is
+  simulated maximum likelihood over `draws` Halton points – the same
+  integral the classic engine approximates, but with an exact
+  automatic-differentiation gradient. `"laplace"` instead uses TMB's
+  Laplace approximation: a sparse-Hessian integration over one latent
+  vector per observation that removes `draws` from the memory cost
+  entirely (tape size then scales with `nrow(data)` alone, not
+  `nrow(data) * draws`), at the cost of requiring at least one random
+  coefficient and restricting it to `"normal"`/`"lognormal"`
+  (`"uniform"` and `"triangular"` error under Laplace). The two
+  estimators agree asymptotically but are different approximations to
+  the same integral – not interchangeable point-for-point on a given
+  dataset, and their [`summary()`](https://rdrr.io/r/base/summary.html)
+  AIC/BIC are not comparable to each other for the same reason. See
+  [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md)'s `method` argument for the full
+  detail, including how boundary tests and
+  [`predict()`](https://rdrr.io/r/stats/predict.html) behave differently
+  under each.
 
 ## Value
 
@@ -333,7 +395,135 @@ admissible by construction); see the decision note in
 d <- read.csv(system.file("extdata", "rwm1984_bnb.csv", package = "rpbnb"))
 fit <- rpbnb(docvis ~ outwork, hospvis ~ outwork, data = d,
              engine = "tmb", random_1 = "outwork", draws = 50)
+#> 1 regions found.
+#> Using 1 threads
+#> Constructing atomic D_lgamma
+#> Constructing atomic qnorm1
+#> outer mgc:  5082.323 
+#> outer mgc:  1601.669 
+#> outer mgc:  672.312 
+#> outer mgc:  394.9403 
+#> outer mgc:  103.2932 
+#> outer mgc:  215.7318 
+#> outer mgc:  119.9019 
+#> outer mgc:  151.9407 
+#> outer mgc:  121.0486 
+#> outer mgc:  162.7661 
+#> outer mgc:  127.3243 
+#> outer mgc:  129.9146 
+#> outer mgc:  43.06334 
+#> outer mgc:  24.65552 
+#> outer mgc:  11.47351 
+#> outer mgc:  5.534918 
+#> outer mgc:  9.610387 
+#> outer mgc:  6.606511 
+#> outer mgc:  6.773489 
+#> outer mgc:  20.37665 
+#> outer mgc:  6.243225 
+#> outer mgc:  15.24498 
+#> outer mgc:  3.535041 
+#> outer mgc:  5.760262 
+#> outer mgc:  3.4489 
+#> outer mgc:  10.49207 
+#> outer mgc:  5.301484 
+#> outer mgc:  9.751027 
+#> outer mgc:  6.532209 
+#> outer mgc:  11.55587 
+#> outer mgc:  5.278562 
+#> outer mgc:  3.36641 
+#> outer mgc:  4.887421 
+#> outer mgc:  3.379547 
+#> outer mgc:  4.317286 
+#> outer mgc:  0.413262 
+#> outer mgc:  0.3594926 
+#> outer mgc:  0.2633344 
+#> outer mgc:  0.1302188 
+#> outer mgc:  0.05624899 
+#> outer mgc:  0.005671993 
+#> outer mgc:  0.005671993 
+#> outer mgc:  0.005671993 
+#> outer mgc:  1.420284 
+#> outer mgc:  1.428384 
+#> outer mgc:  0.5136381 
+#> outer mgc:  0.5190849 
+#> outer mgc:  0.2185296 
+#> outer mgc:  0.2147639 
+#> outer mgc:  0.09360738 
+#> outer mgc:  0.09163845 
+#> outer mgc:  0.03981819 
+#> outer mgc:  0.04490854 
+#> outer mgc:  1.046974 
+#> outer mgc:  1.05846 
+#> outer mgc:  0.0868185 
+#> outer mgc:  0.08828213 
+#> outer mgc:  0.006296026 
+#> outer mgc:  0.005047485 
 #> Warning: The fitted Famoye lambda (1.70507) lies outside the admissible interval recomputed at the fitted parameters [-1.06667, 1.06667]. The bounds passed to the likelihood were frozen at the starting values ([-1.73201, 1.73201]), so the optimizer was free to leave the valid region: the joint pmf is negative somewhere in the count tails and this fit should not be interpreted. Refit from starting values closer to the optimum (so the frozen box is tighter), or use a different dependence structure. See fit$lambda_admissible and fit$lambda_bounds_at_optimum.
 #> Warning: Dependence estimate(s) lam are pinned at a boundary of the Famoye bounds, which are frozen at the starting values. The estimates are constrained by the implementation rather than identified by the data, so their standard errors are reported as NA. Refit from different starting values, or use a dependence family whose range covers the association in these data. rpbnb_tmb_dependence_profile() reports a likelihood-based interval in place of the NA, but for Famoye that interval is mapped through this same frozen box, so widen the box first rather than reading it as a rescue.
 # }
+
+# The rpbnb() call from each standalone example under inst/ (see
+# inst/example_*.R for the full script: data, formulas, diagnostics).
+# Illustration only -- not run by R CMD check.
+if (FALSE) { # \dontrun{
+# example_rpbnb_tmb_famoye.R (sml, Famoye/Sarmanov)
+fit_famoye <- rpbnb(f1, f2, data = d, engine = "tmb", method = "sml",
+                    random_1 = "kids", random_2 = "kids",
+                    draws = DRAWS,
+                    seed = SEED,
+                    dependence = "famoye",
+                    control = ctrl,
+                    boundary_tests = LR_TEST)
+
+# example_rpbnb_tmb_sml.R (sml, copula)
+fit_copula <- rpbnb(f1, f2, data = d, engine = "tmb", method = "sml",
+                    random_1 = "kids",
+                    random_2 = "kids",
+                    dependence = copula(COPULA_FAMILY),
+                    draws = DRAWS,
+                    seed = SEED,
+                    control = ctrl,
+                    boundary_tests = LR_TEST)
+
+# example_rpbnb_tmb_laplace.R (laplace, copula)
+fit_copula <- rpbnb(f1, f2, data = d, engine = "tmb", method = "laplace",
+                    random_1 = "kids",
+                    random_2 = "kids",
+                    dependence = copula(COPULA_FAMILY),
+                    control = ctrl,
+                    boundary_tests = LR_TEST)
+
+# example_rpbnb_dense_tmb_sml.R (sml, dense truck-crash data)
+fit <- rpbnb(
+  formula_1      = f1,
+  formula_2      = f2,
+  data           = data,
+  engine         = "tmb",
+  method         = tmb_method,
+  boundary_draws = boundary_draws,
+  random_1       = random_1,
+  random_2       = random_2,
+  dependence     = dependence,
+  seed           = seed,
+  draws          = draws,
+  standardize    = TRUE,
+  boundary_tests = boundary_tests,
+  control        = ctrl
+)
+
+# example_rpbnb_dense_tmb_laplace.R (laplace, dense truck-crash data)
+fit <- rpbnb(
+  formula_1      = f1,
+  formula_2      = f2,
+  data           = data,
+  engine         = "tmb",
+  method         = tmb_method,
+  random_1       = random_1,
+  random_2       = random_2,
+  dependence     = dependence,
+  standardize    = TRUE,
+  boundary_tests = boundary_tests,
+  control        = ctrl
+)
+} # }
 ```

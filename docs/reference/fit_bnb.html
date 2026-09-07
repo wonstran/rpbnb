@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,8 @@
 <span>  start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  control <span class="op">=</span> <span class="fu"><a href="rpbnb_control.html">rpbnb_control</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  poisson_1 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  poisson_2 <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  poisson_2 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  boundary_tests <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -105,6 +106,16 @@ Famoye dependence constant is <code>exp(-d*mu)</code> (the <code>m -&gt; 0</code
 at a tiny pinned dispersion. The famoye and independence paths are both
 exact (the independence path fits a Poisson GLM margin). Not supported with
 a <code><a href="copula.html">copula()</a></code> dependence.</p></dd>
+
+
+<dt id="arg-boundary-tests">boundary_tests<a class="anchor" aria-label="anchor" href="#arg-boundary-tests"></a></dt>
+<dd><p>Run <code><a href="bnb_boundary_tests.html">bnb_boundary_tests()</a></code> on the converged fit and
+attach the result as <code>fit$boundary_tests</code>, so <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>/<code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> fill
+in the <code>m1</code>/<code>m2</code> LR/df/p columns instead of leaving them blank (see
+<code><a href="bnb_boundary_tests.html">bnb_boundary_tests()</a></code> for what the test is and why a Wald <code>z</code>/<code>p</code> is not
+valid there). Default <code>FALSE</code>: this costs up to two extra refits (one per
+free margin), so it is opt-in rather than automatic. Not supported with a
+<code><a href="copula.html">copula()</a></code> dependence, for the same reason <code>poisson_1</code>/<code>poisson_2</code> are not.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -243,6 +254,89 @@ a <code><a href="copula.html">copula()</a></code> dependence.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   LR statistic = 15233.4826  on 1 df   p = 0.0000  ***</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   (boundary-corrected 50:50 chi-square mixture)</span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Same test for both margins, run automatically and attached to the fit</span></span></span>
+<span class="r-in"><span><span class="va">fit2</span> <span class="op">&lt;-</span> <span class="fu">fit_bnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
+<span class="r-in"><span>                dependence <span class="op">=</span> <span class="st">"famoye"</span>, boundary_tests <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 16577.658491 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 15142.325204</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 14710.503331</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 14333.907717</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 14162.447652</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 14076.950085</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 13623.894678</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 13436.688689</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 13264.517777</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 13214.495326</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 13075.322014</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 12780.993726</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 12491.582897</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  14 value 11921.168011</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  15 value 11753.944382</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  16 value 11377.499493</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  17 value 10317.762362</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  18 value 10251.001528</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  19 value 10047.658983</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  20 value 9921.406917</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  21 value 9883.025635</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  22 value 9841.589759</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  23 value 9777.676419</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  24 value 9740.193415</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  25 value 9671.855990</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  26 value 9661.429609</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  27 value 9660.718514</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  28 value 9660.625970</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  29 value 9660.618441</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618315</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618304</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  30 value 9660.618304</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9660.618304 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 9711.685648 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 9688.919104</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 9688.919104 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 17292.432268 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 17291.726970</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 17288.703701</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 17288.629354</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 17286.688728</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 17283.759374</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 17282.069177</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 17279.858703</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 17278.021219</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 17277.695292</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 17277.402397</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 17277.364008</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 17277.359683</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 17277.359596</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter  13 value 17277.359596</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 17277.359596 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> initial  value 10024.934408 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   2 value 10024.653786</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   3 value 10024.643436</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   4 value 10024.638917</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   5 value 10024.630360</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 10024.615995</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 10024.485963</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 10024.477983</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 10024.463312</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 10024.463307</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 10024.463307</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> final  value 10024.463307 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> converged</span>
+<span class="r-in"><span><span class="va">fit2</span><span class="op">$</span><span class="va">boundary_tests</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> NB2 dispersion LR tests (boundary-corrected, 50:50 chi-square mixture)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> H0: m = 0 (margin is Poisson)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  Parameter         LR df p.value Signif</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         m1 15233.4826  1  0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         m2   727.6900  1  0.0000    ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Signif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span>
+<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Gaussian copula dependence instead of Famoye/Sarmanov</span></span></span>
 <span class="r-in"><span><span class="va">fit_cop</span> <span class="op">&lt;-</span> <span class="fu">fit_bnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
 <span class="r-in"><span>                   dependence <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="st">"normal"</span><span class="op">)</span><span class="op">)</span></span></span>
@@ -254,7 +348,7 @@ a <code><a href="copula.html">copula()</a></code> dependence.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter   6 value 9671.936448</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter   7 value 9669.352861</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter   8 value 9662.086943</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 9638.110220</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iter   9 value 9638.110221</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter  10 value 9633.973407</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter  11 value 9633.861811</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iter  12 value 9633.859385</span>

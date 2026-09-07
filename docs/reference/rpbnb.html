@@ -15,7 +15,7 @@ to the fit itself and returns exactly what the chosen fitter returns."></head><b
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,7 +87,24 @@ to the fit itself and returns exactly what the chosen fitter returns.</p>
 
 
 <dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
-<dd><p>Estimation engine: <code>"classic"</code> (default) or <code>"tmb"</code>.</p></dd>
+<dd><p>Which fitter estimates the model. <code>"classic"</code> (default) calls
+<code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>: a multithreaded (OpenMP) Rcpp simulated-likelihood engine
+optimized by <code>maxLik::maxLik(method = "BFGS")</code> with a numerical gradient.
+<code>"tmb"</code> calls <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>: it builds an automatic-differentiation
+tape with TMB (Template Model Builder) and optimizes it with
+<code><a href="https://rdrr.io/r/stats/nlminb.html" class="external-link">stats::nlminb</a></code> plus a restart polish – the exact gradient this gives
+tends to converge faster and more reliably than the classic engine's
+numerical one, especially under copula dependence. <code>"tmb"</code> is also the
+only engine that accepts <code>dependence = "independence"</code>, the Laplace
+estimator (<code>method = "laplace"</code>, passed via <code>...</code> – see the "estimator"
+discussion below and <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>'s <code>method</code> argument), and
+memory-aware draw chunking for large <code>draws</code>; <code>"classic"</code> is the only one
+that accepts an <code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> term in a formula. Both engines share one
+<code><a href="rpbnb_control.html">rpbnb_control()</a></code> object and this function's cross-engine argument
+checking, but otherwise a fit is exactly what a direct call to the chosen
+fitter would return – see "Which arguments go with which engine" below
+for the full compatibility table, and the Return section for how the fit
+class depends on <code>engine</code>.</p></dd>
 
 
 <dt id="arg-random-random-">random_1, random_2<a class="anchor" aria-label="anchor" href="#arg-random-random-"></a></dt>
@@ -107,8 +124,26 @@ to the fit itself and returns exactly what the chosen fitter returns.</p>
 
 
 <dt id="arg-dependence">dependence<a class="anchor" aria-label="anchor" href="#arg-dependence"></a></dt>
-<dd><p><code>"famoye"</code> (default), a <code><a href="copula.html">copula()</a></code> object, or
-<code>"independence"</code> (TMB engine only).</p></dd>
+<dd><p>How the two margins are linked. <code>"famoye"</code> (default) is
+Famoye/Sarmanov dependence: a single bounded association parameter
+(<code>lam</code>), with an admissible interval frozen at the starting values (see
+"Which arguments go with which engine" below). A <code><a href="copula.html">copula()</a></code> object joins
+the margins with a discrete copula instead – <code>copula("frank")</code>,
+<code>copula("normal")</code> (Gaussian), or <code>copula("kimeldorf")</code> (Clayton) – each
+with its own native dependence parameter, always estimated (<code><a href="copula.html">copula()</a></code>'s
+<code>par</code> argument is for the simulators only, not the fitters). Copula
+evaluation costs more per iteration than Famoye at comparable
+<code>draws</code>/<code>n</code> (discrete-copula pmf plus a per-draw NB CDF corner), and
+under <code>engine = "tmb"</code> the dependence family also changes peak memory –
+see <code>max_workload</code> at <code><a href="rpbnb_control.html">rpbnb_control()</a></code> for the measured per-family
+weights. <code>"independence"</code> – two separate NB2 margins, no association
+parameter at all – is <code>engine = "tmb"</code> only; the fixed-coefficient
+<code><a href="fit_bnb.html">fit_bnb()</a></code> supports it under <code>engine = "classic"</code>, but the
+random-parameter classic engine (<code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>) does not. Whichever
+dependence is chosen, a random coefficient on a 0/1 dummy regressor
+present in both equations is weakly identified (NB dispersion trades off
+against the random-coefficient scale); prefer a continuous regressor for
+a shared random coefficient when one is available.</p></dd>
 
 
 <dt id="arg-poisson-poisson-">poisson_1, poisson_2<a class="anchor" aria-label="anchor" href="#arg-poisson-poisson-"></a></dt>
@@ -173,7 +208,23 @@ engine, or an unrecognised name, is an error. Exception: the TMB tuning
 knobs <code>method</code>, <code>disable_parallel_gaussian</code>, and the deprecated
 <code>force_parallel_gaussian</code> are dropped with a warning (not an error)
 under <code>engine = "classic"</code>, so a call can switch engines without
-stripping them.</p></dd>
+stripping them.</p>
+<p>The estimator, <code>method</code> (<code>engine = "tmb"</code> only, default <code>"sml"</code>), picks
+how the random-coefficient integral is approximated. <code>"sml"</code> is
+simulated maximum likelihood over <code>draws</code> Halton points – the same
+integral the classic engine approximates, but with an exact
+automatic-differentiation gradient. <code>"laplace"</code> instead uses TMB's
+Laplace approximation: a sparse-Hessian integration over one latent
+vector per observation that removes <code>draws</code> from the memory cost
+entirely (tape size then scales with <code>nrow(data)</code> alone, not
+<code>nrow(data) * draws</code>), at the cost of requiring at least one random
+coefficient and restricting it to <code>"normal"</code>/<code>"lognormal"</code> (<code>"uniform"</code>
+and <code>"triangular"</code> error under Laplace). The two estimators agree
+asymptotically but are different approximations to the same integral –
+not interchangeable point-for-point on a given dataset, and their
+<code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> AIC/BIC are not comparable to each other for the same reason.
+See <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code>'s <code>method</code> argument for the full detail, including
+how boundary tests and <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> behave differently under each.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -313,9 +364,137 @@ admissible by construction); see the decision note in <code>R/bnb_likelihood.R</
 <span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"rwm1984_bnb.csv"</span>, package <span class="op">=</span> <span class="st">"rpbnb"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span><span class="va">docvis</span> <span class="op">~</span> <span class="va">outwork</span>, <span class="va">hospvis</span> <span class="op">~</span> <span class="va">outwork</span>, data <span class="op">=</span> <span class="va">d</span>,</span></span>
 <span class="r-in"><span>             engine <span class="op">=</span> <span class="st">"tmb"</span>, random_1 <span class="op">=</span> <span class="st">"outwork"</span>, draws <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 regions found.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Using 1 threads</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Constructing atomic D_lgamma</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Constructing atomic qnorm1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  5082.323 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1601.669 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  672.312 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  394.9403 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  103.2932 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  215.7318 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  119.9019 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  151.9407 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  121.0486 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  162.7661 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  127.3243 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  129.9146 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  43.06334 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  24.65552 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  11.47351 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  5.534918 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  9.610387 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  6.606511 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  6.773489 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  20.37665 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  6.243225 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  15.24498 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  3.535041 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  5.760262 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  3.4489 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  10.49207 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  5.301484 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  9.751027 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  6.532209 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  11.55587 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  5.278562 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  3.36641 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  4.887421 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  3.379547 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  4.317286 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.413262 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.3594926 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2633344 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.1302188 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.05624899 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.005671993 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.005671993 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.005671993 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.420284 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.428384 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5136381 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.5190849 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2185296 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.2147639 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09360738 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.09163845 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.03981819 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.04490854 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.046974 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  1.05846 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.0868185 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.08828213 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.006296026 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> outer mgc:  0.005047485 </span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>The fitted Famoye lambda (1.70507) lies outside the admissible interval recomputed at the fitted parameters [-1.06667, 1.06667]. The bounds passed to the likelihood were frozen at the starting values ([-1.73201, 1.73201]), so the optimizer was free to leave the valid region: the joint pmf is negative somewhere in the count tails and this fit should not be interpreted. Refit from starting values closer to the optimum (so the frozen box is tighter), or use a different dependence structure. See fit$lambda_admissible and fit$lambda_bounds_at_optimum.</span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Dependence estimate(s) lam are pinned at a boundary of the Famoye bounds, which are frozen at the starting values. The estimates are constrained by the implementation rather than identified by the data, so their standard errors are reported as NA. Refit from different starting values, or use a dependence family whose range covers the association in these data. rpbnb_tmb_dependence_profile() reports a likelihood-based interval in place of the NA, but for Famoye that interval is mapped through this same frozen box, so widen the box first rather than reading it as a rescue.</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># The rpbnb() call from each standalone example under inst/ (see</span></span></span>
+<span class="r-in"><span><span class="co"># inst/example_*.R for the full script: data, formulas, diagnostics).</span></span></span>
+<span class="r-in"><span><span class="co"># Illustration only -- not run by R CMD check.</span></span></span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+<span class="r-in"><span><span class="co"># example_rpbnb_tmb_famoye.R (sml, Famoye/Sarmanov)</span></span></span>
+<span class="r-in"><span><span class="va">fit_famoye</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span><span class="va">f1</span>, <span class="va">f2</span>, data <span class="op">=</span> <span class="va">d</span>, engine <span class="op">=</span> <span class="st">"tmb"</span>, method <span class="op">=</span> <span class="st">"sml"</span>,</span></span>
+<span class="r-in"><span>                    random_1 <span class="op">=</span> <span class="st">"kids"</span>, random_2 <span class="op">=</span> <span class="st">"kids"</span>,</span></span>
+<span class="r-in"><span>                    draws <span class="op">=</span> <span class="va">DRAWS</span>,</span></span>
+<span class="r-in"><span>                    seed <span class="op">=</span> <span class="va">SEED</span>,</span></span>
+<span class="r-in"><span>                    dependence <span class="op">=</span> <span class="st">"famoye"</span>,</span></span>
+<span class="r-in"><span>                    control <span class="op">=</span> <span class="va">ctrl</span>,</span></span>
+<span class="r-in"><span>                    boundary_tests <span class="op">=</span> <span class="va">LR_TEST</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># example_rpbnb_tmb_sml.R (sml, copula)</span></span></span>
+<span class="r-in"><span><span class="va">fit_copula</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span><span class="va">f1</span>, <span class="va">f2</span>, data <span class="op">=</span> <span class="va">d</span>, engine <span class="op">=</span> <span class="st">"tmb"</span>, method <span class="op">=</span> <span class="st">"sml"</span>,</span></span>
+<span class="r-in"><span>                    random_1 <span class="op">=</span> <span class="st">"kids"</span>,</span></span>
+<span class="r-in"><span>                    random_2 <span class="op">=</span> <span class="st">"kids"</span>,</span></span>
+<span class="r-in"><span>                    dependence <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="va">COPULA_FAMILY</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                    draws <span class="op">=</span> <span class="va">DRAWS</span>,</span></span>
+<span class="r-in"><span>                    seed <span class="op">=</span> <span class="va">SEED</span>,</span></span>
+<span class="r-in"><span>                    control <span class="op">=</span> <span class="va">ctrl</span>,</span></span>
+<span class="r-in"><span>                    boundary_tests <span class="op">=</span> <span class="va">LR_TEST</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># example_rpbnb_tmb_laplace.R (laplace, copula)</span></span></span>
+<span class="r-in"><span><span class="va">fit_copula</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span><span class="va">f1</span>, <span class="va">f2</span>, data <span class="op">=</span> <span class="va">d</span>, engine <span class="op">=</span> <span class="st">"tmb"</span>, method <span class="op">=</span> <span class="st">"laplace"</span>,</span></span>
+<span class="r-in"><span>                    random_1 <span class="op">=</span> <span class="st">"kids"</span>,</span></span>
+<span class="r-in"><span>                    random_2 <span class="op">=</span> <span class="st">"kids"</span>,</span></span>
+<span class="r-in"><span>                    dependence <span class="op">=</span> <span class="fu"><a href="copula.html">copula</a></span><span class="op">(</span><span class="va">COPULA_FAMILY</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                    control <span class="op">=</span> <span class="va">ctrl</span>,</span></span>
+<span class="r-in"><span>                    boundary_tests <span class="op">=</span> <span class="va">LR_TEST</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># example_rpbnb_dense_tmb_sml.R (sml, dense truck-crash data)</span></span></span>
+<span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  formula_1      <span class="op">=</span> <span class="va">f1</span>,</span></span>
+<span class="r-in"><span>  formula_2      <span class="op">=</span> <span class="va">f2</span>,</span></span>
+<span class="r-in"><span>  data           <span class="op">=</span> <span class="va">data</span>,</span></span>
+<span class="r-in"><span>  engine         <span class="op">=</span> <span class="st">"tmb"</span>,</span></span>
+<span class="r-in"><span>  method         <span class="op">=</span> <span class="va">tmb_method</span>,</span></span>
+<span class="r-in"><span>  boundary_draws <span class="op">=</span> <span class="va">boundary_draws</span>,</span></span>
+<span class="r-in"><span>  random_1       <span class="op">=</span> <span class="va">random_1</span>,</span></span>
+<span class="r-in"><span>  random_2       <span class="op">=</span> <span class="va">random_2</span>,</span></span>
+<span class="r-in"><span>  dependence     <span class="op">=</span> <span class="va">dependence</span>,</span></span>
+<span class="r-in"><span>  seed           <span class="op">=</span> <span class="va">seed</span>,</span></span>
+<span class="r-in"><span>  draws          <span class="op">=</span> <span class="va">draws</span>,</span></span>
+<span class="r-in"><span>  standardize    <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>  boundary_tests <span class="op">=</span> <span class="va">boundary_tests</span>,</span></span>
+<span class="r-in"><span>  control        <span class="op">=</span> <span class="va">ctrl</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># example_rpbnb_dense_tmb_laplace.R (laplace, dense truck-crash data)</span></span></span>
+<span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu">rpbnb</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  formula_1      <span class="op">=</span> <span class="va">f1</span>,</span></span>
+<span class="r-in"><span>  formula_2      <span class="op">=</span> <span class="va">f2</span>,</span></span>
+<span class="r-in"><span>  data           <span class="op">=</span> <span class="va">data</span>,</span></span>
+<span class="r-in"><span>  engine         <span class="op">=</span> <span class="st">"tmb"</span>,</span></span>
+<span class="r-in"><span>  method         <span class="op">=</span> <span class="va">tmb_method</span>,</span></span>
+<span class="r-in"><span>  random_1       <span class="op">=</span> <span class="va">random_1</span>,</span></span>
+<span class="r-in"><span>  random_2       <span class="op">=</span> <span class="va">random_2</span>,</span></span>
+<span class="r-in"><span>  dependence     <span class="op">=</span> <span class="va">dependence</span>,</span></span>
+<span class="r-in"><span>  standardize    <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>  boundary_tests <span class="op">=</span> <span class="va">boundary_tests</span>,</span></span>
+<span class="r-in"><span>  control        <span class="op">=</span> <span class="va">ctrl</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -51,6 +51,8 @@ parameter space, where an ordinary Wald z/p does not apply.
 
 - [`lr_test()`](lr_test.md) : Likelihood-ratio test between two nested
   model fits
+- [`bnb_boundary_tests()`](bnb_boundary_tests.md) : Boundary-corrected
+  LR tests for the NB2 dispersions of a fit_bnb() fit
 - [`rpbnb_boundary_tests()`](rpbnb_boundary_tests.md) :
   Boundary-corrected LR tests for all boundary parameters of an
   rpbnb_fit

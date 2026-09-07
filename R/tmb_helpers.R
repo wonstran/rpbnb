@@ -62,8 +62,41 @@
   policy_capped <- min(requested, as.integer(max_threads))
   realized <- min(policy_capped, supported)
   TMB::openmp(n = realized, DLL = DLL)
+
+  # Concurrent tape construction at more than one thread must not print from
+  # TMB's C++ layer. optimizeTape() writes "Optimizing tape... " through
+  # Rcout from inside the OpenMP loop in MakeADHessObject2() (TMB's
+  # tmb_core.hpp) -- one tape per parallel region, so the loop is live only
+  # when config.tape.parallel is set AND there is more than one region.
+  # Rprintf -> Rvprintf -> R_CheckUserInterrupt -> R_CheckStack, evaluated on
+  # a worker thread, compares that thread's stack pointer against the MAIN
+  # thread's recorded stack base and gets a nonsense depth (observed: 754 GB,
+  # 1.3 GB -- different every run), so R aborts the fit with
+  #   Error: C stack usage <n> is too close to the limit
+  # It is a race, not a threshold: more threads means more regions means more
+  # worker-thread prints, so the odds scale with the realized count rather
+  # than switching on at some particular one.
+  #
+  # Zeroing TMB's trace.* flags for exactly that case keeps concurrent taping
+  # (the point of parallel_tape = TRUE) and costs only TMB's C-level tape and
+  # atomic construction lines. The R-side progress print_level = 1 promises --
+  # the per-outer-evaluation `outer mgc:` lines, and nlminb's trace at 2 --
+  # comes from the main thread and is untouched.
+  #
+  # The flags are set on every call, not only when silencing, because
+  # TMB::config() is per-DLL SESSION state: MakeADFun(silent = TRUE) zeroes
+  # every trace.* via beSilent() and never restores it, so without an
+  # explicit reset a print_level = 0 fit would silently suppress the trace of
+  # every later fit in the same session. Restoring to 1 here cannot override
+  # a caller's own request for silence -- this runs before MakeADFun(), whose
+  # beSilent() has the last word.
+  silence_tape_trace <- isTRUE(parallel_tape) && realized > 1L
+  trace_flag <- if (silence_tape_trace) 0L else 1L
   TMB::config(
     tape.parallel = as.integer(isTRUE(parallel_tape)),
+    trace.optimize = trace_flag,
+    trace.atomic = trace_flag,
+    trace.parallel = trace_flag,
     DLL = DLL
   )
 

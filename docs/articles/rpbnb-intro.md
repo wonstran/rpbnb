@@ -154,7 +154,7 @@ fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #> iter   6 value 9671.936448
 #> iter   7 value 9669.352861
 #> iter   8 value 9662.086943
-#> iter   9 value 9638.110220
+#> iter   9 value 9638.110221
 #> iter  10 value 9633.973407
 #> iter  11 value 9633.861811
 #> iter  12 value 9633.859385
@@ -315,34 +315,34 @@ rp_cop <- fit_rpbnb(docvis ~ outwork + age, hospvis ~ outwork, data = d_small,
 #> iter   2 value 2137.601131
 #> iter   3 value 1821.190915
 #> iter   4 value 1785.054267
-#> iter   5 value 1566.372762
-#> iter   6 value 1548.103056
-#> iter   7 value 1535.358009
-#> iter   8 value 1519.348827
-#> iter   9 value 1494.945886
-#> iter  10 value 1477.367335
-#> iter  11 value 1472.280336
-#> iter  12 value 1468.223569
-#> iter  13 value 1459.606468
-#> iter  14 value 1455.420748
-#> iter  15 value 1449.228918
-#> iter  16 value 1445.636157
-#> iter  17 value 1442.170692
-#> iter  18 value 1436.951464
-#> iter  19 value 1434.359101
-#> iter  20 value 1430.440516
-#> iter  21 value 1430.055460
-#> iter  22 value 1427.697754
-#> iter  23 value 1426.942690
-#> iter  24 value 1426.855621
-#> iter  25 value 1426.594423
-#> iter  26 value 1426.372298
-#> iter  27 value 1426.191034
-#> iter  28 value 1426.058654
-#> iter  29 value 1426.052541
-#> iter  30 value 1426.030318
-#> iter  31 value 1426.027231
-#> iter  32 value 1426.016001
+#> iter   5 value 1566.372766
+#> iter   6 value 1548.103028
+#> iter   7 value 1535.357982
+#> iter   8 value 1519.348709
+#> iter   9 value 1494.945757
+#> iter  10 value 1477.367243
+#> iter  11 value 1472.280280
+#> iter  12 value 1468.223527
+#> iter  13 value 1459.605855
+#> iter  14 value 1455.421129
+#> iter  15 value 1449.228892
+#> iter  16 value 1445.636117
+#> iter  17 value 1442.170610
+#> iter  18 value 1436.950851
+#> iter  19 value 1434.353218
+#> iter  20 value 1430.443076
+#> iter  21 value 1430.058099
+#> iter  22 value 1427.697811
+#> iter  23 value 1426.942700
+#> iter  24 value 1426.855781
+#> iter  25 value 1426.594711
+#> iter  26 value 1426.372304
+#> iter  27 value 1426.191108
+#> iter  28 value 1426.058564
+#> iter  29 value 1426.052526
+#> iter  30 value 1426.030212
+#> iter  31 value 1426.027173
+#> iter  32 value 1426.016000
 #> iter  33 value 1426.015893
 #> iter  33 value 1426.015893
 #> iter  33 value 1426.015893
@@ -350,9 +350,9 @@ rp_cop <- fit_rpbnb(docvis ~ outwork + age, hospvis ~ outwork, data = d_small,
 #> converged
 coef(rp_cop)
 #> b1:(Intercept)     b1:outwork         b1:age b2:(Intercept)     b2:outwork 
-#>    -0.46790857     0.25965926     0.03033793    -2.57797458     0.59294841 
+#>    -0.46790854     0.25965926     0.03033793    -2.57797459     0.59294843 
 #>    log_sd1:age         log_m1         log_m2        z_theta 
-#>    -4.56614275     0.76720525     2.57475911     0.33641336
+#>    -4.56614271     0.76720524     2.57475912     0.33641337
 tanh(coef(rp_cop)[["z_theta"]])  # estimated copula rho
 #> [1] 0.3242716
 ```

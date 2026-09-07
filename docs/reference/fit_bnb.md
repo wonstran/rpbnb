@@ -13,7 +13,8 @@ fit_bnb(
   start = NULL,
   control = rpbnb_control(),
   poisson_1 = FALSE,
-  poisson_2 = FALSE
+  poisson_2 = FALSE,
+  boundary_tests = FALSE
 )
 ```
 
@@ -75,6 +76,18 @@ fit_bnb(
   pinned dispersion. The famoye and independence paths are both exact
   (the independence path fits a Poisson GLM margin). Not supported with
   a [`copula()`](copula.md) dependence.
+
+- boundary_tests:
+
+  Run [`bnb_boundary_tests()`](bnb_boundary_tests.md) on the converged
+  fit and attach the result as `fit$boundary_tests`, so
+  [`print()`](https://rdrr.io/r/base/print.html)/[`summary()`](https://rdrr.io/r/base/summary.html)
+  fill in the `m1`/`m2` LR/df/p columns instead of leaving them blank
+  (see [`bnb_boundary_tests()`](bnb_boundary_tests.md) for what the test
+  is and why a Wald `z`/`p` is not valid there). Default `FALSE`: this
+  costs up to two extra refits (one per free margin), so it is opt-in
+  rather than automatic. Not supported with a [`copula()`](copula.md)
+  dependence, for the same reason `poisson_1`/`poisson_2` are not.
 
 ## Value
 
@@ -212,6 +225,89 @@ lr_test(fit_p1, fit, boundary = TRUE)
 #>   LR statistic = 15233.4826  on 1 df   p = 0.0000  ***
 #>   (boundary-corrected 50:50 chi-square mixture)
 
+# Same test for both margins, run automatically and attached to the fit
+fit2 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
+                dependence = "famoye", boundary_tests = TRUE)
+#> initial  value 16577.658491 
+#> iter   2 value 15142.325204
+#> iter   3 value 14710.503331
+#> iter   4 value 14333.907717
+#> iter   5 value 14162.447652
+#> iter   6 value 14076.950085
+#> iter   7 value 13623.894678
+#> iter   8 value 13436.688689
+#> iter   9 value 13264.517777
+#> iter  10 value 13214.495326
+#> iter  11 value 13075.322014
+#> iter  12 value 12780.993726
+#> iter  13 value 12491.582897
+#> iter  14 value 11921.168011
+#> iter  15 value 11753.944382
+#> iter  16 value 11377.499493
+#> iter  17 value 10317.762362
+#> iter  18 value 10251.001528
+#> iter  19 value 10047.658983
+#> iter  20 value 9921.406917
+#> iter  21 value 9883.025635
+#> iter  22 value 9841.589759
+#> iter  23 value 9777.676419
+#> iter  24 value 9740.193415
+#> iter  25 value 9671.855990
+#> iter  26 value 9661.429609
+#> iter  27 value 9660.718514
+#> iter  28 value 9660.625970
+#> iter  29 value 9660.618441
+#> iter  30 value 9660.618315
+#> iter  30 value 9660.618304
+#> iter  30 value 9660.618304
+#> final  value 9660.618304 
+#> converged
+#> initial  value 9711.685648 
+#> iter   2 value 9688.919104
+#> iter   2 value 9688.919104
+#> iter   2 value 9688.919104
+#> final  value 9688.919104 
+#> converged
+#> initial  value 17292.432268 
+#> iter   2 value 17291.726970
+#> iter   3 value 17288.703701
+#> iter   4 value 17288.629354
+#> iter   5 value 17286.688728
+#> iter   6 value 17283.759374
+#> iter   7 value 17282.069177
+#> iter   8 value 17279.858703
+#> iter   9 value 17278.021219
+#> iter  10 value 17277.695292
+#> iter  11 value 17277.402397
+#> iter  12 value 17277.364008
+#> iter  13 value 17277.359683
+#> iter  13 value 17277.359596
+#> iter  13 value 17277.359596
+#> final  value 17277.359596 
+#> converged
+#> initial  value 10024.934408 
+#> iter   2 value 10024.653786
+#> iter   3 value 10024.643436
+#> iter   4 value 10024.638917
+#> iter   5 value 10024.630360
+#> iter   6 value 10024.615995
+#> iter   7 value 10024.485963
+#> iter   8 value 10024.477983
+#> iter   9 value 10024.463312
+#> iter   9 value 10024.463307
+#> iter   9 value 10024.463307
+#> final  value 10024.463307 
+#> converged
+fit2$boundary_tests
+#> NB2 dispersion LR tests (boundary-corrected, 50:50 chi-square mixture)
+#> H0: m = 0 (margin is Poisson)
+#> 
+#>  Parameter         LR df p.value Signif
+#>         m1 15233.4826  1  0.0000    ***
+#>         m2   727.6900  1  0.0000    ***
+#> 
+#> Signif: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
 # Gaussian copula dependence instead of Famoye/Sarmanov
 fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
                    dependence = copula("normal"))
@@ -223,7 +319,7 @@ fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #> iter   6 value 9671.936448
 #> iter   7 value 9669.352861
 #> iter   8 value 9662.086943
-#> iter   9 value 9638.110220
+#> iter   9 value 9638.110221
 #> iter  10 value 9633.973407
 #> iter  11 value 9633.861811
 #> iter  12 value 9633.859385

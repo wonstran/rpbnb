@@ -130,6 +130,93 @@ test_that("TMB tape construction is sequential unless explicitly enabled", {
   expect_identical(TMB::config(DLL = "rpbnb")$tape.parallel, 1L)
 })
 
+# Regression guard for the "C stack usage <n> is too close to the limit"
+# abort that concurrent tape construction produced whenever TMB's C-level
+# trace was left on: optimizeTape() printed from inside MakeADHessObject2()'s
+# OpenMP loop, and R_CheckStack on a worker thread measured against the main
+# thread's stack base. See .configure_tmb_threads() for the full account.
+trace_flags <- function(DLL = "rpbnb") {
+  cf <- TMB::config(DLL = DLL)
+  vapply(c("trace.optimize", "trace.atomic", "trace.parallel"),
+         function(nm) as.integer(cf[[nm]]), integer(1L))
+}
+
+# Snapshot every piece of per-DLL session state these tests touch, for the
+# caller to hand to restore_tmb_state() from its own on.exit().
+save_tmb_state <- function(DLL = "rpbnb") {
+  cf <- TMB::config(DLL = DLL)
+  list(
+    config = lapply(
+      cf[c("trace.optimize", "trace.atomic", "trace.parallel",
+           "tape.parallel")],
+      as.integer
+    ),
+    threads = TMB::openmp(DLL = DLL),
+    DLL = DLL
+  )
+}
+
+restore_tmb_state <- function(state) {
+  do.call(TMB::config, c(state$config, list(DLL = state$DLL)))
+  TMB::openmp(n = state$threads, DLL = state$DLL)
+  invisible(NULL)
+}
+
+test_that("concurrent tape construction silences TMB's C-level trace", {
+  state <- save_tmb_state()
+  on.exit(restore_tmb_state(state), add = TRUE)
+  supported <- as.integer(TMB::openmp(max = TRUE, DLL = "rpbnb")[[1L]])
+  if (supported < 2L) skip("TMB runtime supports only one thread")
+
+  realized <- .configure_tmb_threads(
+    n_cores = 2L, max_threads = 2L,
+    parallel_tape = TRUE, DLL = "rpbnb"
+  )
+  expect_identical(realized, 2L)
+  expect_identical(TMB::config(DLL = "rpbnb")$tape.parallel, 1L)
+  expect_identical(unname(trace_flags()), c(0L, 0L, 0L))
+})
+
+test_that("TMB's C-level trace stays on when no worker thread can print", {
+  state <- save_tmb_state()
+  on.exit(restore_tmb_state(state), add = TRUE)
+  supported <- as.integer(TMB::openmp(max = TRUE, DLL = "rpbnb")[[1L]])
+
+  # Concurrent taping pinned to a single thread: no parallel region, so
+  # nothing prints off the main thread and the trace is safe to keep.
+  .configure_tmb_threads(
+    n_cores = 1L, max_threads = 1L,
+    parallel_tape = TRUE, DLL = "rpbnb"
+  )
+  expect_identical(unname(trace_flags()), c(1L, 1L, 1L))
+
+  if (supported < 2L) skip("TMB runtime supports only one thread")
+
+  # Multithreaded evaluation with sequential taping: the tape loop that does
+  # the printing is compiled out by config.tape.parallel, so likewise safe.
+  .configure_tmb_threads(
+    n_cores = 2L, max_threads = 2L,
+    parallel_tape = FALSE, DLL = "rpbnb"
+  )
+  expect_identical(unname(trace_flags()), c(1L, 1L, 1L))
+})
+
+test_that("a silent fit does not leak TMB's zeroed trace to the next fit", {
+  state <- save_tmb_state()
+  on.exit(restore_tmb_state(state), add = TRUE)
+
+  # What MakeADFun(silent = TRUE) leaves behind: TMB::config() is per-DLL
+  # session state and beSilent() never restores it.
+  TMB::config(trace.optimize = 0L, trace.atomic = 0L, trace.parallel = 0L,
+              DLL = "rpbnb")
+
+  .configure_tmb_threads(
+    n_cores = 1L, max_threads = 1L,
+    parallel_tape = FALSE, DLL = "rpbnb"
+  )
+  expect_identical(unname(trace_flags()), c(1L, 1L, 1L))
+})
+
 test_that("the workload guard rejects exactly at its limit and opts out", {
   limit <- 100 * 10 * TAPE_CALIBRATION$family_weight[["gaussian"]]
   expect_error(

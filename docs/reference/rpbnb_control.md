@@ -31,7 +31,7 @@ rpbnb_control(
   restarts = 10L,
   max_threads = NULL,
   max_workload = NULL,
-  parallel_tape = FALSE,
+  parallel_tape = TRUE,
   tape_chunks = NULL
 )
 ```
@@ -55,8 +55,41 @@ rpbnb_control(
 - print_level:
 
   Optimizer verbosity, and the switch that silences the boundary-test
-  progress messages. `NULL` (default) uses 2 for the `maxLik` fitters
-  and 0 (silent) for the TMB engine.
+  progress messages. `NULL` (default) uses 2 under `maxLik` and 1 under
+  the TMB engine. Under TMB it drives two separate switches –
+  `MakeADFun(silent = print_level == 0)` and `nlminb`'s
+  `trace = max(0, print_level - 1)` – so the levels are:
+
+  `0`
+
+  :   Silent (the pre-0.4.6 TMB default).
+
+  `1`
+
+  :   TMB's own output only: an `outer mgc:` line per outer evaluation,
+      plus the one-time tape/atomic construction on the first fit of a
+      session. No `nlminb` trace. The C-level trace lines
+      (`Optimizing tape... `, `Constructing atomic ...`, and the
+      `N regions found` / `Using N threads` pair) are suppressed when
+      tapes are built concurrently at more than one thread
+      (`parallel_tape = TRUE`, the default, with `n_cores > 1`), because
+      TMB emits them from its OpenMP worker threads, where printing
+      aborts the fit; the `outer mgc:` lines print from the main thread
+      and are unaffected.
+
+  `2`
+
+  :   Adds `nlminb`'s per-iteration objective and parameter vector – the
+      lowest level that traces every iteration.
+
+  `>2`
+
+  :   `nlminb`'s `trace` is a print *interval*, not a verbosity level,
+      so higher values print the objective *less* often.
+
+  Note that [`rpbnb_tmb_boundary_tests()`](rpbnb_tmb_boundary_tests.md)
+  builds its own control when one is not supplied, so its restricted
+  refits print at their own default regardless of this setting.
 
 - draws_hessian:
 
@@ -75,7 +108,11 @@ rpbnb_control(
 
   Worker processes for [`fit_rpbnb()`](fit_rpbnb.md)'s optional cluster
   path, or OpenMP threads for [`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md) (1 =
-  sequential in both cases).
+  sequential in both cases). Under the TMB engine the *realized* thread
+  count – after `max_threads` and hardware capping – is also what
+  `max_workload`/`tape_chunks` size the tape against when
+  `parallel_tape = TRUE`; see "How `n_cores`, `max_workload`, and
+  `tape_chunks` interact" below.
 
 - compute_se:
 
@@ -172,9 +209,10 @@ rpbnb_control(
   figure here are derived from `TAPE_CALIBRATION`, so this text cannot
   drift from the shipped behaviour.
 
-  With the default `parallel_tape = FALSE` the budget is per fit; with
+  With `parallel_tape = FALSE` the budget is per fit; with the default
   `parallel_tape = TRUE` the tapes are built concurrently and the guard
-  multiplies the workload by the realized thread count.
+  multiplies the workload by the realized thread count (see `n_cores`
+  above for how that count is realized).
 
   One unit is one weighted observation-draw. All figures are measured by
   `inst/dev/tmb_benchmark_memory.R`, whose raw results are stored in
@@ -212,9 +250,18 @@ rpbnb_control(
 
 - parallel_tape:
 
-  Construct per-thread TMB tapes concurrently. The default `FALSE`
-  constructs them sequentially to reduce peak memory; objective and
-  gradient evaluation remains parallel.
+  Construct per-thread TMB tapes concurrently. The default `TRUE` builds
+  them in parallel for faster tape construction; objective and gradient
+  evaluation remains parallel either way. Set `FALSE` to build tapes
+  sequentially instead and reduce peak memory. Concurrent tape
+  construction multiplies the per-tape memory workload the
+  `max_workload`/`tape_chunks` guard sizes against by the realized
+  thread count (see `max_workload` above); pairing
+  `parallel_tape = TRUE` with `max_workload = Inf` disables that guard
+  entirely; `rpbnb_control()` warns when it sees that combination.
+  Concurrent construction at a realized count above one also suppresses
+  TMB's C-level tape, atomic, and parallel-region trace lines at
+  `print_level >= 1` – see `print_level` below.
 
 - tape_chunks:
 
@@ -259,13 +306,62 @@ each estimator reads the number and applies its own meaning to it.
 ## Defaults that depend on the estimator
 
 `iterlim` and `print_level` default to `NULL`, which means "this
-estimator's own long-standing default": `iterlim` is 300 under `maxLik`
-and 500 under `nlminb`; `print_level` is 2 (progress) under `maxLik` and
-0 (silent) under `nlminb`. Supplying either explicitly overrides that
-for every estimator. `max_threads` defaults to `n_cores` and
-`max_workload` is computed from available memory by
+estimator's own default": `iterlim` is 300 under `maxLik` and 500 under
+`nlminb`. `print_level` is 2 under `maxLik` and, as of 0.4.6, 1 under
+the TMB engine (it was 0 – fully silent – before that, which left a long
+TMB fit printing nothing at all while it ran). The TMB default of 1
+shows TMB's own progress without `nlminb`'s per-iteration parameter
+vectors; see `print_level` below for what each level prints. Supplying
+either explicitly overrides that for every estimator; `print_level = 0`
+restores silence. `max_threads` defaults to `n_cores` and `max_workload`
+is computed from available memory by
 [`rpbnb_tmb_max_workload()`](rpbnb_tmb_max_workload.md) the first time a
 TMB fit needs it (so a non-TMB fit never pays for the memory probe).
+
+## How `n_cores`, `max_workload`, and `tape_chunks` interact (TMB, `method = "sml"`)
+
+These three only interact through `parallel_tape`. Before
+[`fit_rpbnb_tmb()`](fit_rpbnb_tmb.md) builds a tape, it estimates a
+weighted workload:
+`nrow(data) * draws * <family weight> * (realized n_cores if parallel_tape = TRUE, else 1)`.
+`max_workload` caps that number, and `tape_chunks` is what lets a fit
+exceed it anyway by building several smaller tapes instead of one.
+
+- `n_cores` sets OpenMP threads for the objective/gradient, which are
+  always evaluated in parallel regardless of anything else here. With
+  the default `parallel_tape = TRUE`, the *realized* thread count (after
+  `max_threads` and hardware capping) also multiplies the workload
+  above, because each thread builds its own full tape concurrently – so
+  raising `n_cores` speeds up evaluation but can push a fit that fit
+  comfortably at one thread over `max_workload` at eight. Set
+  `parallel_tape = FALSE` to decouple the two: tapes then build one at a
+  time (peak memory unaffected by `n_cores`) while evaluation stays
+  fully parallel.
+
+- `max_workload` (`NULL` auto-detects available memory; see above) is
+  checked against that workload number. Exceeding it does not always
+  error: under `method = "sml"` the fit auto-chunks instead (next
+  point). `Inf` disables the check *and* auto-chunking entirely, so
+  nothing sizes the tape for you – pin `tape_chunks` yourself if you
+  still want the memory benefit with the guard off.
+
+- `tape_chunks` (SML fits only; ignored under `method = "laplace"`,
+  whose tape scales with `nrow(data)` alone, not `draws`) is what
+  absorbs a workload over budget: `NULL` auto-selects the smallest chunk
+  count that brings the per-chunk workload back under `max_workload`; an
+  explicit value pins the layout (validated against both `draws` and the
+  budget). More chunks trade slower gradient evaluations (each chunk's
+  contribution is recomputed on every outer step) and the loss of a
+  taped Hessian
+  (`confint(method = "profile")`/[`rpbnb_tmb_dependence_profile()`](rpbnb_tmb_dependence_profile.md)
+  fall back to a Wald interval) for lower peak memory.
+
+Net effect for a large SML fit: pick `n_cores` for speed first. If that
+trips `max_workload`, either let auto-chunking absorb it, set
+`parallel_tape = FALSE` if the extra peak memory isn't worth the
+tape-build speedup, or raise `max_workload` deliberately against memory
+you actually have (see
+[`rpbnb_tmb_max_workload()`](rpbnb_tmb_max_workload.md)).
 
 ## See also
 
@@ -296,7 +392,7 @@ rpbnb_control(method = "BFGS", iterlim = 200)
 #>   restarts       10
 #>   max_threads    1
 #>   max_workload   <estimator default>
-#>   parallel_tape  FALSE
+#>   parallel_tape  TRUE
 #>   tape_chunks    <estimator default>
 #>   supplied by caller: method, iterlim 
 rpbnb_control(hessian = "analytic")
@@ -319,7 +415,7 @@ rpbnb_control(hessian = "analytic")
 #>   restarts       10
 #>   max_threads    1
 #>   max_workload   <estimator default>
-#>   parallel_tape  FALSE
+#>   parallel_tape  TRUE
 #>   tape_chunks    <estimator default>
 #>   supplied by caller: hessian 
 # The same object drives either engine; the TMB-only knobs are simply
@@ -344,7 +440,7 @@ rpbnb_control(n_cores = 4, gradtol = 1e-6, se_method = "opg")
 #>   restarts       10
 #>   max_threads    4
 #>   max_workload   <estimator default>
-#>   parallel_tape  FALSE
+#>   parallel_tape  TRUE
 #>   tape_chunks    <estimator default>
 #>   supplied by caller: n_cores, se_method, gradtol 
 ```

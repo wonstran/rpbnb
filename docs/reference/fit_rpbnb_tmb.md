@@ -56,11 +56,13 @@ fit_rpbnb_tmb(
   tape, dropping peak memory to `nrow(data) * ceiling(draws / chunks)`
   at the cost of somewhat slower gradient evaluations – exact for the
   requested `draws`, not an approximation. Under `method = "laplace"`
-  `draws` does not affect the likelihood, the tape, or chunking, but
-  still sizes the Halton grid used for the frozen Famoye lambda bounds
-  and for the post-estimation averaging in
+  `draws` does not affect the likelihood, the tape, or chunking; its
+  only remaining job is sizing the Halton grid used for the
+  post-estimation averaging in
   [`predict()`](https://rdrr.io/r/stats/predict.html) and the
-  marginal-effect functions.
+  marginal-effect functions. (The frozen Famoye admissible-lambda
+  interval is derived from the random coefficients' support, independent
+  of `draws` under either estimator.)
 
 - seed:
 
@@ -72,8 +74,26 @@ fit_rpbnb_tmb(
 
 - dependence:
 
-  Dependence structure: "famoye", "independence", or a
-  [`copula()`](copula.md) object for copula dependence.
+  How the two margins are linked. `"famoye"` (default) is
+  Famoye/Sarmanov dependence: a single bounded association parameter
+  (`lam`), admissible interval frozen at the starting values. A
+  [`copula()`](copula.md) object joins the margins with a discrete
+  copula instead – `copula("frank")`, `copula("normal")` (Gaussian), or
+  `copula("kimeldorf")` (Clayton) – each with its own native dependence
+  parameter, always estimated ([`copula()`](copula.md)'s `par` argument
+  is for the simulators only). Copula evaluation costs more per
+  iteration than Famoye at comparable `draws`/`n`, and the dependence
+  family also changes peak memory under this engine – see `max_workload`
+  at [`rpbnb_control()`](rpbnb_control.md) for the measured per-family
+  weights. `"independence"` – two separate NB2 margins, no association
+  parameter at all – is only available here; the classic engine
+  ([`fit_rpbnb()`](fit_rpbnb.md)) has no independence path for
+  random-parameter models (use [`fit_bnb()`](fit_bnb.md) for a
+  fixed-coefficient independence model). Whichever dependence is chosen,
+  a random coefficient on a 0/1 dummy regressor present in both
+  equations is weakly identified (NB dispersion trades off against the
+  random-coefficient scale); prefer a continuous regressor for a shared
+  random coefficient when one is available.
 
 - control:
 

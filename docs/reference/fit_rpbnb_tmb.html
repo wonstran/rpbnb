@@ -11,7 +11,7 @@ automatic differentiation. Supports Famoye/Sarmanov and discrete-copula
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,9 +98,11 @@ draw chunks replayed over one smaller TMB tape, dropping peak memory to
 <code>nrow(data) * ceiling(draws / chunks)</code> at the cost of somewhat
 slower gradient evaluations – exact for the requested <code>draws</code>, not
 an approximation. Under <code>method = "laplace"</code> <code>draws</code> does not
-affect the likelihood, the tape, or chunking, but still sizes the Halton
-grid used for the frozen Famoye lambda bounds and for the post-estimation
-averaging in <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> and the marginal-effect functions.</p></dd>
+affect the likelihood, the tape, or chunking; its only remaining job is
+sizing the Halton grid used for the post-estimation averaging in
+<code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> and the marginal-effect functions. (The frozen Famoye
+admissible-lambda interval is derived from the random coefficients'
+support, independent of <code>draws</code> under either estimator.)</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
@@ -112,8 +114,25 @@ averaging in <code><a href="https://rdrr.io/r/stats/predict.html" class="externa
 
 
 <dt id="arg-dependence">dependence<a class="anchor" aria-label="anchor" href="#arg-dependence"></a></dt>
-<dd><p>Dependence structure: "famoye", "independence", or a
-<code><a href="copula.html">copula()</a></code> object for copula dependence.</p></dd>
+<dd><p>How the two margins are linked. <code>"famoye"</code> (default)
+is Famoye/Sarmanov dependence: a single bounded association parameter
+(<code>lam</code>), admissible interval frozen at the starting values. A
+<code><a href="copula.html">copula()</a></code> object joins the margins with a discrete copula instead
+– <code>copula("frank")</code>, <code>copula("normal")</code> (Gaussian), or
+<code>copula("kimeldorf")</code> (Clayton) – each with its own native
+dependence parameter, always estimated (<code><a href="copula.html">copula()</a></code>'s <code>par</code>
+argument is for the simulators only). Copula evaluation costs more per
+iteration than Famoye at comparable <code>draws</code>/<code>n</code>, and the
+dependence family also changes peak memory under this engine – see
+<code>max_workload</code> at <code><a href="rpbnb_control.html">rpbnb_control()</a></code> for the measured per-family
+weights. <code>"independence"</code> – two separate NB2 margins, no
+association parameter at all – is only available here; the classic
+engine (<code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>) has no independence path for random-parameter
+models (use <code><a href="fit_bnb.html">fit_bnb()</a></code> for a fixed-coefficient independence model).
+Whichever dependence is chosen, a random coefficient on a 0/1 dummy
+regressor present in both equations is weakly identified (NB dispersion
+trades off against the random-coefficient scale); prefer a continuous
+regressor for a shared random coefficient when one is available.</p></dd>
 
 
 <dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>

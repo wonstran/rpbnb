@@ -19,7 +19,7 @@ without rewriting its control call."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,7 +75,7 @@ without rewriting its control call.</p>
 <span>  restarts <span class="op">=</span> <span class="fl">10L</span>,</span>
 <span>  max_threads <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_workload <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  parallel_tape <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  parallel_tape <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  tape_chunks <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -100,8 +100,36 @@ the <code>maxLik</code> fitters and 500 for the TMB engine's <code>nlminb</code>
 
 <dt id="arg-print-level">print_level<a class="anchor" aria-label="anchor" href="#arg-print-level"></a></dt>
 <dd><p>Optimizer verbosity, and the switch that silences the
-boundary-test progress messages. <code>NULL</code> (default) uses 2 for the <code>maxLik</code>
-fitters and 0 (silent) for the TMB engine.</p></dd>
+boundary-test progress messages. <code>NULL</code> (default) uses 2 under <code>maxLik</code>
+and 1 under the TMB engine. Under TMB it drives two separate switches –
+<code>MakeADFun(silent = print_level == 0)</code> and <code>nlminb</code>'s
+<code>trace = max(0, print_level - 1)</code> – so the levels are:</p><dl><dt><code>0</code></dt>
+<dd><p>Silent (the pre-0.4.6 TMB default).</p></dd>
+
+<dt><code>1</code></dt>
+<dd><p>TMB's own output only: an <code>outer mgc:</code> line per outer
+evaluation, plus the one-time tape/atomic construction on the first
+fit of a session. No <code>nlminb</code> trace. The C-level trace lines
+(<code>Optimizing tape... </code>, <code>Constructing atomic ...</code>, and the
+<code>N regions found</code> / <code>Using N threads</code> pair) are
+suppressed when tapes are built concurrently at more than one thread
+(<code>parallel_tape = TRUE</code>, the default, with <code>n_cores &gt; 1</code>), because
+TMB emits them from its OpenMP worker threads, where printing
+aborts the fit; the <code>outer mgc:</code> lines print from the main thread
+and are unaffected.</p></dd>
+
+<dt><code>2</code></dt>
+<dd><p>Adds <code>nlminb</code>'s per-iteration objective and parameter
+vector – the lowest level that traces every iteration.</p></dd>
+
+<dt><code>&gt;2</code></dt>
+<dd><p><code>nlminb</code>'s <code>trace</code> is a print <em>interval</em>, not a verbosity
+level, so higher values print the objective <em>less</em> often.</p></dd>
+
+
+</dl><p>Note that <code><a href="rpbnb_tmb_boundary_tests.html">rpbnb_tmb_boundary_tests()</a></code> builds its own control when one is
+not supplied, so its restricted refits print at their own default
+regardless of this setting.</p></dd>
 
 
 <dt id="arg-draws-hessian">draws_hessian<a class="anchor" aria-label="anchor" href="#arg-draws-hessian"></a></dt>
@@ -119,7 +147,11 @@ the simulation draws.</p></dd>
 
 <dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>
 <dd><p>Worker processes for <code><a href="fit_rpbnb.html">fit_rpbnb()</a></code>'s optional cluster path, or
-OpenMP threads for <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code> (1 = sequential in both cases).</p></dd>
+OpenMP threads for <code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code> (1 = sequential in both cases). Under
+the TMB engine the <em>realized</em> thread count – after <code>max_threads</code> and
+hardware capping – is also what <code>max_workload</code>/<code>tape_chunks</code> size the
+tape against when <code>parallel_tape = TRUE</code>; see "How <code>n_cores</code>,
+<code>max_workload</code>, and <code>tape_chunks</code> interact" below.</p></dd>
 
 
 <dt id="arg-compute-se">compute_se<a class="anchor" aria-label="anchor" href="#arg-compute-se"></a></dt>
@@ -201,7 +233,7 @@ set explicitly below <code>n_cores</code>.</p></dd>
 
 <dt id="arg-max-workload">max_workload<a class="anchor" aria-label="anchor" href="#arg-max-workload"></a></dt>
 <dd><p>Maximum weighted observation-draw evaluations permitted before TMB tape construction; <code>Inf</code> disables the guard. The default and every figure here are derived from <code>TAPE_CALIBRATION</code>, so this text cannot drift from the shipped behaviour.</p>
-<p>With the default <code>parallel_tape = FALSE</code> the budget is per fit; with <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count.</p>
+<p>With <code>parallel_tape = FALSE</code> the budget is per fit; with the default <code>parallel_tape = TRUE</code> the tapes are built concurrently and the guard multiplies the workload by the realized thread count (see <code>n_cores</code> above for how that count is realized).</p>
 <p>One unit is one weighted observation-draw. All figures are measured by <code>inst/dev/tmb_benchmark_memory.R</code>, whose raw results are stored in <code>inst/extdata/memory_calibration.csv</code>.</p>
 <p>Retained tape size depends on <code>n * draws</code> alone: tape (MiB) = 13.374 + 0.001164 * units, with R^2 = 0.9994 (1221 bytes per unit over the largest workloads; per-unit cost is higher at small workloads because of the fixed intercept).</p>
 <p>The budget is set on <em>peak</em> working set, not on retained tape, because peak is what exhausts memory: TMB records the whole likelihood before pruning it to each parallel region, so peak runs about 6.11 times the retained tape plus first-evaluation growth, or 12083 bytes per unit measured directly against peak. The default of 700,000 units therefore targets a peak of about 8 GiB for one fit.</p>
@@ -212,8 +244,18 @@ set explicitly below <code>n_cores</code>.</p></dd>
 
 <dt id="arg-parallel-tape">parallel_tape<a class="anchor" aria-label="anchor" href="#arg-parallel-tape"></a></dt>
 <dd><p>Construct per-thread TMB tapes concurrently. The
-default <code>FALSE</code> constructs them sequentially to reduce peak memory;
-objective and gradient evaluation remains parallel.</p></dd>
+default <code>TRUE</code> builds them in parallel for faster tape
+construction; objective and gradient evaluation remains parallel either
+way. Set <code>FALSE</code> to build tapes sequentially instead and reduce
+peak memory. Concurrent tape construction multiplies the per-tape
+memory workload the <code>max_workload</code>/<code>tape_chunks</code> guard sizes
+against by the realized thread count (see <code>max_workload</code> above);
+pairing <code>parallel_tape = TRUE</code> with <code>max_workload = Inf</code>
+disables that guard entirely; <code>rpbnb_control()</code> warns when it sees
+that combination. Concurrent construction at a realized count above one
+also suppresses TMB's C-level tape, atomic, and parallel-region trace
+lines at
+<code>print_level &gt;= 1</code> – see <code>print_level</code> below.</p></dd>
 
 
 <dt id="arg-tape-chunks">tape_chunks<a class="anchor" aria-label="anchor" href="#arg-tape-chunks"></a></dt>
@@ -251,12 +293,55 @@ reads the number and applies its own meaning to it.</p>
 
 
 <p><code>iterlim</code> and <code>print_level</code> default to <code>NULL</code>, which means "this estimator's
-own long-standing default": <code>iterlim</code> is 300 under <code>maxLik</code> and 500 under
-<code>nlminb</code>; <code>print_level</code> is 2 (progress) under <code>maxLik</code> and 0 (silent) under
-<code>nlminb</code>. Supplying either explicitly overrides that for every estimator.
+own default": <code>iterlim</code> is 300 under <code>maxLik</code> and 500 under <code>nlminb</code>.
+<code>print_level</code> is 2 under <code>maxLik</code> and, as of 0.4.6, 1 under the TMB engine
+(it was 0 – fully silent – before that, which left a long TMB fit
+printing nothing at all while it ran). The TMB default of 1 shows TMB's own
+progress without <code>nlminb</code>'s per-iteration parameter vectors; see
+<code>print_level</code> below for what each level prints. Supplying either explicitly
+overrides that for every estimator; <code>print_level = 0</code> restores silence.
 <code>max_threads</code> defaults to <code>n_cores</code> and <code>max_workload</code> is computed from
 available memory by <code><a href="rpbnb_tmb_max_workload.html">rpbnb_tmb_max_workload()</a></code> the first time a TMB fit
 needs it (so a non-TMB fit never pays for the memory probe).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="how-n-cores-max-workload-and-tape-chunks-interact-tmb-method-sml-">How <code>n_cores</code>, <code>max_workload</code>, and <code>tape_chunks</code> interact (TMB, <code>method = "sml"</code>)<a class="anchor" aria-label="anchor" href="#how-n-cores-max-workload-and-tape-chunks-interact-tmb-method-sml-"></a></h2>
+
+
+
+<p>These three only interact through <code>parallel_tape</code>. Before
+<code><a href="fit_rpbnb_tmb.html">fit_rpbnb_tmb()</a></code> builds a tape, it estimates a weighted workload:
+<code>nrow(data) * draws * &lt;family weight&gt; * (realized n_cores if parallel_tape = TRUE, else 1)</code>. <code>max_workload</code> caps that number, and
+<code>tape_chunks</code> is what lets a fit exceed it anyway by building several
+smaller tapes instead of one.</p><ul><li><p><code>n_cores</code> sets OpenMP threads for the objective/gradient, which are
+always evaluated in parallel regardless of anything else here. With the
+default <code>parallel_tape = TRUE</code>, the <em>realized</em> thread count (after
+<code>max_threads</code> and hardware capping) also multiplies the workload above,
+because each thread builds its own full tape concurrently – so raising
+<code>n_cores</code> speeds up evaluation but can push a fit that fit comfortably
+at one thread over <code>max_workload</code> at eight. Set <code>parallel_tape = FALSE</code>
+to decouple the two: tapes then build one at a time (peak memory
+unaffected by <code>n_cores</code>) while evaluation stays fully parallel.</p></li>
+<li><p><code>max_workload</code> (<code>NULL</code> auto-detects available memory; see above) is
+checked against that workload number. Exceeding it does not always
+error: under <code>method = "sml"</code> the fit auto-chunks instead (next point).
+<code>Inf</code> disables the check <em>and</em> auto-chunking entirely, so nothing sizes
+the tape for you – pin <code>tape_chunks</code> yourself if you still want the
+memory benefit with the guard off.</p></li>
+<li><p><code>tape_chunks</code> (SML fits only; ignored under <code>method = "laplace"</code>, whose
+tape scales with <code>nrow(data)</code> alone, not <code>draws</code>) is what absorbs a
+workload over budget: <code>NULL</code> auto-selects the smallest chunk count that
+brings the per-chunk workload back under <code>max_workload</code>; an explicit
+value pins the layout (validated against both <code>draws</code> and the budget).
+More chunks trade slower gradient evaluations (each chunk's contribution
+is recomputed on every outer step) and the loss of a taped Hessian
+(<code>confint(method = "profile")</code>/<code><a href="rpbnb_tmb_dependence_profile.html">rpbnb_tmb_dependence_profile()</a></code> fall
+back to a Wald interval) for lower peak memory.</p></li>
+</ul><p>Net effect for a large SML fit: pick <code>n_cores</code> for speed first. If that
+trips <code>max_workload</code>, either let auto-chunking absorb it, set
+<code>parallel_tape = FALSE</code> if the extra peak memory isn't worth the
+tape-build speedup, or raise <code>max_workload</code> deliberately against memory
+you actually have (see <code><a href="rpbnb_tmb_max_workload.html">rpbnb_tmb_max_workload()</a></code>).</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -286,7 +371,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   restarts       10</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  TRUE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: method, iterlim </span>
 <span class="r-in"><span><span class="fu">rpbnb_control</span><span class="op">(</span>hessian <span class="op">=</span> <span class="st">"analytic"</span><span class="op">)</span></span></span>
@@ -309,7 +394,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   restarts       10</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  TRUE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: hessian </span>
 <span class="r-in"><span><span class="co"># The same object drives either engine; the TMB-only knobs are simply</span></span></span>
@@ -334,7 +419,7 @@ needs it (so a non-TMB fit never pays for the memory probe).</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   restarts       10</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_threads    4</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   max_workload   &lt;estimator default&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   parallel_tape  TRUE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   tape_chunks    &lt;estimator default&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   supplied by caller: n_cores, se_method, gradtol </span>
 </code></pre></div>

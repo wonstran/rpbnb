@@ -57,9 +57,9 @@ uses when recompiling changed sources.
 ``` r
 rpbnb_build_info()
 #> rpbnb build
-#>   optimized      TRUE
+#>   optimized      FALSE   (SLOW -- see ?rpbnb_build_info)
 #>   openmp         TRUE
 #>   max threads    1
-#>   assertions     FALSE
-#>   compiler       gcc 14.3
+#>   assertions     TRUE
+#>   compiler       gcc 12.2
 ```

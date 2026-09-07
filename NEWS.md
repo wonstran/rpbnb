@@ -1,3 +1,34 @@
+# rpbnb 0.4.8
+
+* **Fixed: `Error: C stack usage <n> is too close to the limit` on
+  multithreaded TMB fits.** With 0.4.6's two default flips in force --
+  `parallel_tape = TRUE` and `print_level = 1` for the TMB engine -- a fit at
+  more than one thread could abort during tape construction, most often on
+  the Laplace path where `MakeADHessObject2()` builds one sparse-Hessian tape
+  per parallel region. TMB's `optimizeTape()` prints `Optimizing tape... `
+  through `Rcout` from inside that OpenMP loop, and the `R_CheckStack()` call
+  reached via `Rprintf` measures a *worker* thread's stack pointer against the
+  *main* thread's recorded stack base, yielding a nonsense depth (754 GB and
+  1.3 GB were both observed, differing run to run) that makes R abort. It is a
+  race rather than a threshold, so the odds rose with the thread count: an
+  8-thread fit reproduced it reliably where 4 and 2 came through.
+  `.configure_tmb_threads()` now zeroes TMB's `trace.optimize`,
+  `trace.atomic`, and `trace.parallel` for exactly the case that is exposed --
+  concurrent taping at a realized count above one. Tapes are still built
+  concurrently, and the progress `print_level = 1` promises is unaffected,
+  since the `outer mgc:` lines (and `nlminb`'s trace at `print_level = 2`)
+  print from the main thread; only TMB's C-level tape and atomic construction
+  lines -- `Optimizing tape... `, `Constructing atomic ...`, and the
+  `N regions found` / `Using N threads` pair -- are dropped.
+  `rpbnb_tmb_boundary_tests()` configures its restricted
+  refits through the same helper, so its LR refits are covered too.
+  The flags are also now reset on every call rather than only when silencing:
+  `TMB::config()` is per-DLL session state and `MakeADFun(silent = TRUE)`
+  zeroes every `trace.*` without restoring it, so a `print_level = 0` fit used
+  to silence every later fit in the same session. Workarounds for earlier
+  versions -- `print_level = 0L`, or `parallel_tape = FALSE` -- remain valid
+  and are no longer needed.
+
 # rpbnb 0.4.7
 
 * Reference-manual documentation for `engine`, `dependence`, and the TMB

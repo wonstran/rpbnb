@@ -41,6 +41,7 @@ reference:
       parameter space, where an ordinary Wald z/p does not apply.
     contents:
       - lr_test
+      - bnb_boundary_tests
       - rpbnb_boundary_tests
       - rpbnb_tmb_boundary_tests
   - title: "Post-estimation"
