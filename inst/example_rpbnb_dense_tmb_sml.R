@@ -97,7 +97,17 @@ boundary_draws <- NULL
 #           whole script cheaply before committing to a full run.
 max_rows <- NULL
 
-data <- read.csv(system.file("extdata", "export_dense_all.csv", package = "rpbnb", mustWork = TRUE))
+data_path <- system.file("extdata", "export_dense_all.csv", package = "rpbnb")
+if (!nzchar(data_path) || !file.exists(data_path)) {
+  stop(
+    "inst/extdata/export_dense_all.csv not found. This is local research ",
+    "data, gitignored and build-ignored, so it is never shipped with the ",
+    "package -- this script only runs against your own local copy placed ",
+    "at that path in your source checkout before installing.",
+    call. = FALSE
+  )
+}
+data <- read.csv(data_path)
 if (!is.null(max_rows)) {
   data <- utils::head(data, max_rows)
   cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")

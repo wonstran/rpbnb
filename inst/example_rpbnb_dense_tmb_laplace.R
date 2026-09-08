@@ -69,7 +69,7 @@ sep <- function() cat("\n", paste(rep("=", 72), collapse = ""), "\n", sep = "")
 #         the TMB engine reads; max_threads (a cap on it, defaulting to
 #         n_cores) is not set here because requesting n_cores and capping at
 #         n_cores is the same thing.
-n_cores <- 23L
+n_cores <- 24L
 
 # tmb_method: the TMB engine's estimator. "laplace" here -- the memory-saving
 #             Laplace approximation, as opposed to "sml" (the SML twin's
@@ -99,7 +99,17 @@ boundary_tests <- FALSE
 #           whole script cheaply before committing to a full run.
 max_rows <- NULL
 
-data <- read.csv(system.file("extdata", "export_dense_all.csv", package = "rpbnb", mustWork = TRUE))
+data_path <- system.file("extdata", "export_dense_all.csv", package = "rpbnb")
+if (!nzchar(data_path) || !file.exists(data_path)) {
+  stop(
+    "inst/extdata/export_dense_all.csv not found. This is local research ",
+    "data, gitignored and build-ignored, so it is never shipped with the ",
+    "package -- this script only runs against your own local copy placed ",
+    "at that path in your source checkout before installing.",
+    call. = FALSE
+  )
+}
+data <- read.csv(data_path)
 if (!is.null(max_rows)) {
   data <- utils::head(data, max_rows)
   cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")
