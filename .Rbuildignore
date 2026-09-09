@@ -44,3 +44,4 @@
 ^MULTITHREADING\.md$
 ^_pkgdown\.yml$
 ^reports$
+^CRAN-SUBMISSION$
