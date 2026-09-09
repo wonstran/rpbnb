@@ -51,43 +51,6 @@ test_that("truck results writer creates the timestamped Markdown report", {
   ))
 })
 
-test_that("shipped truck examples remain valid R syntax", {
-  # system.file() rather than test_path("..", "..", "inst", ...): installation
-  # flattens inst/, so the relative path resolves only in a source tree and
-  # turns this into a release-check failure. system.file() resolves the source
-  # inst/ under devtools::load_all() as well, so the assertion stays live in
-  # both development and installed-package testing.
-  # Discovered rather than listed. A hand-written list silently shrinks its own
-  # coverage: this test previously named two of the four shipped truck scripts
-  # while claiming in its title to cover them all, so a syntax regression in
-  # tmb_truck_rpbnb_diff_famoye_laplace.R or tmb_truck_rpbnb_diff_frank_laplace.R
-  # would have gone unnoticed. The pattern is anchored and narrow so it cannot
-  # start sweeping up unrelated files.
-  #
-  # The `tmb_` prefix dates from the rpbnb.tmb merge: every script carried over
-  # from that package took the prefix so the engine a script targets is legible
-  # from its filename. The discovery guard below is what caught the rename --
-  # it failed on zero matches rather than passing over an empty set.
-  root <- system.file("dev", package = "rpbnb", mustWork = TRUE)
-  scripts <- list.files(root, pattern = "^tmb_truck_[A-Za-z0-9_]+\\.R$")
-  # Guard the discovery itself: if the pattern or the layout ever stops
-  # matching, this fails loudly instead of vacuously passing over zero files.
-  expect_gte(length(scripts), 4L)
-  expect_true(all(c("tmb_truck_rpbnb_diff_famoye_dense.R",
-                    "tmb_truck_rpbnb_diff_famoye_laplace.R",
-                    "tmb_truck_rpbnb_diff_frank_laplace.R",
-                    "tmb_truck_rpbnb_diff_kimeldorf_laplace.R") %in% scripts))
-
-  for (nm in scripts) {
-    script <- system.file("dev", nm, package = "rpbnb", mustWork = TRUE)
-    # parse() raises on invalid syntax, and its own message names the file, so
-    # a syntax error identifies itself; `label` additionally names the file on
-    # the (unlikely) path where parse succeeds but returns something odd.
-    # expect_no_error() is not used here because it forbids extra arguments.
-    expect_true(is.expression(parse(file = script)), label = nm)
-  }
-})
-
 test_that("dependence and method add a Model information section", {
   results_dir <- file.path(tempdir(), "truck-results-info")
   unlink(results_dir, recursive = TRUE)

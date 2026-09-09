@@ -1,13 +1,12 @@
-# Write the dense truck example's captured reports as Markdown.
-# Internal helper used by inst/dev/tmb_truck_rpbnb_diff_famoye_dense.R.
+# Write a fitted truck model's captured reports as Markdown.
 #
 # `dependence` and `method` are optional and default to NULL, which reproduces
-# the original three-section report byte for byte -- the four Famoye/Frank/
-# Clayton scripts in inst/dev/ pass neither, and test-results-export.R pins the
-# exact lines.  Supplying them adds the "Model information" header, which
-# matters once several dependence structures are fitted to the same data into
-# the same results/ directory: the reports are named only by timestamp, so
-# without it nothing inside the file records which model produced it.
+# the original three-section report byte for byte, and test-results-export.R
+# pins the exact lines. Supplying them adds the "Model information" header,
+# which matters once several dependence structures are fitted to the same
+# data into the same results/ directory: the reports are named only by
+# timestamp, so without it nothing inside the file records which model
+# produced it.
 .write_truck_results_markdown <- function(
     model_summary,
     marginal_effects,
