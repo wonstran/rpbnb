@@ -91,7 +91,7 @@ f2 <- hospvis ~ outwork + kids + postHS + MarM + MarF + SinF
 #   "frank"     -- theta on the whole real line, no tail dependence
 #   "normal"    -- Gaussian, rho in (-1, 1)
 #   "kimeldorf" -- Kimeldorf-Sampson (Clayton), theta > 0, lower-tail dependence
-COPULA_FAMILY <- "normal"
+COPULA_FAMILY <- "kimeldorf"
 
 # rpbnb_control()'s n_cores is the OpenMP thread count for both TMB estimators
 # (see ?rpbnb_control); leave 1 core free for the rest of the system. TMB's

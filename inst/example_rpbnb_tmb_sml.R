@@ -85,7 +85,7 @@ d$SinF <- as.integer(d$married == 0 & d$female == 1)  # single female
 f1 <- docvis  ~ outwork + kids + postHS + MarM + MarF + SinF
 f2 <- hospvis ~ outwork + kids + postHS + MarM + MarF + SinF
 
-DRAWS <- 500
+DRAWS <- 1000
 SEED  <- 1234
 # Which copula to fit. copula() accepts exactly these three families;
 # everything downstream (labels, the reported native parameter, Kendall's

@@ -87,7 +87,7 @@ tmb_method <- "laplace"
 #             (since 0.4.6 -- the SIGSEGV the old single-thread cap guarded
 #             against was fixed in 0.4.4), so set disable_parallel_gaussian =
 #             TRUE on the fit to pin a Gaussian run to one thread.
-dependence <- copula("frank")
+dependence <- copula("kimeldorf")
 
 # boundary_tests: which parameter groups to LR-test against their boundary
 #                 restriction. "all" = c("sd", "dispersion", "dependence") --
@@ -99,17 +99,20 @@ boundary_tests <- FALSE
 #           whole script cheaply before committing to a full run.
 max_rows <- NULL
 
-data_path <- system.file("extdata", "export_dense_all.csv", package = "rpbnb")
-if (!nzchar(data_path) || !file.exists(data_path)) {
-  stop(
-    "inst/extdata/export_dense_all.csv not found. This is local research ",
-    "data, gitignored and build-ignored, so it is never shipped with the ",
-    "package -- this script only runs against your own local copy placed ",
-    "at that path in your source checkout before installing.",
-    call. = FALSE
-  )
-}
-data <- read.csv(data_path)
+data_path <- "https://its.cutr.usf.edu/ftp/data/export_dense_all.csv"
+data <- tryCatch(
+  read.csv(data_path),
+  error = function(e) {
+    stop(
+      "Could not read export_dense_all.csv from ", data_path, ". This is ",
+      "local research data hosted on CUTR's internal FTP server rather than ",
+      "shipped with the package -- confirm that server is reachable (e.g. ",
+      "VPN/network access) before running this script.\n",
+      "Underlying error: ", conditionMessage(e),
+      call. = FALSE
+    )
+  }
+)
 if (!is.null(max_rows)) {
   data <- utils::head(data, max_rows)
   cat("*** SMOKE TEST: using the first", max_rows, "rows only ***\n")
