@@ -36,7 +36,6 @@ interchangeable engines.
   - [Exact draw chunking](#exact-draw-chunking-new)
   - [Laplace approximation](#laplace-approximation)
 - [Multithreaded Gaussian copula (parallel by default since 0.4.6)](#multithreaded-gaussian-copula-parallel-by-default-since-046)
-- [Example scripts](#example-scripts)
 - [Example datasets](#example-datasets)
 - [Documentation](#documentation)
 - [Development](#development)
@@ -158,23 +157,46 @@ From a source checkout (not yet installed), run the file in `inst/` directly:
 Rscript inst/example_bnb.R
 ```
 
-| Script | Model | Dependence toggle |
-| --- | --- | --- |
-| `example_bnb.R` | Fixed-coefficient (`fit_bnb()`) | `DEPENDENCE`: `"famoye"` or `"copula"` (+ `COPULA_FAMILY`) |
-| `example_rpbnb_classic_sml.R` | Random-parameter, classic engine (`rpbnb(engine = "classic")`) | `DEPENDENCE`: `"famoye"` or `"copula"` (+ `COPULA_FAMILY`) |
-| `example_rpbnb_tmb_famoye.R` | Random-parameter, TMB engine, `method = "sml"` | Famoye/Sarmanov only |
-| `example_rpbnb_tmb_sml.R` | Random-parameter, TMB engine, `method = "sml"` | `copula(COPULA_FAMILY)` |
-| `example_rpbnb_tmb_laplace.R` | Random-parameter, TMB engine, `method = "laplace"` | `copula(COPULA_FAMILY)` |
-| `example_rpbnb_dense_tmb_sml.R` | Random-parameter, TMB engine, `method = "sml"`, local research data | Famoye/Sarmanov |
-| `example_rpbnb_dense_tmb_laplace.R` | Random-parameter, TMB engine, `method = "laplace"`, local research data | `copula(COPULA_FAMILY)` |
+Each script is a full worked model spec (data, formulas, control object,
+diagnostics) rather than a short snippet; every script's own header comment
+explains its choices in detail. Most scripts expose their key choices
+(dependence structure, draws, thread count, boundary tests) as plain editable
+variables near the top of the file rather than command-line arguments — open
+the script and edit those before running.
 
-The first five run out of the box against `rwm1984.csv`, which ships with the
+**German health-care panel (`rwm1984.csv`, ships with the package — same data
+as [Quick start](#quick-start)):**
+
+Fixed-coefficient and classic-engine baselines — each fits exactly one
+dependence structure per run, picked by an editable `DEPENDENCE` toggle:
+
+| Script | Engine | Notes |
+| --- | --- | --- |
+| `example_bnb.R` | none (`fit_bnb()`, fixed coefficients) | Also carries the full dummy-variable derivation the other scripts refer back to; adds `bnb_gof()`, marginal effects, and elasticities after the fit |
+| `example_rpbnb_classic_sml.R` | `"classic"` | `kids` random in both equations; `se_method` set explicitly per branch (`"analytic"` for Famoye, `"opg"` for copula) |
+
+TMB-engine scripts:
+
+| Script | Method | Dependence | Notes |
+| --- | --- | --- | --- |
+| `example_rpbnb_tmb_famoye.R` | `"sml"` | Famoye/Sarmanov | `kids` random in both equations |
+| `example_rpbnb_tmb_sml.R` | `"sml"` | `copula(COPULA_FAMILY)`, default `"normal"` | Companion to the Famoye script; includes a post-fit convergence gate that diagnoses a non-converged fit's weak-identification signature instead of surfacing a raw optimizer error |
+| `example_rpbnb_tmb_laplace.R` | `"laplace"` | `copula(COPULA_FAMILY)`, default `"normal"` | Laplace counterpart of `example_rpbnb_tmb_sml.R` — run both to compare the two approximations on the same model |
+
+**Dense-section truck-crash data (`export_dense_all.csv` — local research
+data, gitignored and not published in this repo; see
+[Example datasets](#example-datasets)):**
+
+| Script | Method | Notes |
+| --- | --- | --- |
+| `example_rpbnb_dense_tmb_sml.R` | `"sml"` | Random coefficient on `SR40_MI3` in both equations, Famoye/Sarmanov dependence |
+| `example_rpbnb_dense_tmb_laplace.R` | `"laplace"` | Same model, Laplace estimator (`draws` and `max_workload`/`tape_chunks` have no effect under Laplace) |
+
+The five TMB-engine scripts above (via `rpbnb()`) print `summary()` plus their
+`control` object; see each script's header for its exact boundary tests. The
+first five run out of the box against `rwm1984.csv`, which ships with the
 package; the last two need your own copy of the gitignored dense-section data
-(see [Example datasets](#example-datasets)). Most scripts expose their key
-choices (dependence structure, draws, thread count, boundary tests) as plain
-editable variables near the top of the file rather than command-line
-arguments — open the script and edit those before running. See
-[Example scripts](#example-scripts) below for engine/method/notes detail.
+(see [Example datasets](#example-datasets)).
 
 ## Quick start
 
@@ -555,45 +577,6 @@ old `force_parallel_gaussian` argument is deprecated: `TRUE` is now a no-op
 `disable_parallel_gaussian = TRUE`, both with a warning. `fit$parallel`
 records both the `requested` and `realized` thread counts.
 
-## Example scripts
-
-Standalone, runnable scripts under `inst/` — `Rscript inst/<file>.R` from a
-source checkout, or `Rscript system.file("<file>.R", package = "rpbnb")` after
-install. Each is a full worked model spec (data, formulas, control object,
-diagnostics) rather than the short snippets in [Usage examples](#usage-examples)
-above; every script's own header comment explains its choices in detail.
-
-**German health-care panel (`rwm1984.csv`, ships with the package — same data
-as [Quick start](#quick-start)):**
-
-Fixed-coefficient and classic-engine baselines — each fits exactly one
-dependence structure per run, picked by an editable `DEPENDENCE` toggle:
-
-| Script | Engine | Notes |
-| --- | --- | --- |
-| `example_bnb.R` | none (`fit_bnb()`, fixed coefficients) | Also carries the full dummy-variable derivation the other scripts refer back to; adds `bnb_gof()`, marginal effects, and elasticities after the fit |
-| `example_rpbnb_classic_sml.R` | `"classic"` | `kids` random in both equations; `se_method` set explicitly per branch (`"analytic"` for Famoye, `"opg"` for copula) |
-
-TMB-engine scripts:
-
-| Script | Method | Dependence | Notes |
-| --- | --- | --- | --- |
-| `example_rpbnb_tmb_famoye.R` | `"sml"` | Famoye/Sarmanov | `kids` random in both equations |
-| `example_rpbnb_tmb_sml.R` | `"sml"` | `copula(COPULA_FAMILY)`, default `"normal"` | Companion to the Famoye script; includes a post-fit convergence gate that diagnoses a non-converged fit's weak-identification signature instead of surfacing a raw optimizer error |
-| `example_rpbnb_tmb_laplace.R` | `"laplace"` | `copula(COPULA_FAMILY)`, default `"normal"` | Laplace counterpart of `example_rpbnb_tmb_sml.R` — run both to compare the two approximations on the same model |
-
-**Dense-section truck-crash data (`export_dense_all.csv` — local research
-data, gitignored and not published in this repo; see
-[Example datasets](#example-datasets)):**
-
-| Script | Method | Notes |
-| --- | --- | --- |
-| `example_rpbnb_dense_tmb_sml.R` | `"sml"` | Random coefficient on `SR40_MI3` in both equations, Famoye/Sarmanov dependence |
-| `example_rpbnb_dense_tmb_laplace.R` | `"laplace"` | Same model, Laplace estimator (`draws` and `max_workload`/`tape_chunks` have no effect under Laplace) |
-
-The five TMB-engine scripts above (via `rpbnb()`) print `summary()` plus their
-`control` object; see each script's header for its exact boundary tests.
-
 ## Example datasets
 
 Available via `system.file("extdata", "<file>", package = "rpbnb")`:
@@ -603,7 +586,7 @@ Available via `system.file("extdata", "<file>", package = "rpbnb")`:
 | `rwm1984.csv` | Raw German health-care utilization panel (docvis, hospvis, and demographic/employment covariates) |
 | `rwm1984_clean.csv` | Same data plus derived dummy variables; used throughout the function examples above and the vignette |
 | `rwm1984_bnb.csv` | `rwm1984_clean.csv` with generic `y1`/`y2` alias columns |
-| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data behind the [dense-model example scripts](#example-scripts); local research data, gitignored and not shipped in this repo, so those two scripts only run against your own local copy |
+| `export_dense_all.csv`, `export_open_all.csv` | Highway-segment pavement/safety data behind the [dense-model example scripts](#examples); local research data, gitignored and not shipped in this repo, so those two scripts only run against your own local copy |
 | `memory_calibration.csv` | Raw TMB memory benchmark measurements behind `TAPE_CALIBRATION` |
 
 ## Documentation
