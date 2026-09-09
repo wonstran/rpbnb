@@ -24,7 +24,7 @@ interchangeable engines.
 ## Table of contents
 
 - [Installation](#installation)
-- [Get started](#get-started)
+- [Examples](#examples)
 - [Quick start](#quick-start)
 - [Core concepts](#core-concepts)
   - [Fixed vs. random-parameter models](#fixed-vs-random-parameter-models)
@@ -130,7 +130,7 @@ well; reinstall from source with no `-O0` in `~/.R/Makevars`. `openmp = FALSE`
 is worth the same attention: the fit will be single-threaded whatever
 `control$n_cores` says.
 
-## Get started
+## Examples
 
 The fastest way to see the package work is to run one of the worked example
 scripts shipped under `inst/` — each is a complete, runnable model spec (data,
