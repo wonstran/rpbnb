@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,13 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.9" id="rpbnb-049">rpbnb 0.4.9<a class="anchor" aria-label="anchor" href="#rpbnb-049"></a></h2>
+<ul><li>New example script <code>inst/example_bnb.R</code>: fits the fixed-coefficient bivariate NB model (<code><a href="../reference/fit_bnb.html">fit_bnb()</a></code>) under Famoye/Sarmanov or copula dependence, picked by an editable <code>DEPENDENCE</code> toggle. It also carries the full dummy-variable derivation for the <code>rwm1984.csv</code> panel that the other <code>inst/example_rpbnb_*.R</code> scripts already referred back to.</li>
+<li>
+<code>inst/example_rpbnb_classic_sml.R</code> restructured to fit exactly one dependence structure per run via the same <code>DEPENDENCE</code> toggle, instead of fitting Famoye/Sarmanov and copula back to back; <code>se_method</code> is now set explicitly per branch (<code>"analytic"</code> for Famoye, <code>"opg"</code> for copula).</li>
+<li>README: added an “Examples” section showing how to list and run the <code>inst/</code> example scripts (from source or after install), and merged the previously separate, duplicated “Example scripts” section into it.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.8" id="rpbnb-048">rpbnb 0.4.8<a class="anchor" aria-label="anchor" href="#rpbnb-048"></a></h2>
 <ul><li>

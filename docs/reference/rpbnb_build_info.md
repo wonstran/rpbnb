@@ -61,5 +61,5 @@ rpbnb_build_info()
 #>   openmp         TRUE
 #>   max threads    1
 #>   assertions     TRUE
-#>   compiler       gcc 12.2
+#>   compiler       gcc 14.3
 ```

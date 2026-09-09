@@ -1,5 +1,22 @@
 # Changelog
 
+## rpbnb 0.4.9
+
+- New example script `inst/example_bnb.R`: fits the fixed-coefficient
+  bivariate NB model ([`fit_bnb()`](../reference/fit_bnb.md)) under
+  Famoye/Sarmanov or copula dependence, picked by an editable
+  `DEPENDENCE` toggle. It also carries the full dummy-variable
+  derivation for the `rwm1984.csv` panel that the other
+  `inst/example_rpbnb_*.R` scripts already referred back to.
+- `inst/example_rpbnb_classic_sml.R` restructured to fit exactly one
+  dependence structure per run via the same `DEPENDENCE` toggle, instead
+  of fitting Famoye/Sarmanov and copula back to back; `se_method` is now
+  set explicitly per branch (`"analytic"` for Famoye, `"opg"` for
+  copula).
+- README: added an “Examples” section showing how to list and run the
+  `inst/` example scripts (from source or after install), and merged the
+  previously separate, duplicated “Example scripts” section into it.
+
 ## rpbnb 0.4.8
 
 - **Fixed: `Error: C stack usage <n> is too close to the limit` on

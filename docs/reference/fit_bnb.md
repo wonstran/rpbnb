@@ -319,7 +319,7 @@ fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #> iter   6 value 9671.936448
 #> iter   7 value 9669.352861
 #> iter   8 value 9662.086943
-#> iter   9 value 9638.110221
+#> iter   9 value 9638.110220
 #> iter  10 value 9633.973407
 #> iter  11 value 9633.861811
 #> iter  12 value 9633.859385

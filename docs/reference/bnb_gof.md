@@ -71,7 +71,7 @@ fit <- fit_bnb(docvis ~ outwork + age, hospvis ~ outwork, data = d,
 #> iter   3 value 9649.351194
 #> iter   4 value 9649.083518
 #> iter   5 value 9648.593995
-#> iter   6 value 9648.079320
+#> iter   6 value 9648.079321
 #> iter   7 value 9643.429855
 #> iter   8 value 9632.852428
 #> iter   9 value 9627.281386

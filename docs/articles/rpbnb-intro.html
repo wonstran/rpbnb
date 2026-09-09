@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rpbnb</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,6 +62,9 @@
     
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">rpbnb</span><span class="op">)</span></span>
+<span><span class="co">#&gt; rpbnb was compiled WITHOUT optimization (-O0): fits will run roughly twice as slow as they should.</span></span>
+<span><span class="co">#&gt;   Usual causes: a -O0/-Og entry in ~/.R/Makevars, or a package built by pkgbuild::compile_dll(debug = TRUE) (its default, used by devtools::load_all()).</span></span>
+<span><span class="co">#&gt;   Reinstall from source for an optimized build; see ?rpbnb_build_info.</span></span>
 <span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"rwm1984_clean.csv"</span>, package <span class="op">=</span> <span class="st">"rpbnb"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="section level2">
 <h2 id="bivariate-nb">Bivariate NB<a class="anchor" aria-label="anchor" href="#bivariate-nb"></a>
@@ -202,7 +205,7 @@ estimated from the data rather than fixed.</p>
 <span><span class="co">#&gt; iter   6 value 9671.936448</span></span>
 <span><span class="co">#&gt; iter   7 value 9669.352861</span></span>
 <span><span class="co">#&gt; iter   8 value 9662.086943</span></span>
-<span><span class="co">#&gt; iter   9 value 9638.110221</span></span>
+<span><span class="co">#&gt; iter   9 value 9638.110220</span></span>
 <span><span class="co">#&gt; iter  10 value 9633.973407</span></span>
 <span><span class="co">#&gt; iter  11 value 9633.861811</span></span>
 <span><span class="co">#&gt; iter  12 value 9633.859385</span></span>
@@ -349,34 +352,34 @@ dummy:</p>
 <span><span class="co">#&gt; iter   2 value 2137.601131</span></span>
 <span><span class="co">#&gt; iter   3 value 1821.190915</span></span>
 <span><span class="co">#&gt; iter   4 value 1785.054267</span></span>
-<span><span class="co">#&gt; iter   5 value 1566.372766</span></span>
-<span><span class="co">#&gt; iter   6 value 1548.103028</span></span>
-<span><span class="co">#&gt; iter   7 value 1535.357982</span></span>
-<span><span class="co">#&gt; iter   8 value 1519.348709</span></span>
-<span><span class="co">#&gt; iter   9 value 1494.945757</span></span>
-<span><span class="co">#&gt; iter  10 value 1477.367243</span></span>
-<span><span class="co">#&gt; iter  11 value 1472.280280</span></span>
-<span><span class="co">#&gt; iter  12 value 1468.223527</span></span>
-<span><span class="co">#&gt; iter  13 value 1459.605855</span></span>
-<span><span class="co">#&gt; iter  14 value 1455.421129</span></span>
-<span><span class="co">#&gt; iter  15 value 1449.228892</span></span>
-<span><span class="co">#&gt; iter  16 value 1445.636117</span></span>
-<span><span class="co">#&gt; iter  17 value 1442.170610</span></span>
-<span><span class="co">#&gt; iter  18 value 1436.950851</span></span>
-<span><span class="co">#&gt; iter  19 value 1434.353218</span></span>
-<span><span class="co">#&gt; iter  20 value 1430.443076</span></span>
-<span><span class="co">#&gt; iter  21 value 1430.058099</span></span>
-<span><span class="co">#&gt; iter  22 value 1427.697811</span></span>
-<span><span class="co">#&gt; iter  23 value 1426.942700</span></span>
-<span><span class="co">#&gt; iter  24 value 1426.855781</span></span>
-<span><span class="co">#&gt; iter  25 value 1426.594711</span></span>
-<span><span class="co">#&gt; iter  26 value 1426.372304</span></span>
-<span><span class="co">#&gt; iter  27 value 1426.191108</span></span>
-<span><span class="co">#&gt; iter  28 value 1426.058564</span></span>
-<span><span class="co">#&gt; iter  29 value 1426.052526</span></span>
-<span><span class="co">#&gt; iter  30 value 1426.030212</span></span>
-<span><span class="co">#&gt; iter  31 value 1426.027173</span></span>
-<span><span class="co">#&gt; iter  32 value 1426.016000</span></span>
+<span><span class="co">#&gt; iter   5 value 1566.372762</span></span>
+<span><span class="co">#&gt; iter   6 value 1548.103056</span></span>
+<span><span class="co">#&gt; iter   7 value 1535.358009</span></span>
+<span><span class="co">#&gt; iter   8 value 1519.348827</span></span>
+<span><span class="co">#&gt; iter   9 value 1494.945886</span></span>
+<span><span class="co">#&gt; iter  10 value 1477.367335</span></span>
+<span><span class="co">#&gt; iter  11 value 1472.280336</span></span>
+<span><span class="co">#&gt; iter  12 value 1468.223569</span></span>
+<span><span class="co">#&gt; iter  13 value 1459.606468</span></span>
+<span><span class="co">#&gt; iter  14 value 1455.420748</span></span>
+<span><span class="co">#&gt; iter  15 value 1449.228918</span></span>
+<span><span class="co">#&gt; iter  16 value 1445.636157</span></span>
+<span><span class="co">#&gt; iter  17 value 1442.170692</span></span>
+<span><span class="co">#&gt; iter  18 value 1436.951464</span></span>
+<span><span class="co">#&gt; iter  19 value 1434.359101</span></span>
+<span><span class="co">#&gt; iter  20 value 1430.440516</span></span>
+<span><span class="co">#&gt; iter  21 value 1430.055460</span></span>
+<span><span class="co">#&gt; iter  22 value 1427.697754</span></span>
+<span><span class="co">#&gt; iter  23 value 1426.942690</span></span>
+<span><span class="co">#&gt; iter  24 value 1426.855621</span></span>
+<span><span class="co">#&gt; iter  25 value 1426.594423</span></span>
+<span><span class="co">#&gt; iter  26 value 1426.372298</span></span>
+<span><span class="co">#&gt; iter  27 value 1426.191034</span></span>
+<span><span class="co">#&gt; iter  28 value 1426.058654</span></span>
+<span><span class="co">#&gt; iter  29 value 1426.052541</span></span>
+<span><span class="co">#&gt; iter  30 value 1426.030318</span></span>
+<span><span class="co">#&gt; iter  31 value 1426.027231</span></span>
+<span><span class="co">#&gt; iter  32 value 1426.016001</span></span>
 <span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
 <span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
 <span><span class="co">#&gt; iter  33 value 1426.015893</span></span>
@@ -384,9 +387,9 @@ dummy:</p>
 <span><span class="co">#&gt; converged</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">rp_cop</span><span class="op">)</span></span>
 <span><span class="co">#&gt; b1:(Intercept)     b1:outwork         b1:age b2:(Intercept)     b2:outwork </span></span>
-<span><span class="co">#&gt;    -0.46790854     0.25965926     0.03033793    -2.57797459     0.59294843 </span></span>
+<span><span class="co">#&gt;    -0.46790857     0.25965926     0.03033793    -2.57797458     0.59294841 </span></span>
 <span><span class="co">#&gt;    log_sd1:age         log_m1         log_m2        z_theta </span></span>
-<span><span class="co">#&gt;    -4.56614271     0.76720524     2.57475912     0.33641337</span></span>
+<span><span class="co">#&gt;    -4.56614275     0.76720525     2.57475911     0.33641336</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Hyperbolic.html" class="external-link">tanh</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">rp_cop</span><span class="op">)</span><span class="op">[[</span><span class="st">"z_theta"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>  <span class="co"># estimated copula rho</span></span>
 <span><span class="co">#&gt; [1] 0.3242716</span></span></code></pre></div>
 </div>
