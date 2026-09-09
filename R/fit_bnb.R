@@ -390,6 +390,7 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #'                dependence = "famoye")
 #' summary(fit)
 #'
+#' \donttest{
 #' # Overdispersion test for margin 1 (H0: m1 = 0, Poisson)
 #' fit_p1 <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #'                   dependence = "famoye", poisson_1 = TRUE)
@@ -404,6 +405,7 @@ fit_bnb_independence <- function(formula_1, formula_2, data, cn1, cn2,
 #' fit_cop <- fit_bnb(docvis ~ outwork, hospvis ~ outwork, data = d,
 #'                    dependence = copula("normal"))
 #' fit_cop$cop_tau  # estimated Kendall's tau
+#' }
 fit_bnb <- function(formula_1, formula_2, data,
                     dependence = c("independence", "famoye"),
                     start = NULL, control = rpbnb_control(),

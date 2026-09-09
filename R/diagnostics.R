@@ -861,6 +861,7 @@ bnb_elasticities <- function(fit,
 #' @seealso [bnb_marginal_effects()] for fixed-coefficient `bnb_fit` models.
 #' @export
 #' @examples
+#' \donttest{
 #' sim <- simulate_rpbnb(n = 400,
 #'   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
 #'   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
@@ -869,6 +870,7 @@ bnb_elasticities <- function(fit,
 #' fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
 #'                  draws = 100)
 #' rpbnb_marginal_effects(fit, which = "y1", type = "AME")
+#' }
 rpbnb_marginal_effects <- function(fit,
                                    which = c("y1", "y2", "both", "all"),
                                    type  = c("AME", "MEM"),
@@ -936,6 +938,7 @@ rpbnb_marginal_effects <- function(fit,
 #' @seealso [bnb_elasticities()] for fixed-coefficient `bnb_fit` models.
 #' @export
 #' @examples
+#' \donttest{
 #' sim <- simulate_rpbnb(n = 400,
 #'   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
 #'   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
@@ -944,6 +947,7 @@ rpbnb_marginal_effects <- function(fit,
 #' fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
 #'                  draws = 100)
 #' rpbnb_elasticities(fit, which = "both", type = "AME")
+#' }
 rpbnb_elasticities <- function(fit,
                                which = c("y1", "y2", "both"),
                                type  = c("AME", "MEM"),

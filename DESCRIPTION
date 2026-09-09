@@ -15,6 +15,8 @@ Description: Maximum-likelihood estimation of bivariate negative binomial
     automatic-differentiation engine that additionally offers a Laplace
     approximation, with a common front end.
 License: MIT + file LICENSE
+URL: https://github.com/wonstran/rpbnb
+BugReports: https://github.com/wonstran/rpbnb/issues
 Encoding: UTF-8
 Depends: R (>= 4.1)
 Imports:
@@ -37,7 +39,8 @@ Suggests:
     testthat (>= 3.1.5),
     knitr,
     rmarkdown,
-    pkgload
+    pkgload,
+    Matrix
 SystemRequirements: GNU make
 Config/testthat/edition: 3
 VignetteBuilder: knitr

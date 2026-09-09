@@ -18,6 +18,14 @@ Two estimation engines are available for the random-parameter model:
 adds a Laplace approximation and dependence profiling). \code{\link[=rpbnb]{rpbnb()}} is a common
 front end that dispatches to either.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/wonstran/rpbnb}
+  \item Report bugs at \url{https://github.com/wonstran/rpbnb/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Zhenyu Wang \email{wonstran@hotmail.com}
 

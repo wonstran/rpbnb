@@ -40,3 +40,7 @@
 # Local research data -- large and deliberately not published. Both are also
 # gitignored; keeping them out of the tarball as well.
 ^inst/extdata/export_.*_all\.csv$
+# Dev-only project files, not part of the installable package.
+^MULTITHREADING\.md$
+^_pkgdown\.yml$
+^reports$

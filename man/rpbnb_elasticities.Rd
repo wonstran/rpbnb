@@ -64,6 +64,7 @@ of an \code{\link[=fit_rpbnb]{fit_rpbnb()}} fit. Under fixed coefficients these 
 delta method over the equation's mean and log-scale parameters.
 }
 \examples{
+\donttest{
 sim <- simulate_rpbnb(n = 400,
   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
@@ -72,6 +73,7 @@ sim <- simulate_rpbnb(n = 400,
 fit <- fit_rpbnb(y1 ~ x1, y2 ~ x1, data = sim$data, random_1 = "x1",
                  draws = 100)
 rpbnb_elasticities(fit, which = "both", type = "AME")
+}
 }
 \seealso{
 \code{\link[=bnb_elasticities]{bnb_elasticities()}} for fixed-coefficient \code{bnb_fit} models.

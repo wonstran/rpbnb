@@ -219,7 +219,7 @@ automatic differentiation. Supports Famoye/Sarmanov and discrete-copula
 (Frank, Gaussian, Clayton) dependence.
 }
 \examples{
-\dontrun{
+\donttest{
 sim <- simulate_rpbnb_tmb(n = 300,
   beta1 = c("(Intercept)" = 0.2, x1 = 0.4),
   beta2 = c("(Intercept)" = 0.1, x1 = -0.3),
