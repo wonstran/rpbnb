@@ -11,8 +11,8 @@ Description: Maximum-likelihood estimation of bivariate negative binomial
     estimation of a bivariate random-parameter negative binomial model under
     either dependence structure, with a random-coefficient data simulator,
     diagnostics, and standard model methods. Two estimation engines are
-    provided: an OpenMP/Rcpp maximum-simulated-likelihood engine and a TMB
-    automatic-differentiation engine that additionally offers a Laplace
+    provided: an 'OpenMP'/'Rcpp' maximum-simulated-likelihood engine and a
+    'TMB' automatic-differentiation engine that additionally offers a Laplace
     approximation, with a common front end.
 License: MIT + file LICENSE
 URL: https://github.com/wonstran/rpbnb

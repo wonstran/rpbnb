@@ -10,19 +10,18 @@
 
 ## R CMD check results
 
-0 errors | 0 warnings | 3 notes (win-builder: Windows 3 notes, Debian 2 notes)
-
-* This is a new release.
-
-  This is the package's first submission to CRAN.
+0 errors | 0 warnings | 2 notes (win-builder: Windows 2 notes, Debian 1 note)
 
 * checking CRAN incoming feasibility ... NOTE
-  Possibly misspelled words in DESCRIPTION: "Famoye", "OpenMP", "Rcpp",
-  "Sarmanov", "TMB".
+  New submission
 
-  All five are correctly spelled: "Famoye" and "Sarmanov" are the surnames
-  of the statisticians the dependence structures are named after; "OpenMP",
-  "Rcpp", and "TMB" are the names of the software/libraries used.
+  Possibly misspelled words in DESCRIPTION: Famoye, Sarmanov
+
+  This is the package's first submission to CRAN. Both words are correctly
+  spelled: they are the surnames of the statisticians the bivariate
+  dependence structure is named after (the Famoye/Sarmanov bivariate
+  negative binomial). The software names previously flagged here ('OpenMP',
+  'Rcpp', 'TMB') are now in single quotes.
 
 * checking compilation flags used ... NOTE
   Compilation used the following non-portable flag(s): '-Wa,-mbig-obj'
@@ -32,14 +31,9 @@
   differentiation template) exceeds the COFF object format's 32767-section
   limit without it. Does not apply to, or affect, any other platform.
 
-* checking HTML version of manual ... NOTE
-  Skipping checking math rendering: package 'V8' unavailable
+## Changes since the previous pretest
 
-  Local-check artifact only: the optional `V8` package is not installed on
-  the machine used for this check. Not expected on CRAN's own check machines.
-
-win-builder's pretest additionally flagged two issues now fixed in this
-submission and not expected to reproduce:
+An earlier upload of this version also flagged two issues, both fixed:
 
 * Invalid file URIs in README.md ("ref/rpbnb_0.4.9.pdf",
   "docs/TMB_SML_large_draws_OOM_guide.md") -- both pointed at repo-relative
