@@ -10,11 +10,19 @@
 
 ## R CMD check results
 
-0 errors | 0 warnings | 3 notes
+0 errors | 0 warnings | 3 notes (win-builder: Windows 3 notes, Debian 2 notes)
 
 * This is a new release.
 
   This is the package's first submission to CRAN.
+
+* checking CRAN incoming feasibility ... NOTE
+  Possibly misspelled words in DESCRIPTION: "Famoye", "OpenMP", "Rcpp",
+  "Sarmanov", "TMB".
+
+  All five are correctly spelled: "Famoye" and "Sarmanov" are the surnames
+  of the statisticians the dependence structures are named after; "OpenMP",
+  "Rcpp", and "TMB" are the names of the software/libraries used.
 
 * checking compilation flags used ... NOTE
   Compilation used the following non-portable flag(s): '-Wa,-mbig-obj'
@@ -29,6 +37,16 @@
 
   Local-check artifact only: the optional `V8` package is not installed on
   the machine used for this check. Not expected on CRAN's own check machines.
+
+win-builder's pretest additionally flagged two issues now fixed in this
+submission and not expected to reproduce:
+
+* Invalid file URIs in README.md ("ref/rpbnb_0.4.9.pdf",
+  "docs/TMB_SML_large_draws_OOM_guide.md") -- both pointed at repo-relative
+  paths excluded from the built tarball (`ref/`, `docs/` are in
+  `.Rbuildignore`); changed to absolute GitHub URLs.
+* "Non-standard file/directory found at top level: 'cran-comments.md'" --
+  this file is now itself listed in `.Rbuildignore`.
 
 ## Additional notes for reviewers
 

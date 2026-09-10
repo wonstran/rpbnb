@@ -45,3 +45,4 @@
 ^_pkgdown\.yml$
 ^reports$
 ^CRAN-SUBMISSION$
+^cran-comments\.md$

@@ -1,6 +1,6 @@
 # Random Parameter Bivariate Negative Binomial (RPBNB) Model
 
-[**Reference manual (PDF)**](ref/rpbnb_0.4.9.pdf) — full CRAN-style function
+[**Reference manual (PDF)**](https://github.com/wonstran/rpbnb/blob/master/ref/rpbnb_0.4.9.pdf) — full CRAN-style function
 documentation, regenerated from the current `man/` pages.
 
 Maximum-likelihood and maximum-simulated-likelihood estimation of bivariate
@@ -475,7 +475,7 @@ gradient step recomputes every chunk's contribution) and gives up the taped
 Hessian: `rpbnb_tmb_dependence_profile(method = "profile")` on a chunked fit
 falls back to a Wald interval with a warning. Wald/`optimHess` inference (the
 default `inference = "full"`/`"diag"`) is unaffected. See
-[docs/TMB_SML_large_draws_OOM_guide.md](docs/TMB_SML_large_draws_OOM_guide.md)
+[docs/TMB_SML_large_draws_OOM_guide.md](https://github.com/wonstran/rpbnb/blob/master/docs/TMB_SML_large_draws_OOM_guide.md)
 for the full design writeup.
 
 ### Laplace approximation
