@@ -2,15 +2,33 @@
 
 * Local: Windows 11 x64, R 4.6.1 (x86_64-w64-mingw32), `R CMD check --as-cran`
   with `_R_CHECK_DONTTEST_EXAMPLES_=TRUE` (matches CRAN's own check behavior).
-* GitHub Actions (`.github/workflows/release-binaries.yaml`): ubuntu-latest,
-  macos-latest, windows-latest, R release -- build, install, and (on Linux)
-  verify a default source install is optimized (`-O2`, OpenMP available).
-* GitHub Actions (`.github/workflows/tests.yaml`): ubuntu-latest, R release --
-  full testthat suite.
+* Previous CRAN pretests (2026-09-10): Windows Server 2022 and Debian
+  forky/sid, R-devel. Both passed tests, examples, vignettes, and manuals.
+* Configured CI (not rerun for this local resubmission): release builds on
+  Ubuntu, macOS, and Windows; fast tests on Ubuntu for pushes/PRs, with all
+  test tiers on the weekly schedule or manual dispatch.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 2 notes (win-builder: Windows 2 notes, Debian 1 note)
+Local verification on 2026-09-12, using the rebuilt source tarball:
+
+* Full `R CMD check --as-cran`, including `--run-donttest` examples, tests,
+  vignette rebuilding, and PDF/HTML manuals: 0 errors, 0 warnings, 2 notes.
+  The notes were "New submission" and a local Pandoc PATH issue when
+  checking README/NEWS. All examples, tests, vignettes, and manuals passed.
+* After adding the installed Pandoc to PATH, a follow-up `--as-cran` check
+  with `--no-tests --no-examples --no-vignettes --no-manual` completed with
+  0 errors, 0 warnings, 1 note ("New submission"). Top-level file checking
+  and compilation-flags checking both report OK. The tarball was unchanged.
+* Testthat: 1,664 passes, 0 failures, 7 warnings, 182 skips under the
+  package's existing CRAN/slow-test guards and installed-file availability
+  check. For comparison, the previous CRAN Windows test log had the same
+  pass/skip counts, 0 failures, and 8 warnings; its test check also passed.
+* The installed build reports both optimization and OpenMP enabled.
+
+The previous CRAN pretests (2026-09-10) reported 0 errors, 0 warnings,
+2 notes on Windows and 1 note on Debian. This resubmission addresses them
+as follows.
 
 * checking CRAN incoming feasibility ... NOTE
   New submission
@@ -23,15 +41,18 @@
   negative binomial). The software names previously flagged here ('OpenMP',
   'Rcpp', 'TMB') are now in single quotes.
 
-* checking compilation flags used ... NOTE
-  Compilation used the following non-portable flag(s): '-Wa,-mbig-obj'
-
-  Required on Windows only (`src/Makevars.win`): one translation unit
-  (`src/rpbnb_tmb.cpp`, which builds the package's TMB automatic-
-  differentiation template) exceeds the COFF object format's 32767-section
-  limit without it. Does not apply to, or affect, any other platform.
+* The Windows-only compilation-flags NOTE has been addressed by removing
+  `-Wa,-mbig-obj` from `src/Makevars.win`. A clean source build with Rtools45
+  GCC 14.3.0 succeeds without it. The TMB object has 2,852 sections and uses
+  standard `pe-x86-64` COFF format. Our previous comment that the current
+  template required the extended object format was incorrect. R's standard
+  optimization flags and OpenMP compile/link flags remain in use.
 
 ## Changes since the previous pretest
+
+This is a resubmission of version 0.4.9, which has not yet been accepted
+on CRAN. Relative to the 2026-09-10 pretests, software names in DESCRIPTION
+are now single-quoted and the unnecessary Windows assembler flag is removed.
 
 An earlier upload of this version also flagged two issues, both fixed:
 
